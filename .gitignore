@@ -21,6 +21,10 @@ Flask版/logs/
 __pycache__/
 *.pyc
 
+# ===== 同步/布局临时产物（可随时重生成，不入库）=====
+创造模式测试原型/_sync_out.html
+创造模式测试原型/*.bak_sync
+
 # ===== 系统杂项 =====
 Thumbs.db
 Desktop.ini

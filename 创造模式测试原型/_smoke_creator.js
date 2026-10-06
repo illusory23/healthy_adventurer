@@ -162,6 +162,14 @@ ck(S.health.score === 0 && S.health.done[5] === 0 && S.health.meals.every(x => !
 S.active = [{name: "采集草药", q: C["Lv1"][0], rate: 1.0, acceptTs: Date.now(), finishTs: Date.now() + 3600000}];
 creFinishActive();
 ck(S.active.length === 0, "creFinishActive：立即完成并结算");
+/* v1.61c：立即完成委托锁定骰值 1（大成功）——spy 捕获结算掷骰 */
+let _seenRoll = null;
+const _q3orig = queueRoll3D;
+queueRoll3D = function(r, name){ _seenRoll = r; return Promise.resolve(); };
+S.active = [{name: "采集草药", q: C["Lv1"][0], rate: 0.01, acceptTs: Date.now(), finishTs: Date.now() + 3600000}];
+creFinishActive();
+queueRoll3D = _q3orig;
+ck(S.active.length === 0 && _seenRoll === 1, "v1.61c：creFinishActive 锁定骰值 1（大成功，实际 " + _seenRoll + "）");
 S.pool = {point:"OLD@00", list:["旧批次"], taken:false, bornTs:0}; S.poolPoint = "OLD@00";
 creRerollPool();
 ck(S.pool !== null && S.pool.list.length > 0 && S.pool.point !== "OLD@00", "creRerollPool：无视时间段重抽（旧批次作废替换）");

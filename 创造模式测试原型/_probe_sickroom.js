@@ -49,8 +49,8 @@ function seed(rep){
 seed(0); renderHealth();
 const h0 = document.getElementById("tab-health").innerHTML;
 check(h0.indexOf("🕊️ 疗养圣所") >= 0, "0 声望即显示疗养圣所卡");
-check(h0.indexOf('<div class="card"><h3>🕊️ 疗养圣所') >= 0, "独立通栏块");
-check(h0.indexOf('</div><div class="card"><h3>🕊️ 疗养圣所') >= 0, "卡片位于双栏容器之后（v1.61b 防重叠结构）");
+check(h0.indexOf('<div class="card" style="margin-top:12px"><h3>🕊️ 疗养圣所') >= 0, "独立通栏块（v1.61c：margin-top 12px）");
+check(h0.indexOf('</div><div class="card" style="margin-top:12px"><h3>🕊️ 疗养圣所') >= 0, "卡片位于双栏容器之后（v1.61b 防重叠结构）");
 check(h0.indexOf("3 / 3 天") >= 0, "初始剩余 3/3 天");
 check(h0.indexOf("takeSickLeave('today')") >= 0 && h0.indexOf("takeSickLeave('yesterday')") >= 0, "两个按钮均在");
 check(h0.indexOf('onclick="takeSickLeave(\\'today\\')" disabled') < 0, "今日按钮可用");

@@ -870,7 +870,7 @@ const QUEST_STORY = {
   "星界信使·初见":"天空塔之上来了一位「信使」，说要找人送信。信上的字会动——塔灵劝你慎重。",
   "星界信使·传讯":"信要送往星界另一头。你要做的只是别在半路把信读出来——信使的嘱咐，字字当真。",
   "星界信使·回响":"回信到了。信使说，听过回响的人，这一生都会记得星空的声音——记得就好，别回答。",
-  "深渊回响·远征":"领主封印之下传来了回响——深渊深处还有更古老的东西在翻身。远征队需要一个人带头。",
+  "深渊回响·远征":"领主封印之下传来了回响——深渊核心还有更古老的东西在翻身。远征队需要一个人带头。",
   /* ── v1.41 I4：追踪类 / 资源指定类 ── */
   "深林鹿王追踪":"一头罕见的白鹿现身深林，行踪不定。跟住它三天——传说它带路的地方，长着最安静的草药。",
   "海怪追踪":"近海有东西掀翻了渔船。公会要三天的观测记录：跟住它、记下它，别被它跟上。",
@@ -1110,7 +1110,7 @@ const REGIONS = [
   {n:"虚空裂痕·深处", t:"22:00-23:30", c:9, h:14, lv:5, g:6, deep:1, d:[["星尘",25],["星辉石",22],["陨铁",18],["月长石",10],["云纹锦",7],["凤凰木",7],["星界罗盘",7],["远古符文",6],["星陨岩",6],["巨龙竖瞳",8],["星辉绸",10],["星辉花",3],["星尘蜜",3],["世界树枝条",3],["时之沙漏",3],["疾风符咒",5],["命运骰子",3],["时之怀表",3],["",10]]},
   /* v1.41 I1：深渊线探索地点——完成对应委托后解锁（03 深渊链）；后续链可续挂新地点 */
   {n:"深渊裂隙", t:"08:00-23:30", c:10, h:10, unlock:{quest:"深渊裂隙调查"}, d:[["陨铁",20],["暗影草",24],["龙息草",14],["凤凰草",10],["龙涎果",8],["星辉石",8],["月长石",6],["龙血",5],["龙心",3],["安眠护符",6],["清醒符咒",6],["",12]]},
-  {n:"深渊深处", t:"08:00-23:30", c:12, h:14, unlock:{quest:"深渊领主封印"}, d:[["星核",18],["星辉绸",12],["世界树汁液",12],["龙心",10],["世界树心",8],["世界树皮",8],["凤凰木",6],["疾风符咒",4],["时之沙漏",3],["命运骰子",3],["世界树枝条",3],["",13]]},
+  {n:"深渊核心", t:"08:00-23:30", c:12, h:14, unlock:{quest:"深渊领主封印"}, d:[["星核",18],["星辉绸",12],["世界树汁液",12],["龙心",10],["世界树心",8],["世界树皮",8],["凤凰木",6],["疾风符咒",4],["时之沙漏",3],["命运骰子",3],["世界树枝条",3],["",13]]},   // v1.61c：按用户指定改名为「深渊核心」
   /* v1.57：六条种族委托链解锁的探索地点（随链逐步开放——先踏勘、后深入）
      掉落概率按 07 文档《概率设计原则》：主材料 25~30% / 次材料 10~22% / 稀有 2~6%
      v1.58：每处地点追加一种「六域遗珍」专属材料（3~4%，仅此一处产出） */
@@ -2066,7 +2066,7 @@ function petPat(n){                                // 抚摸（每日 1 次/宠�
   addLog("🤗 你摸了摸 " + petShowName(n) + "：" + txt, "ok");
   save(); render();
   dlg("🤗 " + petShowName(n), '<div class="dlg-msg" style="line-height:1.9">' + txt + '</div>'
-    + '<div class="muted" style="font-size:11px;margin-top:6px">心情 +5（今日互动已完成）</div>', [{text:"好", cls:"pri", fn:function(){ showPetDetail(n); }}]);
+    + '<div class="muted" style="font-size:11px;margin-top:6px">心情 +5（今日互动已完成）</div>', [{text:"好", cls:"pri", fn:null}]);   // v1.61c：只显示互动信息，不再打开宠物详情
 }
 function petWalkStart(n){                          // 派宠物去散步
   if(S.carryPet === n) return showAlert("它正陪你冒险呢，没空去散步。", "宠物散步");
@@ -3227,7 +3227,7 @@ async function settle(a, now){
 async function _settleInner(a, now){
   const q = a.q;
   const rate = a.rate;
-  const roll = rand(100);
+  const roll = a.forceRoll || rand(100);         // v1.61c：创造面板「立即完成委托」可锁定骰值（1 = 大成功）
   const ok = roll <= Math.round(rate*100);
   const crit = roll<=5, fumble = roll>=96;
 
@@ -3240,7 +3240,7 @@ async function _settleInner(a, now){
     const L = a.legend;
     const lname = a.lname || S.legendName || "传奇事件";
     const base = LEGEND_GOLD[L[4]] || 1000000;
-    const roll2 = rand(100);
+    const roll2 = a.forceRoll || rand(100);         // v1.61c：锁骰同覆盖传奇事件判定
     await queueRoll3D(roll2, L[0]);                 // 与常规委托一致，也播 3D 动画（标题=事件名）
     const ok2 = roll2 <= Math.round(a.rate*100);
     let g2 = ok2 ? Math.round(base * (1 + gearBonus() + gearAccBonus() + charmPay())) : Math.max(1, Math.round(base*0.3));
@@ -5081,6 +5081,8 @@ function cookTier(r){
 }
 /* v1.41：厨房按玩家等级分阶段开放——Lv1 普通 / Lv2 精良及以下 / Lv3 稀有及以下 / Lv4 史诗及以下 / Lv5 全部 */
 function cookTierOpen(r){ return QUALITY_ORDER.indexOf(cookTier(r)) <= S.lvIdx; }
+/* v1.61c：巨龙盛宴固定置顶——用户指定「排列锁定到料理最上方」（酒馆料理 + 图鉴·料理两处同款） */
+function dishTopFirst(r){ return !!(r && r.n === "巨龙盛宴"); }
 /* ── v1.38c：副材料品类联动 —— 由主材料品类推导允许的副材料品类（食材不可作打造材料）── */
 const SUB_CATS = {
   "木材": ["木材","兽材","织物"],   // 弓弩杖：兽筋弓弦、皮绳缠柄
@@ -5218,8 +5220,21 @@ function showAchvDetail(){
   const _ac = (S.achv || []).length, _at = ACHV.length;   // v1.38o：全部达成后揭晓真实总数
   dlg("🏅 成就（" + _ac + (_ac >= _at ? " / " + _at + " ✓ 已全部达成" : " / ?") + "）", rows || '<div class="muted">还没有达成任何成就。</div>', [{text: "关闭", fn: null}]);
 }
-function showTitleDetail(){
+function showTitleDetail(one){                       // v1.61c：传名称 = 只看单个称号详情（荣誉页标签点击）
   const now = Date.now();
+  if(one){
+    const _inTim = !!(S.timTitles && S.timTitles[one] > now);
+    const _d = _inTim ? Math.ceil((S.timTitles[one] - now) / 86400000) : 0;
+    const _cnt = (S.titles || []).length;
+    return dlg("🏷️ " + one,
+      '<div style="font-size:12.5px;line-height:2">'
+      + '<b style="color:var(--gold2)">🏷️ ' + one + '</b>'
+      + (_inTim ? '<span class="muted" style="font-size:11px"> · 当月称号 · 剩余 ' + _d + ' 天</span>'
+                : '<span class="muted" style="font-size:11px"> · 永久称号</span>')
+      + '<div class="muted" style="line-height:1.8;margin-top:4px">' + (TITLE_DESC[one] || "传奇事件授予的荣誉称号。") + '</div>'
+      + (_inTim ? "" : '<div class="muted" style="line-height:1.8;margin-top:4px">收集加成：已获 ' + _cnt + ' 个称号 → 委托报酬 +' + Math.round(titleOwnBonus() * 100) + '%（每 1 个 +1%，上限 +10%）。</div>')
+      + '</div>', [{text: "关闭", fn: null}]);
+  }
   const _nT = (S.titles || []).length;
   let rows = _nT ? '<div class="muted" style="font-size:12px;line-height:1.7;margin-bottom:2px">🏷️ 称号收集：已获 ' + _nT + ' 个 → 委托报酬 <b style="color:var(--gold2)">+' + Math.round(titleOwnBonus() * 100) + '%</b>（每 1 个 +1%，上限 +10%）</div>' : "";
   (S.titles || []).forEach(function(n){
@@ -6200,6 +6215,7 @@ function randomMat(tier){
    区域事件与「盗贼伏击」按 70 / 30 抽取；区域事件不可用时只出盗贼
    ══════════════════════════════════════════════════ */
 const EXPLORE_EVENT_CHANCE = 0.20;
+const EV_ROB_CAP = 1000000;   // v1.61c：盗贼伏击抢夺上限 = 1 铂金币（1,000,000）——服务端同值
 const REGION_EVENTS = {
   "晨光森林":"迷路商人", "午间溪谷":"隐藏泉眼", "黄昏山丘":"受伤小狼",
   "星夜洞窟":"古代石碑", "腐化森林":"净化成功", "虚空裂痕":"裂痕回响"
@@ -6324,11 +6340,11 @@ function runExploreEvent(name, r){
         save(); render();
         dlg("🗡 盗贼伏击", "回程路上，几名盗贼从岩石后窜出！<br><br>你消耗 <b>10 精力</b> 与他们周旋……<b>成功击退了他们。</b>");
       } else {
-        const loss = Math.floor(S.money * 0.10);
+        const loss = Math.min(Math.floor(S.money * 0.10), EV_ROB_CAP);
         S.money -= loss;
-        evLog("盗贼伏击 → 被抢走 " + fmtMoneyFull(loss) + "（当前钱币的 10%，消耗 10 精力）");
+        evLog("盗贼伏击 → 被抢走 " + fmtMoneyFull(loss) + "（当前钱币的 10%，上限 1 铂金币，消耗 10 精力）");
         save(); render();
-        dlg("🗡 盗贼伏击", "回程路上，几名盗贼从岩石后窜出！<br><br>你消耗 <b>10 精力</b> 与他们周旋，却寡不敌众——<br><b>损失当前钱币的 10%（" + fmtMoneyFull(loss) + "）。</b>");
+        dlg("🗡 盗贼伏击", "回程路上，几名盗贼从岩石后窜出！<br><br>你消耗 <b>10 精力</b> 与他们周旋，却寡不敌众——<br><b>损失当前钱币的 10%（上限 1 铂金币，实损 " + fmtMoneyFull(loss) + "）。</b>");
       }
     },
     "净化成功": function(){
@@ -6740,7 +6756,25 @@ function tryBardLetter(){
       + cmp + '<br><br><span class="muted">——琴声止处，愿你今晚好眠。</span></div>');
   }catch(e){}
 }
+/* v1.61c：重绘保滚动——20s 轮询 refreshState → render() 会全量重建 innerHTML，
+   内嵌长列表（.scroll-y：委托流 / 酒馆 / 宠物）的滚动位置会被拽回顶部；
+   重绘前快照、重绘后按顺序复原（元素消失/变少时安全跳过） */
+function _snapScroll(){
+  const c = {};
+  document.querySelectorAll('section[id^="tab-"]').forEach(function(sec){
+    c[sec.id] = Array.prototype.map.call(sec.querySelectorAll('.scroll-y'), function(el){ return el.scrollTop; });
+  });
+  return c;
+}
+function _restoreScroll(c){
+  document.querySelectorAll('section[id^="tab-"]').forEach(function(sec){
+    const a = c[sec.id]; if(!a) return;
+    const els = sec.querySelectorAll('.scroll-y');
+    for(let i = 0; i < els.length && i < a.length; i++){ if(a[i]) els[i].scrollTop = a[i]; }
+  });
+}
 function render(){
+  const _scSnap = _snapScroll();             // v1.61c：记录内嵌滚动位置（尾部复原）
   exploreFinishCheck();                      // 探索到点自动结算（幂等，无进行中探索时直接返回）
   // HUD
   S.health.score = calcHealth();
@@ -6779,6 +6813,7 @@ function render(){
   renderQuest(); renderTavern(); renderHealth(); renderBag(); renderPet(); renderGallery(); renderShop(); renderLog();   // v1.41f4：+酒馆；v1.56：+宠物
   checkLastNightHint();                        // v1.38：昨晚错过入睡打卡的尾巴提醒
   tryBardLetter();                             // v1.38：每 7 天一次的吟游诗人周报
+  _restoreScroll(_scSnap);                     // v1.61c：复原内嵌滚动位置（防轮询重绘跳顶）
 }
 
 function renderQuest(){
@@ -7015,7 +7050,11 @@ function renderQuest(){
     hR += `<div class="muted" style="color:var(--red)">⚠️ 前一日健康 ${ph} 分（低于 60），今天不能探索。</div>`;
   } else {
     hR += `<div class="muted" style="margin-bottom:8px;font-size:11px">前一日健康 ${ph} 分 → 今日 ${S.explore} 点探索点（每日刷新）</div>`;
-    REGIONS.forEach(function(r,i){
+    hR += `<div class="scroll-y">`;   // v1.61c：地点列表限高滚动（地点变多不再拉长整页；滚动位置由 render 快照保持）
+    REGIONS.map(function(r,i){ return {r:r, i:i}; })
+      .sort(function(a,b){ return a.r.c - b.r.c || a.i - b.i; })   // v1.61c：按探索点消耗低→高排列（同消耗保持原顺序）
+      .forEach(function(o){
+      const r = o.r, i = o.i;
       if(regionGate(r)) return;      // v1.41：未解锁区域完全隐藏
       const timeOk = inRegionTime(r.t);
       const can = S.explore >= r.c && S.exploreUsed < 2 && timeOk;
@@ -7025,6 +7064,7 @@ function renderQuest(){
         <div class="muted" style="font-size:11px">${r.t}　耗时 ${r.h} 小时${!timeOk?"　（当前不在开放时间）":""}　<span style="color:var(--gold2)">详情 ›</span></div>
       </div>`;
     });
+    hR += `</div>`;
   }
   hR += `</div>`;
   }
@@ -7094,9 +7134,9 @@ function renderTavern(){
       用食材烹饪料理（更高品阶随冒险者等级逐步开放）。材料从背包扣除。<br>
       <b style="color:var(--gold2)">报酬 / 成功率加成只作用于「接取委托前最后吃的那道菜」</b>，精力恢复与上限提升则立即生效。
     </div>`;
-  CFG.recipes.map(function(r, i){ return {r:r, i:i}; })                                          // v1.38h：按料理品级展示；v1.54：高→低（巨龙盛宴 传说自然居首）
+  CFG.recipes.map(function(r, i){ return {r:r, i:i}; })                                          // v1.38h：按料理品级展示；v1.54：高→低；v1.61c：巨龙盛宴锁定最上方
     .filter(function(o){ return cookTierOpen(o.r); })                   // v1.41：未开放品阶的料理不显示
-    .sort(function(a,b){ return byQualityDesc(cookTier(a.r), cookTier(b.r)); })
+    .sort(function(a,b){ return (dishTopFirst(b.r) - dishTopFirst(a.r)) || byQualityDesc(cookTier(a.r), cookTier(b.r)); })
     .forEach(function(o){
     const r = o.r, i = o.i;
     const ok = canCook(r);
@@ -7266,7 +7306,8 @@ function renderHealth(){
   </div></div>`;
 
   /* v1.61：疗养圣所——生病请假：每月 3 天，无门槛；病假日评分锁定 59 + 打卡封存
-     v1.61b：移出双栏容器，作为 .twocol 之后的独立通栏块渲染——修复末位 column-span 卡与上方卡片重叠 */
+     v1.61b：移出双栏容器，作为 .twocol 之后的独立通栏块渲染——修复末位 column-span 卡与上方卡片重叠
+     v1.61c：补 margin-top 12px——多栏容器截断尾行卡的 margin-bottom（Chromium 实测残差 ≈5px），否则与上方卡片贴住 */
   let hSick = "";
   {
     const _sickLeft = sickLeftNow();
@@ -7283,7 +7324,7 @@ function renderHealth(){
       else { _yWhy = "无昨日记录"; }
     } else { _yWhy = "暂无记录"; }
     const _tBtnOk = !_todayCovered && _sickLeft > 0;
-    hSick = `<div class="card"><h3>🕊️ 疗养圣所</h3>
+    hSick = `<div class="card" style="margin-top:12px"><h3>🕊️ 疗养圣所</h3>
       <div class="li"><span>本月剩余病假</span><b style="color:${_sickLeft>0?"var(--green)":"#8a8aa0"}">${_sickLeft} / ${SICK_MONTHLY} 天</b></div>
       ${_todayCovered ? `<div class="li"><span>今日状态</span><b style="color:var(--gold2)">病假封存 · 评分锁定 ${SICK_LOCK_SCORE} · 打卡关闭</b></div>` : ""}
       <div class="row" style="gap:8px;margin-top:6px">
@@ -7369,7 +7410,7 @@ function renderGallery(){
   CFG.recipes.forEach(function(r){ if(cooked[r.n]) cGot++; });
   let cookHtml = `<div class="gal-grid">`;
   cookHtml += `<div class="muted" style="grid-column:1/-1;margin-top:6px;font-size:12px">🍲 全部料理（${cnt(cGot, cAll)}）</div>`;
-  CFG.recipes.slice().sort(function(a,b){ return byQualityDesc(cookTier(a), cookTier(b)); }).forEach(function(r){   // v1.54：按料理品级高→低
+  CFG.recipes.slice().sort(function(a,b){ return (dishTopFirst(b) - dishTopFirst(a)) || byQualityDesc(cookTier(a), cookTier(b)); }).forEach(function(r){   // v1.54：按料理品级高→低；v1.61c：巨龙盛宴固定置顶
     if(cooked[r.n]) cookHtml += `<div class="gal-cell" onclick="showCookDetail('${r.n}')" style="cursor:pointer" title="点击查看详情"><span style="font-size:17px">🍲</span><div class="gname">${r.n}</div><span class="tier t-${cookTier(r)}" style="font-size:9px">${cookTier(r)}</span></div>`;
   });
   if(cGot < cAll) cookHtml += `<div class="gal-cell dim" title="尚未收集"><span style="font-size:17px">❓</span><div class="gname">？？？</div></div>`;
@@ -7542,8 +7583,8 @@ function renderBag(){
   }
   h += `</div>`;
 
-  // ── 打造（只显示已拥有图纸的装备） ──
-  const owned = GEAR.filter(function(g){ return S.blueprints[g[0]] === true; });
+  // ── 打造（只显示已拥有图纸的装备）——v1.61c：主材料"—"（成就/传奇奖励装备）不可打造，不入列表 ──
+  const owned = GEAR.filter(function(g){ return g[5] !== "—" && S.blueprints[g[0]] === true; });
   h += `<div class="card"><h3>🔨 打造（已掌握 ${owned.length} 张图纸）</h3>`;
   if(!owned.length){
     h += `<div class="muted">还没有任何图纸。<br><br>到下方「📜 图纸商店」购买，或从探索事件获得。</div>`;
@@ -7870,15 +7911,18 @@ function renderLog(){
   {
     h += `<div class="card"><h3>🏆 荣誉</h3>`;
     if(S.titles.length)   h += `<div class="li" style="cursor:pointer;flex-direction:column;align-items:stretch;gap:6px" onclick="showTitleDetail()">
-      <div class="row"><span>称号（${S.titles.length} · 报酬 +${Math.round(titleOwnBonus()*100)}%）</span><span class="muted" style="font-size:11px">点击查看详情 ›</span></div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px">${S.titles.map(function(t){ return `<span style="display:inline-block;padding:2px 8px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);font-size:11.5px;color:var(--gold2);white-space:nowrap">🏷️ ${t}</span>`; }).join("")}</div>
-    </div>`;   // v1.50：称号排版重设计（长列表 → 换行标签网格）
+      <div class="row"><span>称号（${S.titles.length} · 报酬 +${Math.round(titleOwnBonus()*100)}%）</span><span class="muted" style="font-size:11px">点标签看单个 · 此处看全部 ›</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${S.titles.map(function(t){ return `<span style="cursor:pointer;display:inline-block;padding:2px 8px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);font-size:11.5px;color:var(--gold2);white-space:nowrap" onclick="event.stopPropagation();showTitleDetail('${t}')">🏷️ ${t}</span>`; }).join("")}</div>
+    </div>`;   // v1.50：称号排版重设计（长列表 → 换行标签网格）；v1.61c：单个标签点击 → 单个称号详情（stopPropagation 防冒泡到整卡）
     if(S.pets.length)     h += `<div class="li"><span>宠物</span><b style="text-align:right">${S.pets.join("、")}</b></div>`;
     if(S.pendingPet)      h += `<div class="li"><span>就医中的小狼</span><b style="text-align:right">3 天后加入</b></div>`;
     if(S.trophies.length) h += `<div class="li"><span>藏品</span><b style="text-align:right">${S.trophies.join("、")}</b></div>`;
     if(S.charm > 0) h += `<div class="li"><span>🌙 冥念护符</span><b style="text-align:right${S.charm>=5?";color:var(--gold2)":""}">${S.charm >= 5 ? "已满级 5/5 ✨" : S.charm + " / 5 级"}</b></div>`;   // v1.38p2：未获取（0 级）时不展示
     if(S.echo)            h += `<div class="li"><span>裂痕回响</span><b style="text-align:right">稀有事件概率 +${S.echo}%</b></div>`;
-    if(S.legendDone.length) h += `<div class="li"><span>已完成传奇</span><b style="text-align:right">${S.legendDone.join("、")}</b></div>`;
+    if(S.legendDone.length) h += `<div class="li" style="flex-direction:column;align-items:stretch;gap:6px">
+      <div class="row"><span>已完成传奇（${S.legendDone.length}）</span><span class="muted" style="font-size:11px">点标签看详情 ›</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${S.legendDone.map(function(t){ return `<span style="cursor:pointer;display:inline-block;padding:2px 8px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);font-size:11.5px;color:var(--gold2);white-space:nowrap" onclick="showLegendGalleryDetail('${t}')">🌍 ${t}</span>`; }).join("")}</div>
+    </div>`;   // v1.61c：参考称号标签网格重排（原「、」连接长行），点击单个查看详情
     h += `<div class="li" style="cursor:pointer" onclick="showAchvDetail()"><span>🏅 成就</span><b>${(S.achv||[]).length >= ACHV.length ? (ACHV.length + " / " + ACHV.length + " ✓ 已全部达成") : ((S.achv||[]).length + " / ?")}</b></div>`;   // v1.38o：全部达成后揭晓真实总数
     const tt = Object.keys(S.timTitles||{}).filter(function(k){ return S.timTitles[k] > Date.now(); });
     if(tt.length) h += `<div class="li" style="cursor:pointer" onclick="showTitleDetail()"><span>当月称号</span><b style="text-align:right">${tt.join("、")}</b></div>`;
@@ -8782,9 +8826,16 @@ function feedPet(n, foodName){
     }
   });
 }
-/* v1.56：宠物互动（服务端权威） */
+/* v1.56：宠物互动（服务端权威）；v1.61c：只弹互动信息，不再自动打开宠物详情 */
 function petPat(n){
-  apiCall("pet_pat", {name:n}).then(function(j){ if(j.error) return; showPetDetail(n); });
+  apiCall("pet_pat", {name:n}).then(function(j){
+    if(j.error) return;
+    const _m = (j.msgs || []).filter(function(x){ return String(x).indexOf("🤗 ") === 0; }).pop() || "";
+    const _i = _m.indexOf("\n");
+    if(_i < 0) return;
+    dlg(_m.slice(0, _i), '<div class="dlg-msg" style="line-height:1.9">' + _m.slice(_i + 1) + '</div>'
+      + '<div class="muted" style="font-size:11px;margin-top:6px">心情 +5（今日互动已完成）</div>', [{text:"好", cls:"pri", fn:null}]);
+  });
 }
 function petWalkStart(n){
   apiCall("pet_walk", {name:n}).then(function(j){ if(j.error) return; render(); });

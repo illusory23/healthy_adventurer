@@ -121,7 +121,7 @@ ck(CFG.recipes.every(function(r){ return !r.cap; })
 ck(typeof S.mealSp === 'object' && S.mealSp !== null && 'cnt' in S.mealSp && 'got' in S.mealSp,
    'v1.41f5：S.mealSp 字段（cnt/got）');
 ck(REGIONS.filter(function(r){ return r.n === "深渊裂隙"; })[0].c === 10
-   && REGIONS.filter(function(r){ return r.n === "深渊深处"; })[0].c === 12, 'v1.41f5：深渊裂隙 10 / 深渊深处 12');
+   && REGIONS.filter(function(r){ return r.n === "深渊核心"; })[0].c === 12, 'v1.41f5：深渊裂隙 10 / 深渊核心 12（v1.61c 改名）');
 /* v1.42：龙种体系 + 九头蛇材料改造 + 巨龙盛宴 enPct */
 ck(Object.keys(M).length === 125, 'v1.58：材料 125 种（+六域遗珍 6：冥河灯油 / 地狱火种 / 泰坦石核 / 沼心莲实 / 深海遗珠 / 冰晶果）');
 ck(C["Lv5"].some(function(q){ return q[0] === "魔鬼的谈判"; }) && C["Lv4"].some(function(q){ return q[0] === "镇压恶魔裂隙"; }),
@@ -304,7 +304,8 @@ hck(html.indexOf('📅 每日签到') >= 0 && html.indexOf('连续 7 / 14 / 30 �
 hck(html.indexOf('终局出口') < 0 && html.indexOf('终局活力出口') < 0, 'v1.50：局外设计解释文案已清除');
 hck(html.indexOf('失败仅获得 30% 报酬、30% 经验') >= 0, 'v1.50：失败文案（经验 30% 修正）');
 hck(html.indexOf('次日打卡时结算（最迟 12:00 自动）') >= 0, 'v1.50：跨天结算文案统一');
-hck(html.indexOf('nowrap">🏷️ ${t}') >= 0, 'v1.50：称号标签网格渲染（换行 chips）');
+hck(html.indexOf("showTitleDetail('${t}')") >= 0 && html.indexOf('>🏷️ ${t}</span>') >= 0,
+    'v1.50/v1.61c：称号标签网格渲染（换行 chips + 单个点击看详情）');
 hck(html.indexOf('canE = S.energy >= Math.max(1, Math.round(q[7] * (1 - gearEnCutFor(q[1]))))') >= 0,
     'v1.50：精力判定计入装备减免（池卡 / 详情）');
 /* v1.50c：图鉴扩展（道具 + 传奇事件）+ 文案清理 */
@@ -492,6 +493,33 @@ hck((html.match(/sickToday\(\)\) return showAlert\("今日病假已封存/g) || 
     'v1.61：病假日封存（打卡三入口 + 打卡类道具，前后端同款）+ v1.61b 卡片移出双栏容器');
 hck((html.match(/sick\.indexOf\(h\.date\) >= 0|sk\.indexOf\(h\.date\) >= 0|_sickDays\.indexOf\(h\.date\) >= 0/g) || []).length >= 3,
     'v1.60：病假日计入三处连击口径（sleepStreak / sleepStreakProt / 连击显示）');
+/* v1.61c：本轮实机反馈修复四件套 */
+hck(html.indexOf('style="margin-top:12px"><h3>🕊️ 疗养圣所') >= 0,
+    'v1.61c：圣所卡补 margin-top 12px（多栏容器截断尾行 margin，Chromium 实测贴靠）');
+hck(html.indexOf("function _snapScroll") >= 0 && html.indexOf("function _restoreScroll") >= 0
+    && html.indexOf("const _scSnap = _snapScroll()") >= 0 && html.indexOf("_restoreScroll(_scSnap)") >= 0,
+    'v1.61c：轮询重绘保滚动（render 快照/复原 .scroll-y，防列表跳顶）');
+hck(html.indexOf('g[5] !== "—" && S.blueprints[g[0]] === true') >= 0,
+    'v1.61c：打造列表过滤不可打造装备（主材料"—"，与图纸商店口径一致）');
+hck(html.indexOf("function showTitleDetail(one)") >= 0 && html.indexOf("event.stopPropagation();showTitleDetail(") >= 0
+    && html.indexOf("已完成传奇（") >= 0 && html.indexOf("showLegendGalleryDetail('${t}')") >= 0
+    && html.indexOf("fn:function(){ showPetDetail(n); }") < 0
+    && html.indexOf("心情 +5（今日互动已完成）") >= 0,
+    'v1.61c：荣誉页（单个称号标签看详情 + 已完成传奇标签网格）+ 抚摸不弹宠物详情');
+hck(html.indexOf("function dishTopFirst") >= 0 && (html.match(/dishTopFirst\(/g) || []).length >= 5,
+    'v1.61c：巨龙盛宴锁定料理列表最上方（酒馆 + 图鉴两处排序）');
+hck(html.indexOf('{n:"深渊核心"') >= 0 && html.indexOf("深渊深处") < 0,
+    'v1.61c：深渊深处 → 深渊核心（改名，无旧名残留）');
+hck(html.indexOf("a.r.c - b.r.c || a.i - b.i") >= 0,
+    'v1.61c：探索地点列表按探索点消耗低→高排列');
+hck(html.indexOf("地点列表限高滚动") >= 0,
+    'v1.61c：探索地点列表限高滚动（地点变多不再拉长整页）');
+hck(html.indexOf("const EV_ROB_CAP = 1000000") >= 0
+    && html.indexOf("Math.min(Math.floor(S.money * 0.10), EV_ROB_CAP)") >= 0
+    && html.indexOf("上限 1 铂金币") >= 0,
+    'v1.61c：盗贼伏击抢夺上限 1 铂金币（上限 + 文案）');
+hck(html.indexOf("const roll = a.forceRoll || rand(100)") >= 0 && html.indexOf("const roll2 = a.forceRoll || rand(100)") >= 0,
+    'v1.61c：立即完成委托锁定骰值 1（forceRoll 覆盖常规 + 传奇结算）');
 hck(html.indexOf('{n:"晨光森林·深处", t:"07:00-09:00", c:4, h:3, lv:3, g:3, deep:1') >= 0
     && html.indexOf('{n:"星夜洞窟·深处", t:"21:00-23:00", c:5, h:6, lv:4, g:5, deep:1') >= 0
     && html.indexOf('{n:"腐化森林·深处", t:"08:00-23:30", c:7, h:9, lv:5, g:6, deep:1') >= 0

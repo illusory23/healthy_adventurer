@@ -457,6 +457,9 @@ def check_level_up(s):
 SICK_LOCK_SCORE = 59                   # v1.61：疗养圣所·病假日评分锁定值
 SICK_LOCK_MSG = "今日病假已封存——健康评分锁定 " + str(SICK_LOCK_SCORE) + "，本日无法打卡（好好休息）。"
 
+# ══════════════ 探索 ══════════════
+EV_ROB_CAP = 1000000                   # v1.61c：盗贼伏击抢夺上限 = 1 铂金币（1,000,000）——前端 EV_ROB_CAP 对齐
+
 
 def sick_today(s):
     """v1.61：今日是否为病假日（评分锁定 59、打卡封存）"""
@@ -3547,10 +3550,10 @@ def roll_explore_event(s, r):
             ev_log(s, "盗贼伏击 → 击退盗贼（消耗 10 精力）")
             text = "回程路上，几名盗贼从岩石后窜出！<br><br>你消耗 <b>10 精力</b> 与他们周旋……<b>成功击退了他们。</b>"
         else:
-            loss = int(s["money"] * 0.10)
+            loss = min(int(s["money"] * 0.10), EV_ROB_CAP)   # v1.61c：抢夺上限 1 铂金币
             s["money"] -= loss
-            ev_log(s, "盗贼伏击 → 被抢走 " + fmt_money(loss) + "（当前钱币的 10%，消耗 10 精力）")
-            text = "回程路上，几名盗贼从岩石后窜出！<br><br>你消耗 <b>10 精力</b> 与他们周旋，却寡不敌众——<br><b>损失当前钱币的 10%（" + fmt_money(loss) + "）。</b>"
+            ev_log(s, "盗贼伏击 → 被抢走 " + fmt_money(loss) + "（当前钱币的 10%，上限 1 铂金币，消耗 10 精力）")
+            text = "回程路上，几名盗贼从岩石后窜出！<br><br>你消耗 <b>10 精力</b> 与他们周旋，却寡不敌众——<br><b>损失当前钱币的 10%（上限 1 铂金币，实损 " + fmt_money(loss) + "）。</b>"
         return {"name": ev, "title": "🗡 盗贼伏击", "text": text,
                 "options": [{"label": "确定", "accept": 1, "pri": 1}]}
     if ev == "隐藏泉眼":

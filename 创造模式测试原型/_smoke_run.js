@@ -1478,7 +1478,7 @@ console.log("\\n===== 28. v1.41c 节日窗口扩展 + 任务排序 =====");
 console.log("\\n===== 29. v1.41f5/f6：料理平衡调整 =====");
 {
   check(REGIONS.filter(function(r){ return r.n === "深渊裂隙"; })[0].c === 10
-    && REGIONS.filter(function(r){ return r.n === "深渊深处"; })[0].c === 12, "v1.41f5：深渊裂隙 10 / 深渊深处 12 探索点消耗");
+    && REGIONS.filter(function(r){ return r.n === "深渊核心"; })[0].c === 12, "v1.41f5：深渊裂隙 10 / 深渊核心 12 探索点消耗（v1.61c 改名）");
   const _spR = CFG.recipes.filter(function(r){ return r.sp; });
   check(_spR.length === 5 && _spR.every(function(r){ return r.sp <= 5; }), "v1.41f6：探索点料理 5 道、单次 ≤5 点");
   // v1.50：sp 按品阶分布（精良1 / 稀有2 / 史诗3 / 传说5；普通无）
@@ -1920,8 +1920,19 @@ const _h38r = [
   ["v1.59b 良好档活力点+1（结算 + 区间奖励）", html.indexOf("else if(sc>=60){ rep=2; con=1; vit=1; }") >= 0 && html.indexOf("else if(sc>=60){ nb.pay=0.05; nb.con=1; nb.vit=1; }") >= 0],
   ["v1.60 大师试炼 250（前后端同值）", html.indexOf("S.doneBelow5 < 250") >= 0 && html.indexOf("累计完成 250 次 Lv5 以下委托") >= 0],
   ["v1.61 疗养圣所：无门槛 / 每月 3 天 / 59 锁定 / 今日+补请昨日", html.indexOf("function takeSickLeave") >= 0 && html.indexOf("SICK_MONTHLY = 3") >= 0 && html.indexOf("SICK_LOCK_SCORE = 59") >= 0 && html.indexOf("function sickToday") >= 0 && html.indexOf("guildIdx() < 3") < 0 && html.indexOf('apiCall("sick_leave"') >= 0 && html.indexOf("sickDays:[]") >= 0],
-  ["v1.61b 疗养圣所 UI（独立通栏块，移出双栏容器防重叠）", html.indexOf("<h3>🕊️ 疗养圣所</h3>") >= 0 && html.indexOf('<div class="card"><h3>🕊️ 疗养圣所') >= 0 && html.indexOf('<section id="tab-health" class="tabpage twocol"') < 0 && html.indexOf("'<div class=\"twocol\">' + h + '</div>' + hSick") >= 0 && html.indexOf("病假封存 · 评分锁定") >= 0 && html.indexOf("onclick=\"takeSickLeave('yesterday')\"") >= 0],
+  ["v1.61b/c 疗养圣所 UI（独立通栏块 + margin-top 12px 防贴靠）", html.indexOf("<h3>🕊️ 疗养圣所</h3>") >= 0 && html.indexOf('<div class="card" style="margin-top:12px"><h3>🕊️ 疗养圣所') >= 0 && html.indexOf('<section id="tab-health" class="tabpage twocol"') < 0 && html.indexOf("'<div class=\"twocol\">' + h + '</div>' + hSick") >= 0 && html.indexOf("病假封存 · 评分锁定") >= 0 && html.indexOf("onclick=\"takeSickLeave('yesterday')\"") >= 0],
   ["v1.61 病假日封存：打卡三入口 + 打卡类道具拒绝（前后端同款）", (html.match(/sickToday\(\)\) return showAlert\("今日病假已封存/g) || []).length >= 6 && html.indexOf("打卡类道具无法使用") >= 0],
+  ["v1.61c 重绘保滚动（轮询刷新不跳顶）", html.indexOf("function _snapScroll") >= 0 && html.indexOf("function _restoreScroll") >= 0 && html.indexOf("const _scSnap = _snapScroll()") >= 0 && html.indexOf("_restoreScroll(_scSnap)") >= 0],
+  ["v1.61c 打造列表过滤不可打造装备（主材料为破折号）", html.indexOf('g[5] !== "—" && S.blueprints[g[0]] === true') >= 0],
+  ["v1.61c 抚摸后只显示互动信息（不再弹宠物详情）", html.indexOf("心情 +5（今日互动已完成）") >= 0 && html.indexOf("fn:function(){ showPetDetail(n); }") < 0],
+  ["v1.61c 荣誉页：单个称号标签查看详情（stopPropagation）", html.indexOf("function showTitleDetail(one)") >= 0 && html.indexOf("event.stopPropagation();showTitleDetail(") >= 0],
+  ["v1.61c 已完成传奇改标签网格（点击单个看详情）", html.indexOf("已完成传奇（") >= 0 && html.indexOf("showLegendGalleryDetail('${t}')") >= 0],
+  ["v1.61c 巨龙盛宴锁定料理最上方（酒馆 + 图鉴两处排序）", html.indexOf("function dishTopFirst") >= 0 && (html.match(/dishTopFirst\(/g) || []).length >= 5],
+  ["v1.61c 深渊深处 → 深渊核心（无旧名残留）", html.indexOf('{n:"深渊核心"') >= 0 && html.indexOf("深渊深处") < 0],
+  ["v1.61c 探索地点按探索点消耗低→高排列", html.indexOf("a.r.c - b.r.c || a.i - b.i") >= 0],
+  ["v1.61c 探索地点列表限高滚动（防界面过长）", html.indexOf("地点列表限高滚动") >= 0],
+  ["v1.61c 盗贼伏击抢夺上限 1 铂金币", html.indexOf("const EV_ROB_CAP = 1000000") >= 0 && html.indexOf("Math.min(Math.floor(S.money * 0.10), EV_ROB_CAP)") >= 0],
+  ["v1.61c 立即完成委托锁定骰值 1（forceRoll 大成功）", html.indexOf("const roll = a.forceRoll || rand(100)") >= 0 && html.indexOf("const roll2 = a.forceRoll || rand(100)") >= 0],
   ["v1.60 病假日计入两条连击口径（sleepStreak / sleepStreakProt）", html.indexOf("sick.indexOf(h.date) >= 0") >= 0 && html.indexOf("sk.indexOf(h.date) >= 0") >= 0],
   ["v1.60 深处 C/A/S 共绑", html.indexOf('{n:"星夜洞窟·深处", t:"21:00-23:00", c:5, h:6, lv:4, g:5') >= 0 && html.indexOf('{n:"腐化森林·深处", t:"08:00-23:30", c:7, h:9, lv:5, g:6') >= 0 && html.indexOf('{n:"晨光森林·深处", t:"07:00-09:00", c:4, h:3, lv:3, g:3') >= 0],
   ["v1.60 虚空裂痕地表 Lv4", html.indexOf('{n:"虚空裂痕", t:"22:00-23:30", c:8, lv:4, h:12') >= 0],

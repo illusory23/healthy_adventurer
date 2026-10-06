@@ -383,6 +383,22 @@ for _ in range(1000):
         hit = True
         break
 check(hit and s3["energy"] <= 50, "盗贼伏击：消耗 10 精力（现 " + str(s3["energy"]) + "）")
+# v1.61c：盗贼伏击抢夺上限 1 铂金币（控制随机：0.1 触发事件 → 0.9 跳过宠物奇遇 → 0.1 抽中盗贼；rand=100 强制「被抢」分支）
+s4 = new_state()
+s4["daily"] = game._blank_daily(game.today_str())
+s4["money"] = 20000000                     # 200 铂金币；10% = 200 万 → 应封顶 100 万
+_seq = [0.1, 0.9, 0.1]
+_orig_random = game.random.random
+_orig_rand = game.rand
+game.random.random = lambda: _seq.pop(0) if _seq else 0.1
+game.rand = lambda n: 100
+try:
+    e4 = game.roll_explore_event(s4, {"n": "晨光森林"})
+finally:
+    game.random.random = _orig_random
+    game.rand = _orig_rand
+check(e4 and e4["name"] == "盗贼伏击" and s4["money"] == 19000000,
+      "盗贼伏击：抢夺上限 1 铂金币（200 铂金 → 实损 1 铂金，现余 " + str(s4["money"]) + "）")
 
 print("=== 16. 搜索新动作（sell_all / abandon name / pending_rare） ===")
 s = new_state()
@@ -1532,8 +1548,8 @@ check(abs(game.title_own_bonus(_s80) - 0.10) < 1e-9, "超过 10 个 → 封顶 +
 print("=== 43. v1.41f5/f6：料理平衡（探索点限次与品阶梯度 / cap 改恢复 / 深渊消耗 / 巨龙盛宴） ===")
 # 深渊消耗上调（探索点经济：最高的两个区域）
 _dy = {r["n"]: r["c"] for r in game.REGIONS}
-check(_dy.get("深渊裂隙") == 10 and _dy.get("深渊深处") == 12,
-      "深渊裂隙 10 / 深渊深处 12 探索点消耗")
+check(_dy.get("深渊裂隙") == 10 and _dy.get("深渊核心") == 12,
+      "深渊裂隙 10 / 深渊核心 12 探索点消耗（v1.61c：深渊深处改名）")
 check(all(not r.get("cap") for r in game.CFG["recipes"]), "cap 类料理清零（全改恢复类）")
 _sp_recipes = [(j, r) for j, r in enumerate(game.CFG["recipes"]) if r.get("sp")]
 check(len(_sp_recipes) == 5 and all(r["sp"] <= 5 for _j, r in _sp_recipes),
