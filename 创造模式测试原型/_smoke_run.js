@@ -2048,7 +2048,8 @@ const _h38r = [
   ["v1.61j 失败时触发率减半（failMul:0.5——委托失败 6%→3% / 传奇失败 12%→6%，含心情修正后减半）", html.indexOf("failMul:0.5") >= 0 && html.indexOf("if(fail) pct *= PET_FIND.failMul;") >= 0],
   ["v1.61k 拾取权重 = 内容自身产出结构（委托期望数量 / 区域掉率% / 传奇必得数量 —— tierW 全品阶权重移除）", html.indexOf("tierW") < 0 && html.indexOf("v1.61k：拾取权重 = 内容自身的产出结构") >= 0 && html.indexOf("v1.61k：权重 = 掉表期望数量") >= 0 && html.indexOf("v1.61k：权重 = 区域掉率%") >= 0 && html.indexOf("v1.61k：权重 = 必得数量") >= 0],
   ["v1.61m 手机页签栏移至顶部（钱币信息下方——贴底横滑撞系统手势）", html.indexOf("v1.61m：移至顶部（钱币信息下方）") >= 0 && html.indexOf("#tabs{position:fixed;bottom:0") < 0 && html.indexOf("body{padding-bottom:64px}") < 0],
-  ["v1.61n HUD 底部内边距修正（inset-top 误用 → 下 8px；页签栏与钱币信息间不再多出空隙）", html.indexOf("padding:calc(8px + env(safe-area-inset-top,0)) 12px 8px") >= 0 && html.indexOf("padding:8px 12px calc(8px + env(safe-area-inset-top,0))") < 0]
+  ["v1.61n HUD 底部内边距修正（inset-top 误用 → 下 8px；页签栏与钱币信息间不再多出空隙）", html.indexOf("padding:calc(8px + env(safe-area-inset-top,0)) 12px 8px") >= 0 && html.indexOf("padding:8px 12px calc(8px + env(safe-area-inset-top,0))") < 0],
+  ["v1.61o 打造说明文案与 v1.61l 数据同步（主材料 3/4/5/6/7 · 副材料 3/4/5/7/9）", html.indexOf("主材料 普通 3 / 精良 4 / 稀有 5 / 史诗 6 / 传说 7（饰品 −1）；副材料 3 / 4 / 5 / 7 / 9（护甲 +1）") >= 0 && html.indexOf("主材料 普通 2 / 精良 3 / 稀有 4 / 史诗 5 / 传说 6") < 0]
 ];
 let _h38rBad = 0;
 _h38r.forEach(function(x){ console.log("  " + (x[1] ? "✅" : "❌") + " " + x[0]); if(!x[1]) _h38rBad++; });

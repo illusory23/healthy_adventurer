@@ -254,6 +254,9 @@ hck(html.indexOf('v1.61m：移至顶部（钱币信息下方）') >= 0 && html.i
 hck(html.indexOf('padding:calc(8px + env(safe-area-inset-top,0)) 12px 8px') >= 0
     && html.indexOf('padding:8px 12px calc(8px + env(safe-area-inset-top,0))') < 0,
     'v1.61n：HUD 底部内边距修正（inset-top 误用替代 → 下 8px；刘海机型 HUD 与页签栏间不再多出 ≈55px 空隙）');
+hck(html.indexOf('主材料 普通 3 / 精良 4 / 稀有 5 / 史诗 6 / 传说 7（饰品 −1）；副材料 3 / 4 / 5 / 7 / 9（护甲 +1）') >= 0
+    && html.indexOf('主材料 普通 2 / 精良 3 / 稀有 4 / 史诗 5 / 传说 6') < 0,
+    'v1.61o：打造说明文案与 v1.61l 数据同步（背包·打造卡可见文案 3/4/5/6/7 + 3/4/5/7/9）');
 hck((html.match(/<span class="tb-i">/g) || []).length === 8, 'v1.57：8 个页签全部带图标（tb-i）');
 hck(html.indexOf('b.scrollIntoView({inline:"center"') >= 0, 'v1.57：当前页签自动滚入视野');
 hck(html.indexOf('main.addEventListener("touchstart"') >= 0 && html.indexOf('Math.abs(dx) < 70') >= 0
