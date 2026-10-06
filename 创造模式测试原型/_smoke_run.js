@@ -712,6 +712,12 @@ console.log("\\n===== 12. 背包筛选与详情补全 =====");
   showPetDetail("月光狐");
   check(dlgCap && dlgCap.t === "宠物详情" && (dlgCap.b || "").indexOf("月光狐") >= 0
     && (dlgCap.b || "").indexOf("品阶") >= 0, "showPetDetail：宠物详情弹窗（含品阶）");
+  /* v1.61f：宠物详情展示具体心情值（数值 / 100 + 进度条） */
+  const _pmB = petMetaOf("月光狐");
+  check(dlgCap && (dlgCap.b || "").indexOf("心情值 <b") >= 0
+    && (dlgCap.b || "").indexOf(">" + _pmB.mood + "</b> / 100") >= 0
+    && (dlgCap.b || "").indexOf("width:" + _pmB.mood + "%;background:") >= 0,
+    "showPetDetail：具体心情值（数值 / 100 + 进度条）");
   render();
   check((document.getElementById("tab-log").innerHTML || "").indexOf("宠物（") >= 0
     && (document.getElementById("tab-log").innerHTML || "").indexOf("月光狐") >= 0, "信息页：全宠物总览（不再只显示小狼）");
@@ -1967,7 +1973,8 @@ const _h38r = [
   ["v1.61d 清醒符咒/安眠护符移入铂金商店（规则道具）", html.indexOf('{n:"清醒符咒 ×1", platC:1') >= 0 && html.indexOf('{n:"安眠护符 ×1", platC:1') >= 0],
   ["v1.61d 薰香/护符只展示下一阶 + 额外饰品类说明", html.indexOf("it.incense === _ic + 1") >= 0 && html.indexOf("🕯️ 安眠薰香（") >= 0 && html.indexOf("与安眠薰香同属「额外饰品」类永久加成") >= 0 && html.indexOf("if(it.incense) return;") >= 0],
   ["v1.61d HUD 公会经验条（声望独立显示移除）", html.indexOf('id="hGuildBar"') >= 0 && html.indexOf('id="hGuildTxt"') >= 0 && html.indexOf('class="bar bar-guild"') >= 0 && html.indexOf('id="hRep"') < 0 && html.indexOf("⭐声望") < 0],
-  ["v1.61d 规则道具不可出售（sellMat 非材料守卫 ×2）", (html.match(/!M\[name\] \|\| !S\.mats\[name\]/g) || []).length >= 2]
+  ["v1.61d 规则道具不可出售（sellMat 非材料守卫 ×2）", (html.match(/!M\[name\] \|\| !S\.mats\[name\]/g) || []).length >= 2],
+  ["v1.61f 宠物详情显示具体心情值（数值 / 100 + 进度条 + 卡片提示）", html.indexOf("心情值 <b") >= 0 && html.indexOf("</b> / 100") >= 0 && html.indexOf("连续 7 天会收到心意礼物") >= 0 && html.indexOf("（${mood}/100）") >= 0]
 ];
 let _h38rBad = 0;
 _h38r.forEach(function(x){ console.log("  " + (x[1] ? "✅" : "❌") + " " + x[0]); if(!x[1]) _h38rBad++; });
