@@ -166,32 +166,25 @@ s["money"] = 100000000
 s["con"] = 100000
 s["vit"] = 100000
 s["rep"] = 999999
-game.buy(s, 2, [])
+game.buy(s, 1, [])
 check(len(s["mats"]) > 0, "材料包购买")
-# v1.38k/m/o：批量购买 / 兑换 + 商店限购（渠道独立计数）
+# v1.38k/m/o：批量购买 / 兑换 + 商店限购（渠道独立计数）；v1.61d：清醒符咒/安眠护符移出铜币商店 → 用材料包/疾风符咒验证
 m0, mat0 = s["money"], sum(s["mats"].values())
-bad = game.buy(s, 0, [], 2)
-check(bad is not None and s["money"] == m0, "超日限购被拒（清醒符咒 ×2 > 日限 1）")
-game.buy(s, 0, [], 1)
-check(s["items"].get("清醒符咒", 0) == 1 and s["money"] == m0 - 500000, "限购内购买 ×1（50 万/个）")
+bad = game.buy(s, 0, [], 4)
+check(bad is not None and s["money"] == m0, "超日限购被拒（普通材料包 ×4 > 日限 3）")
+game.buy(s, 0, [], 3)
+check(s["money"] == m0 - 18000 and sum(s["mats"].values()) == mat0 + 15, "限购内批量购买 ×3（-1.8 万，+15 材料）")
 bad = game.buy(s, 0, [], 1)
 check(bad is not None, "达日限购后再买被拒")
-game.buy(s, 2, [], 2)
-check(sum(s["mats"].values()) == mat0 + 10, "批量购买材料包 ×2（+10 材料，无日限）")
-c0 = s["con"]
+# v1.38o：疾风符咒日限 1（v1.61d：贡献商店首项；清醒/安眠已移至铂金商店）
+s["con"] = 1000
+wind0 = s["items"].get("疾风符咒", 0)
 game.buy_con(s, 0, [], 1)
-check(s["items"].get("清醒符咒", 0) == 2 and s["con"] == c0 - 120, "贡献渠道独立限购 ×1（-120 贡献，v1.50 提价）")
+check(s["items"].get("疾风符咒", 0) == wind0 + 1 and s["con"] == 600, "贡献商店：疾风符咒 ×1（-400 贡献）")
 c1 = s["con"]; s["con"] = 10
 bad = game.buy_con(s, 0, [], 1)
 check(bad is not None and s["con"] == 10, "已购满日限后再兑换被拒")
 s["con"] = c1
-# v1.38o：疾风符咒日限 1
-s["con"] = 1000
-wind0 = s["items"].get("疾风符咒", 0)
-game.buy_con(s, 2, [], 1)
-check(s["items"].get("疾风符咒", 0) == wind0 + 1 and s["con"] == 600, "疾风符咒 ×1（-400 贡献）")
-bad = game.buy_con(s, 2, [], 1)
-check(bad is not None and s["con"] == 600, "疾风符咒日限 1 拦截")
 # v1.38o：史诗材料 周限 2；v1.41 H2：材料改真自选（传 mat；索引按名查找防插项错位）
 _i_ep = next(i for i, x in enumerate(game.CON_SHOP) if x.get("matSel") and x["matSel"][0] == "史诗")
 _i_rare = next(i for i, x in enumerate(game.CON_SHOP) if x.get("matSel") and x["matSel"][0] == "稀有")
@@ -217,7 +210,7 @@ bad = game.buy_con(s, _i_rare, [], 1, _rare_mat)
 check(bad is not None and s["con"] == 1640, "稀有材料周限购拦截（每周 3）")
 s["con"] = c1
 e0 = s["explore"]
-game.buy_vit(s, 4, [], 3)
+game.buy_vit(s, 2, [], 3)                        # v1.61d：探索点 +5 新索引 2（清醒/安眠移出后移位）
 check(s["explore"] == e0 + 15 and s["vit"] == 100000 - 75, "批量活力点兑换（探索点 +15）")
 m2 = s["money"]; s["money"] = 100000
 bad = game.buy(s, 0, [], 9999)
@@ -267,9 +260,9 @@ _r_idx = s["rumor"]["idx"] if s.get("rumor") else None
 game.catch_up(s)
 check(s.get("rumor") and s["rumor"]["date"] == game.today_str() and s["rumor"]["idx"] == _r_idx,
       "酒馆传闻：当日缺失时 catch_up 幂等补齐")
-game.buy_vit(s, 6, [])
+game.buy_vit(s, 4, [])                           # v1.61d：薰香 Ⅰ 新索引 4
 check(s["incense"] == 1, "安眠薰香 I")
-bad = game.buy_vit(s, 10, [])
+bad = game.buy_vit(s, 8, [])                     # 薰香 Ⅴ 新索引 8（跳级拦截）
 check(s["incense"] == 1 and bad, "薰香跳级拦截")
 game.up_skill(s, "体能", [])
 check(s["skills"]["体能"] == 1, "技能升级")
@@ -1859,15 +1852,29 @@ check(game.INCENSE_BONUS == [0, 4, 9, 16, 26, 40]
 _s60 = new_state(); _s60["incense"] = 5
 check(game.energy_base(_s60) == game.CFG["energyMax"][0] + 40, "薰香 V：精力上限累计 +40")
 _epic59 = [k for k, v in game.M.items() if v[1] == "史诗"]
-check(len(game.PLAT_SHOP) == 5 and all("platC" in it for it in game.PLAT_SHOP)
+check(len(game.PLAT_SHOP) == 7 and all("platC" in it for it in game.PLAT_SHOP)
       and len(game.PLAT_SHOP[1]["sel"]) == len(_epic59)
       and all(k in game.PLAT_SHOP[1]["sel"] for k in _epic59),
-      "铂金商店：5 项全铂金币结算；史诗自选包 = 全部 " + str(len(_epic59)) + " 种")
+      "铂金商店：7 项全铂金币结算（v1.61d +清醒/安眠）；史诗自选包 = 全部 " + str(len(_epic59)) + " 种")
 _s61 = new_state(); _s61["lv_idx"] = 4; _s61["rep"] = 999999; _s61["money"] = 10 ** 9
 check(game.buy_plat(_s61, [], 1, "龙血") is None and _s61["mats"].get("龙血") == 3
       and _s61["money"] == 10 ** 9 - 1000000, "铂金商店：史诗自选 ×3（-1 铂金币）")
 check(game.buy_plat(_s61, [], 1, "蘑菇") is not None, "铂金商店：素材品阶不符被拒")
 check(game.buy_plat(_s61, [], 3) is None and _s61["items"].get("疾风符咒") == 1, "铂金商店：疾风符咒 ×1")
+check(game.buy_plat(_s61, [], 5) is None and _s61["items"].get("清醒符咒") == 1,
+      "铂金商店：清醒符咒 ×1（v1.61d 由铜币商店移入）")
+check(game.buy_plat(_s61, [], 6) is None and _s61["items"].get("安眠护符") == 1,
+      "铂金商店：安眠护符 ×1（v1.61d 移入）")
+# v1.61d：铂金商店解锁门槛 = 当前持有 ≥1 铂金币（不再看公会 S 级）
+_s62 = new_state(); _s62["rep"] = 999999; _s62["money"] = 999999
+check(game.buy_plat(_s62, [], 3) is not None, "铂金商店：持有 <1 铂金币被拒（门槛改持有量）")
+_s62["money"] = 1000000
+check(game.buy_plat(_s62, [], 3) is None, "铂金商店：恰 1 铂金币放行")
+# v1.61d：规则道具不可出售（交易所只收材料）
+_m0b = _s62["money"]; _s62["items"]["清醒符咒"] = 1
+bad = game.sell_mat(_s62, "清醒符咒", 1)
+check(bad is not None and _s62["money"] == _m0b and _s62["items"].get("清醒符咒") == 1,
+      "规则道具不可出售（交易所仅材料）")
 # ⑩ 导入档 schema 校验
 _bad10 = game.import_save_state({"lvIdx": "x", "gear": "oops", "mats": 3, "money": -5})
 check(_bad10 is not None and _bad10["lv_idx"] == 0 and isinstance(_bad10["gear"], list)

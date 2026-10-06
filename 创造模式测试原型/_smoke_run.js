@@ -377,48 +377,47 @@ console.log("\\n===== 8. 商店 / 兑换 / 技能 / 护符 / 稀有事件 / 存�
 {
   S.lvIdx = 4; S.money = 100000000; S.con = 0; S.vit = 0;
   check(CFG.drawCount.join("-") === "1-3-5-6-8", "各级单次抽取数量 1-3-5-6-8");
-  buy(2); check(true, "材料包");
-  S.vit = 100000; buyVit(5); check(S.con >= 10, "活力点兑换贡献失败");
+  buy(1); check(true, "材料包");                          // v1.61d：精良材料包新索引 1
+  S.vit = 100000; buyVit(3); check(S.con >= 10, "活力点兑换贡献失败");   // 贡献 +10 新索引 3
   S.con = 500; const matB8 = Object.keys(S.mats).length;
-  buyCon(3); check(Object.keys(S.mats).length >= matB8, "贡献兑换材料失败");
+  buyCon(1); check(Object.keys(S.mats).length >= matB8, "贡献兑换材料失败");   // 探索点 +5 新索引 1
   /* v1.38k/m：批量购买 / 兑换（拖动条）+ 商店限购 */
   function _matTotal(){ let t = 0; for(const k in S.mats) t += S.mats[k]; return t; }
   function _epCount(){ let c = 0; for(const k in S.mats){ if(M[k] && M[k][1] === "史诗") c += S.mats[k]; } return c; }
   S.money = 100000000; S.items = {};
   S.shopDaily = {date: todayStr(), cnt:{}}; S.shopWeekly = {week: weekKey(), cnt:{}};
   const _mK = S.money;
-  /* v1.38o：购买弹窗（独立小窗 + 拖动条 + −/+ 步进 + 「最大」） */
+  /* v1.38o：购买弹窗（独立小窗 + 拖动条 + −/+ 步进 + 「最大」）；v1.61d：改用普通材料包（清醒符咒已移至铂金商店） */
   openShopBuy("c", 0);
-  check(dlgCap && dlgCap.t.indexOf("清醒符咒") >= 0, "购买弹窗：独立小窗已弹出（购买 · 清醒符咒）");
+  check(dlgCap && dlgCap.t.indexOf("普通材料包") >= 0, "购买弹窗：独立小窗已弹出（购买 · 普通材料包）");
   check(dlgCap.b.indexOf('type="range"') >= 0, "购买弹窗：拖动条已渲染");
   check(dlgCap.b.indexOf("sbStep") >= 0 && dlgCap.b.indexOf("sbMax") >= 0, "购买弹窗：−/+ 步进 + 「最大」按钮");
-  check(dlgCap.b.indexOf('max="1"') >= 0, "购买弹窗：数量按今日剩余 1 封顶");
+  check(dlgCap.b.indexOf('max="3"') >= 0, "购买弹窗：数量按今日剩余 3 封顶");
+  const _matP = _matTotal();
   document.getElementById("sbR_c_0").value = "1";   // 模拟弹窗选 ×1 后点「确认购买」
   dlgCap.btns[1].fn();
-  check((S.items["清醒符咒"]||0) === 1 && S.money === _mK - 500000, "弹窗确认 → 购买 ×1（-50 万）");
+  check(_matTotal() === _matP + 5 && S.money === _mK - 6000, "弹窗确认 → 购买 ×1（+5 材料，-6000 铜）");
+  buy(0, 2);                                        // 补满日限（3/3）
   const _cfA = confirmN;
-  buy(0, 2);
-  check((S.items["清醒符咒"]||0) === 1 && confirmN === _cfA, "已购满日限后再买被拒（清醒符咒 日限 1；被拒不弹确认）");
+  buy(0, 1);
+  check(confirmN === _cfA, "已购满日限后再买被拒（普通材料包 日限 3；被拒不弹确认）");
   const _matK = _matTotal();
   const _cfB = confirmN;
-  buy(2, 2);
-  check(_matTotal() === _matK + 10, "批量购买材料包 ×2（+10 材料，无日限）");
+  buy(1, 2);
+  check(_matTotal() === _matK + 6, "批量购买材料包 ×2（+6 材料）");
   check(confirmN === _cfB + 1, "v1.53：购买经二次确认（累计确认 " + confirmN + " 次）");
   S.vit = 1000; const _eK = S.explore;
-  buyVit(4, 3);
+  buyVit(2, 3);
   check(S.explore === _eK + 15 && S.vit === 925, "批量活力点兑换 ×3（探索点 +15，活力点 -75）");
-  /* 贡献渠道独立限购（c:/con: 前缀互不影响） */
-  S.con = 500; const _iK = S.items["清醒符咒"]||0;
+  /* 渠道独立限购（vit:/con: 前缀互不影响）——v1.61d：改用疾风符咒（同时上架活力/贡献/铂金三店） */
+  S.vit = 1000; const _windK = S.items["疾风符咒"]||0;
+  buyVit(1, 1);
+  check((S.items["疾风符咒"]||0) === _windK + 1 && S.vit === 500, "活力渠道疾风符咒 ×1（-500 活力点）");
+  S.con = 500;
   buyCon(0, 1);
-  check((S.items["清醒符咒"]||0) === _iK + 1 && S.con === 380, "贡献渠道独立限购 ×1（-120 贡献，v1.50 提价）");
+  check((S.items["疾风符咒"]||0) === _windK + 2 && S.con === 100, "贡献渠道独立限购 ×1（-400 贡献，两渠道计数互不影响）");
   S.con = 10; buyCon(0, 1);
   check(S.con === 10, "已购满日限后再兑换被拒（不扣贡献）");
-  /* v1.38o：疾风符咒 新增日限 1 */
-  S.con = 1000; const _windK = S.items["疾风符咒"]||0;
-  buyCon(2, 1);
-  check((S.items["疾风符咒"]||0) === _windK + 1 && S.con === 600, "疾风符咒 ×1（-400 贡献）");
-  buyCon(2, 1);
-  check(S.con === 600, "疾风符咒日限 1 拦截");
   /* v1.38o：史诗材料 周限 2；v1.41 H2：材料改真自选（弹窗选择，索引按名查找防插项错位） */
   S.con = 2000; const _epK = _epCount();
   const _iEp = CON_SHOP.findIndex(function(x){ return x.matSel && x.matSel[0] === "史诗"; });
@@ -442,7 +441,7 @@ console.log("\\n===== 8. 商店 / 兑换 / 技能 / 护符 / 稀有事件 / 存�
   buyCon(_iRare, 1);
   check(S.con === 1640, "稀有材料周限购拦截（每周 3）");
   S.vit = 10000; S.incense = 0;
-  buyVit(6, 5);
+  buyVit(4, 5);                                      // v1.61d：薰香 Ⅰ 新索引 4
   check(S.incense === 1 && S.vit === 9920, "薰香忽略批量（固定单次：-80 而非 -400）");
   /* v1.38m：干粮 / 地图新效果 */
   S.items["神秘地图"] = 1; S.explore = 10;
@@ -455,9 +454,28 @@ console.log("\\n===== 8. 商店 / 兑换 / 技能 / 护符 / 稀有事件 / 存�
   S.money = 5000000; render();
   const _kH = document.getElementById("tab-shop").innerHTML || "";
   check(_kH.indexOf('type="range"') < 0, "商店行：拖动条已移入弹窗（行内不渲染）");
-  check(_kH.indexOf("📅 今日 1/1") >= 0, "限购状态显示（清醒符咒 今日 1/1）");
+  check(_kH.indexOf("📅 今日 3/3") >= 0, "限购状态显示（普通材料包 今日 3/3）");
   check(_kH.indexOf("📅 本周 2/2") >= 0, "周限购显示（史诗材料 本周 2/2）");
   check(_kH.indexOf("📅 本周 3/3") >= 0, "周限购显示（稀有材料 本周 3/3）");
+  /* v1.61d：铂金商店（持有 5 铂金 → 内容可见）；薰香卡只展示下一阶；大师商店未解锁 → 界面保留内容隐藏 */
+  check(_kH.indexOf("🏛 铂金商店") >= 0 && _kH.indexOf("清醒符咒") >= 0 && _kH.indexOf("安眠护符") >= 0,
+        "铂金商店：≥1 铂金币内容可见（含清醒符咒 / 安眠护符）");
+  check(_kH.indexOf("🕯️ 安眠薰香") >= 0 && _kH.indexOf("第 2 级") >= 0 && _kH.indexOf("安眠薰香 I") < 0 && _kH.indexOf("安眠薰香 II") < 0,
+        "薰香卡：只展示下一阶（Ⅰ 已购 → 只出 Ⅱ；不再整列 Ⅰ~Ⅴ）");
+  const _achvK = S.achv; S.achv = []; render();
+  const _kM = document.getElementById("tab-shop").innerHTML || "";
+  check(_kM.indexOf("🎓 大师商店") >= 0 && _kM.indexOf("内容隐藏——需达成成就") >= 0,
+        "大师商店：未解锁时界面保留、内容隐藏（v1.61d）");
+  S.achv = _achvK; render();
+  S.money = 500000; render();
+  const _kH2 = document.getElementById("tab-shop").innerHTML || "";
+  check(_kH2.indexOf("🏛 铂金商店") >= 0 && _kH2.indexOf("内容隐藏——需持有") >= 0,
+        "铂金商店：持有 <1 铂金币 → 界面保留、内容隐藏（v1.61d）");
+  S.money = 5000000; render();
+  /* v1.61d：规则道具不可出售（交易所仅收材料） */
+  S.money = 1000; S.items["清醒符咒"] = 1;
+  const _smR = (typeof sellMat === "function") ? sellMat("清醒符咒") : null;
+  check(S.money === 1000 && S.items["清醒符咒"] === 1, "规则道具不可出售（sellMat 对非材料直接忽略）");
   /* v1.38o/p2：荣誉区——冥念护符获取后显示（0 级隐藏）+ 成就全部达成揭晓真实总数 */
   const _achvBak = S.achv.slice();
   const _charmBak = S.charm;
@@ -555,6 +573,9 @@ console.log("\\n===== 9. 装备槽弹窗 + 三餐按钮 =====");
   const h = document.getElementById("tab-bag").innerHTML;
   check(h.includes("openSlotPicker('weapon')") && h.includes(">装备</button>"), "装备栏：空槽显示「装备」按钮");
   check(h.includes("openSlotPicker('armor')") && h.includes(">更换</button>"), "装备栏：已装备槽显示「更换」按钮");
+  /* v1.61d：背包双栏等高容器 + 宠物小界面清除（用户指定） */
+  check((h.match(/class="qcol"/g) || []).length === 2 && h.includes('<div class="qsplit">'), "背包：qsplit 双栏结构（两栏等高容器）");
+  check(!h.includes("宠物") && !h.includes("gotoPetTab"), "背包：无宠物小界面残留（v1.61d 删除）");
   renderHealth();
   check(document.getElementById("tab-health").innerHTML.includes("meal-btn"), "三餐按钮使用加大样式 meal-btn");
   console.log("  装备槽按钮（装备/更换）与三餐按钮 ✅");
@@ -1230,20 +1251,20 @@ console.log("\\n===== 23. v1.41 I6：大师层 =====");
 
 console.log("\\n===== 24. v1.41 未解锁内容隐藏 =====");
 {
-  const _bRep = S.rep, _bLv = S.lvIdx, _bLA = S.legendActive, _bLP = S.legendPreview;
+  const _bRep = S.rep, _bLv = S.lvIdx, _bLA = S.legendActive, _bLP = S.legendPreview, _bMoney = S.money;
   const _bHist = S.history, _bEx = S.explore, _bExU = S.exploreUsed, _bExA = S.exploreActive, _bDQ = S.doneQuests;
   // 0) F 级商店页：页签常显，页面给出「商店未开放」引导（保持原行为）
   S.rep = 0; renderShop();
   check(document.getElementById("tab-shop").innerHTML.indexOf("商店未开放") >= 0,
         "公会 F 级：商店页显示「商店未开放」引导（页签不隐藏）");
   // 1) 铂金商店 / 贡献商店 / 技能树 / 护符：按解锁条件整卡显隐
-  S.rep = 100; renderShop();
+  S.rep = 100; S.money = 100000; renderShop();     // v1.61d：铂金商店改按持有解锁——固定 <1 铂金币验证内容隐藏
   let _sh = document.getElementById("tab-shop").innerHTML;
-  check(_sh.indexOf("铂金商店") < 0, "E 级：铂金商店整卡隐藏（需 S 级）");
+  check(_sh.indexOf("🏛 铂金商店") >= 0 && _sh.indexOf("内容隐藏——需持有") >= 0, "E 级：铂金商店界面保留、内容隐藏（v1.61d 改按持有 ≥1 铂金币解锁）");
   check(_sh.indexOf("贡献商店（") < 0, "E 级：贡献商店未到 D 级 → 隐藏");
   check(_sh.indexOf("技能树") < 0, "E 级：技能树（需 D 级）整卡隐藏");
-  check(_sh.indexOf("冥念护符") < 0, "E 级：冥念护符（需 C 级）整卡隐藏");
-  check(_sh.indexOf("🔒") < 0, "商店页：全页无「🔒」锁定提示");
+  check(_sh.indexOf("🌙 冥念护符") < 0, "E 级：冥念护符（需 C 级）整卡隐藏");
+  check(_sh.indexOf("🔒") >= 0, "商店页：未解锁卡片以「🔒 内容隐藏」呈现（v1.61d 取代整卡隐藏）");
   check(_sh.indexOf("图纸商店") >= 0 && _sh.indexOf("普通 图纸") >= 0, "E 级：图纸商店显示（普通/精良档已解锁）");
   check(_sh.indexOf("稀有 图纸") < 0, "E 级：稀有档位（需 C 级）隐藏");
   S.rep = 400; renderShop();
@@ -1251,17 +1272,17 @@ console.log("\\n===== 24. v1.41 未解锁内容隐藏 =====");
   check(_sh.indexOf("贡献商店（") >= 0, "D 级：贡献商店显示");
   check(_sh.indexOf("重掷券") < 0, "D 级：精英重掷券（需 B 级）隐藏");
   check(_sh.indexOf("技能树") >= 0, "D 级：技能树显示");
-  check(_sh.indexOf("冥念护符") < 0, "D 级：冥念护符仍隐藏（v1.60 起需 C 级）");
+  check(_sh.indexOf("🌙 冥念护符") < 0, "D 级：冥念护符仍隐藏（v1.60 起需 C 级）");
   S.rep = 850; renderShop();
   _sh = document.getElementById("tab-shop").innerHTML;
-  check(_sh.indexOf("冥念护符") >= 0, "C 级：冥念护符第 1 级显示（v1.60 对齐文案）");
+  check(_sh.indexOf("🌙 冥念护符") >= 0, "C 级：冥念护符第 1 级显示（v1.60 对齐文案）");
   check(_sh.indexOf("重掷券") < 0, "C 级：精英重掷券仍隐藏（v1.60 起需 B 级）");
   S.rep = 1200; renderShop();
   _sh = document.getElementById("tab-shop").innerHTML;
   check(_sh.indexOf("重掷券") >= 0, "B 级：精英重掷券显示（v1.60 修正档位）");
-  S.rep = 6500; renderShop();
+  S.rep = 6500; S.money = 5000000; renderShop();   // v1.61d：持有 ≥1 铂金币 → 铂金商店内容可见
   _sh = document.getElementById("tab-shop").innerHTML;
-  check(_sh.indexOf("铂金商店") >= 0, "S 级（6500 声望）：铂金商店显示");
+  check(_sh.indexOf("🏛 铂金商店") >= 0 && _sh.indexOf("清醒符咒") >= 0, "S 级：铂金商店内容可见（持有 ≥1 铂金币）");
   check(_sh.indexOf("稀有 图纸") >= 0, "S 级：稀有档位显示");
   check(_sh.indexOf("史诗 图纸") >= 0, "S 级：史诗档位显示（需 A 级）");
   // 2) 探索：整卡显隐 + 未解锁区域隐藏
@@ -1326,7 +1347,7 @@ console.log("\\n===== 24. v1.41 未解锁内容隐藏 =====");
   check(!!S.legendActive && S.legendPreview === true, "未达参与条件：每日低语预览可生成（2%）");
   Math.random = _rnd2;
   // 恢复
-  S.rep = _bRep; S.lvIdx = _bLv; S.legendActive = _bLA; S.legendPreview = _bLP;
+  S.rep = _bRep; S.lvIdx = _bLv; S.legendActive = _bLA; S.legendPreview = _bLP; S.money = _bMoney;
   S.history = _bHist; S.explore = _bEx; S.exploreUsed = _bExU; S.exploreActive = _bExA; S.doneQuests = _bDQ;
   console.log("  v1.41 未解锁内容隐藏 ✅");
 }
@@ -1939,7 +1960,14 @@ const _h38r = [
   ["v1.60 护符 I/II 判定 = C/B", html.indexOf("{lv:1, need:3,") >= 0 && html.indexOf("{lv:2, need:4,") >= 0],
   ["v1.60 重掷券解锁档位 C → B（g:4）", html.indexOf('重掷券", con:240, lim:["日",1], g:4') >= 0],
   ["v1.60 探索解锁 = Lv2 + 12 次 Lv2 委托", html.indexOf("function lv2DoneCount") >= 0 && html.indexOf("const EXPLORE_LV2_NEED = 12") >= 0 && html.indexOf("次 Lv2 委托后解锁") >= 0 && (html.match(/次 Lv2 委托后解锁/g) || []).length >= 2],
-  ["v1.60 LEVEL_INFO（Lv2 探索预告 / Lv3 腐化 / Lv4 虚空裂痕）", html.indexOf("自由探索开放——完成 12 次 Lv2 委托后解锁") >= 0 && html.indexOf('"🗺️ 探索高阶区域开放：腐化森林"') >= 0 && html.indexOf('"🗺️ 探索高阶区域开放：虚空裂痕"') >= 0]
+  ["v1.60 LEVEL_INFO（Lv2 探索预告 / Lv3 腐化 / Lv4 虚空裂痕）", html.indexOf("自由探索开放——完成 12 次 Lv2 委托后解锁") >= 0 && html.indexOf('"🗺️ 探索高阶区域开放：腐化森林"') >= 0 && html.indexOf('"🗺️ 探索高阶区域开放：虚空裂痕"') >= 0],
+  ["v1.61d 委托/背包两栏等高（弹性末卡 + 背包估算切分）", html.indexOf(".qcol{display:flex;flex-direction:column}") >= 0 && html.indexOf(".qcol>.card:last-child{flex:1}") >= 0 && html.indexOf("按估算高度取最优前缀切分") >= 0 && html.indexOf('id="tab-bag" class="tabpage twocol"') < 0 && html.indexOf('id="tab-bag" class="tabpage"') >= 0],
+  ["v1.61d 背包删除宠物小界面（v1.56 引导卡移除）", html.indexOf("原 v1.56 的「宠物→宠物页」引导卡已删除") >= 0],
+  ["v1.61d 铂金商店解锁 = 持有 ≥1 铂金币（界面保留·内容隐藏）", html.indexOf("const PLAT_UNLOCK_MONEY = 1000000") >= 0 && html.indexOf("function platShopUnlocked(){ return (S.money || 0) >= PLAT_UNLOCK_MONEY; }") >= 0 && html.indexOf("内容隐藏——需持有") >= 0 && html.indexOf("v1.61d：未解锁时界面保留、内容隐藏") >= 0],
+  ["v1.61d 清醒符咒/安眠护符移入铂金商店（规则道具）", html.indexOf('{n:"清醒符咒 ×1", platC:1') >= 0 && html.indexOf('{n:"安眠护符 ×1", platC:1') >= 0],
+  ["v1.61d 薰香/护符只展示下一阶 + 额外饰品类说明", html.indexOf("it.incense === _ic + 1") >= 0 && html.indexOf("🕯️ 安眠薰香（") >= 0 && html.indexOf("与安眠薰香同属「额外饰品」类永久加成") >= 0 && html.indexOf("if(it.incense) return;") >= 0],
+  ["v1.61d HUD 公会经验条（声望独立显示移除）", html.indexOf('id="hGuildBar"') >= 0 && html.indexOf('id="hGuildTxt"') >= 0 && html.indexOf('class="bar bar-guild"') >= 0 && html.indexOf('id="hRep"') < 0 && html.indexOf("⭐声望") < 0],
+  ["v1.61d 规则道具不可出售（sellMat 非材料守卫 ×2）", (html.match(/!M\[name\] \|\| !S\.mats\[name\]/g) || []).length >= 2]
 ];
 let _h38rBad = 0;
 _h38r.forEach(function(x){ console.log("  " + (x[1] ? "✅" : "❌") + " " + x[0]); if(!x[1]) _h38rBad++; });

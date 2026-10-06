@@ -57,6 +57,7 @@ body[data-tod="evening"]{--amb1:rgba(140,110,255,.18); --amb2:rgba(200,130,255,.
 .bar{flex:1;height:6px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden}
 .bar i{display:block;height:100%;border-radius:3px;transition:width .3s}
 .bar-exp i{background:linear-gradient(90deg,#4a86e8,#6cb4f5)} .bar-en i{background:linear-gradient(90deg,#3fae75,#5fd49a)}
+.bar-guild i{background:linear-gradient(90deg,#7a5fb8,#a98fe0)}   /* v1.61d：公会进度条（紫） */
 .bar-en i.warn{background:linear-gradient(90deg,#c9a227,#e8c84a)}   /* v1.34：精力 ≤66% 黄 */
 .bar-en i.low{background:linear-gradient(90deg,#b0332a,#e05a4a)}    /* v1.34：精力 ≤33% 红 */
 .bar-lab{font-size:10px;color:var(--dim2);margin-top:2px;display:flex;justify-content:space-between}
@@ -97,11 +98,13 @@ main{padding:14px;max-width:980px;margin:0 auto}
 .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .grid{display:grid;gap:8px}
 .grid2{grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
-/* ── 委托页双栏布局 ── */
+/* ── 委托页双栏布局（v1.61d：背包页同样改用 qsplit——两栏等高）── */
 .qsplit{display:grid;grid-template-columns:1fr;gap:0}
+.qcol{display:flex;flex-direction:column}
+.qcol>.card:last-child{flex:1}   /* v1.61d：两栏等高——较短一栏的末卡自动弹缩补齐（用户指定） */
 @media(min-width:900px){
-  main:has(#tab-quest.on){max-width:1400px}
-  .qsplit{grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:10px;align-items:start}
+  main:has(#tab-quest.on),main:has(#tab-bag.on){max-width:1400px}
+  .qsplit{grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:10px}
 }
 /* ── 委托卡 ── */
 .quest{background:linear-gradient(160deg,#30345a,#282c4c);border:1px solid #454b7a;border-radius:10px;padding:13px;cursor:pointer;transition:.15s;box-shadow:0 2px 10px rgba(0,0,0,.22)}
@@ -252,10 +255,10 @@ main{padding:14px;max-width:980px;margin:0 auto}
   <div class="hud-bars">
     <div style="flex:1"><div class="bar bar-exp"><i id="hExpBar" style="width:0%"></i></div><div class="bar-lab"><span>经验</span><span id="hExpTxt">0/40</span></div></div>
     <div style="flex:1"><div class="bar bar-en"><i id="hEnBar" style="width:100%"></i></div><div class="bar-lab"><span>精力</span><span id="hEnTxt">60/60</span></div></div>
+    <div style="flex:1"><div class="bar bar-guild"><i id="hGuildBar" style="width:0%"></i></div><div class="bar-lab"><span>公会</span><span id="hGuildTxt">0/100</span></div></div>
   </div>
   <div class="hud-res">
     <span>💰<b id="hMoney">0</b></span>
-    <span>⭐声望<b id="hRep">0</b></span>
     <span>🎖️贡献<b id="hCon">0</b></span>
     <span>🌙活力点<b id="hVit">0</b></span>
     <span>🍀健康<b id="hHp">0</b></span>
@@ -278,7 +281,7 @@ main{padding:14px;max-width:980px;margin:0 auto}
   <section id="tab-quest" class="tabpage on"></section>
   <section id="tab-tavern" class="tabpage"></section>
   <section id="tab-health" class="tabpage"></section>
-  <section id="tab-bag" class="tabpage twocol"></section>
+  <section id="tab-bag" class="tabpage"></section>
   <section id="tab-pet" class="tabpage"></section>
   <section id="tab-shop" class="tabpage twocol"></section>
   <section id="tab-log" class="tabpage"></section>
@@ -3649,8 +3652,8 @@ function canTrade(){ return S.lvIdx >= 1; }
 
 function sellMat(name){
   if(!canTrade()) return showAlert("交易所尚未开放");
+  if(!M[name] || !S.mats[name]) return;             // v1.61d：非材料（规则道具等）不可出售
   const sell = M[name][2];
-  if(!S.mats[name]) return;
   confirmSpend("交易所", "确定卖出「"+name+"」×1，换得 <b>"+fmtMoney(sell)+"</b> 吗？", function(){
     S.money += sell;
     addLog("💱 卖出 "+name+" ×1 → +"+fmtMoney(sell),"");
@@ -3673,8 +3676,7 @@ function sellAll(){
 
 /* 商店 */
 const SHOP = [
-  {n:"清醒符咒", c:500000, lim:["日",1], d:"规则道具：当日早起视为达成", item:"清醒符咒"},     // v1.38m：免死金牌级定价 + 每日限购（v1.38o：收紧为每日 1）
-  {n:"安眠护符", c:1000000, lim:["日",1], d:"规则道具：当日早睡视为达成", item:"安眠护符"},
+  /* v1.61d：清醒符咒 / 安眠护符移至铂金商店（用户指定）——铜币商店不再出售 */
   {n:"普通材料包", c:6000, lim:["日",3], d:"随机普通材料 ×5"},
   {n:"精良材料包", c:40000, lim:["日",2], d:"随机精良材料 ×3"},
   {n:"专注药剂", c:60000, lim:["日",2], d:"规则道具：下一次委托成功率 +3%", item:"专注药剂"},
@@ -3688,8 +3690,7 @@ const SHOP = [
   {n:"圣水", c:48000, d:"任务准备物：恶魔/深渊类委托必备（猎杀深渊恶魔 / 潜入深渊神殿 等）", item:"圣水"},
 ];
 const VIT_SHOP = [
-  {n:"清醒符咒",    vit:60,  d:"规则道具：当日早起视为达成",           item:"清醒符咒"},
-  {n:"安眠护符",    vit:80,  d:"规则道具：当日早睡视为达成",           item:"安眠护符"},
+  /* v1.61d：清醒符咒 / 安眠护符移至铂金商店（用户指定）——活力商店不再出售 */
   {n:"活力药水",    vit:300, d:"规则道具：当日健康锁定 100 分",        item:"活力药水"},
   {n:"疾风符咒",    vit:500, d:"高级道具：直接完成一个进行中的委托",    item:"疾风符咒"},
   {n:"探索点 +5",   vit:25,  d:"立即获得 5 探索点",                    sp:5},
@@ -3702,8 +3703,7 @@ const VIT_SHOP = [
 ];
 /* 贡献商店 */
 const CON_SHOP = [
-  {n:"清醒符咒",  con:120, lim:["日",1], d:"规则道具：当日早起视为达成",        item:"清醒符咒"},
-  {n:"安眠护符",  con:160, lim:["日",1], d:"规则道具：当日早睡视为达成",        item:"安眠护符"},
+  /* v1.61d：清醒符咒 / 安眠护符移至铂金商店（用户指定）——贡献商店不再出售 */
   {n:"疾风符咒",  con:400, lim:["日",1], d:"高级道具：直接完成一个进行中的委托", item:"疾风符咒"},   // v1.38o：加每日限购 1
   {n:"探索点 +5", con:60,  lim:["日",2], d:"立即获得 5 探索点",                 sp:5},        // v1.41 H2：按 06 设计实装
   {n:"指定普通材料×5", con:20,  lim:["日",3], d:"自选普通材料 ×5",  matSel:["普通",5]},     // v1.41 H2：改真自选（原随机开包）
@@ -3720,7 +3720,12 @@ const PLAT_SHOP = [
   {n:"活力药水 ×1", platC:1, lim:["周",1], item:"活力药水", d:"规则道具：当日健康锁定 100 分"},
   {n:"疾风符咒 ×1", platC:1, lim:["周",1], item:"疾风符咒", d:"高级道具：直接完成一个进行中的委托"},
   {n:"幸运币 ×2", platC:1, lim:["周",2], item:"幸运币", itemN:2, d:"规则道具：下一次委托成功率 +5%"},
+  {n:"清醒符咒 ×1", platC:1, lim:["周",2], item:"清醒符咒", d:"规则道具：当日早起视为达成（v1.61d 由铜币商店移入）"},
+  {n:"安眠护符 ×1", platC:1, lim:["周",2], item:"安眠护符", d:"规则道具：当日早睡视为达成（v1.61d 由铜币商店移入）"},
 ];
+/* v1.61d：铂金商店解锁 = 当前持有 ≥1 铂金币（不看历史获得总量；服务端同值）——未解锁时界面保留、内容隐藏 */
+const PLAT_UNLOCK_MONEY = 1000000;
+function platShopUnlocked(){ return (S.money || 0) >= PLAT_UNLOCK_MONEY; }
 /* v1.41 H3：交易所买入（06 设计：买入价 = 卖出价 ×3；E 级解锁；仅普通/精良/稀有——史诗走贡献商店、传说走铂金商店） */
 const BUY_TIERS = {"普通":1, "精良":1, "稀有":1};
 /* v1.38m：商店限购——lim:["日",N] / ["周",N]；记账在 S.shopDaily / S.shopWeekly（tick 跨天/跨周幂等重置）
@@ -3935,7 +3940,7 @@ function buyMasterVit(){
 }
 /* v1.50：铂金商店购买（S 级；全部以铂金币结算；自选包点击后展开可选清单） */
 function buyPlat(i){
-  if(guildIdx() < 6) return showAlert("铂金商店需公会 <b>S 级</b>（"+CFG.guildReq[6]+" 声望）。", "铂金商店");
+  if(!platShopUnlocked()) return showAlert("铂金商店需持有 <b>≥1 铂金币</b>（当前 "+fmtMoney(S.money||0)+"）。", "铂金商店");   // v1.61d：门槛改持有量
   const it = PLAT_SHOP[i]; if(!it) return;
   const _lim = shopLimCheck(it, 1, "plat");
   if(_lim) return showAlert(_lim, "铂金商店");
@@ -6804,8 +6809,21 @@ function render(){
   enBar.className = enPct <= 33 ? "low" : (enPct <= 66 ? "warn" : "");
   document.getElementById("hEnTxt").textContent = S.energy+"/"+em;
 
+  // v1.61d：公会进度条（类似经验条）——声望不再在资源行独立显示
+  {
+    const _gi = guildIdx(), _gioMax = _gi >= CFG.guildReq.length - 1;
+    let _gPct, _gTxt;
+    if(_gioMax){ _gPct = 100; _gTxt = guildName()+" 级 · 满级"; }
+    else {
+      const _gf = CFG.guildReq[_gi], _gn = CFG.guildReq[_gi + 1];
+      _gPct = Math.min(100, Math.max(0, (_gn > _gf ? (S.rep - _gf) / (_gn - _gf) * 100 : 100)));
+      _gTxt = (S.rep - _gf) + "/" + (_gn - _gf);
+    }
+    document.getElementById("hGuildBar").style.width = _gPct + "%";
+    document.getElementById("hGuildTxt").textContent = _gTxt;
+  }
+
   document.getElementById("hMoney").textContent = fmtMoney(S.money);
-  document.getElementById("hRep").textContent = S.rep;
   document.getElementById("hCon").textContent = S.con;
   document.getElementById("hVit").textContent = S.vit;
   document.getElementById("hHp").textContent = S.health.score;
@@ -7685,14 +7703,8 @@ function renderBag(){
   }
   h += `</div>`;
 
-  // ── v1.56：宠物管理移至独立「🐾 宠物」页 ──
-  {
-    const _pn = (S.pets || []).filter(function(n){ return n !== "小狼"; }).length + (S.wolf ? 1 : 0);   // v1.56：小狼由 S.wolf 单独计数（防重复）
-    h += `<div class="card"><h3>🐾 宠物（${_pn}）</h3>
-      <div class="muted" style="font-size:12px;line-height:1.8">宠物已搬到独立的「<b>🐾 宠物</b>」页——心情互动、抚摸、喂食、散步、羁绊故事都在那里。</div>
-      <div style="margin-top:8px"><button class="btn sm pri" onclick="gotoPetTab()">前往宠物页</button></div></div>`;
-  }
-  h += `</div>`;
+  // v1.61d：原 v1.56 的「宠物→宠物页」引导卡已删除（用户指定：背包中不再残留宠物小界面）；同行清理了一枚多余的 </div>
+
 
 
   const total = keys.reduce((a,k)=>a+M[k][2]*S.mats[k],0);
@@ -7707,7 +7719,24 @@ function renderBag(){
     <div class="li"><span>材料估值</span><b>${fmtMoney(total)}</b></div>
   </div>`;
 
-  el.innerHTML = h;
+  // ══ v1.61d：两栏等高（用户指定）——扫描各卡起点 → 按估算高度取最优前缀切分（较短一栏的末卡自动弹缩补齐）══
+  {
+    const _estMap = {"🎽 装备栏": 430, "🔨 打造": 170 + owned.length * 64, "⚗️ 炼金台": 140 + Object.keys(CRAFT).length * 92, "🪄 规则道具": 130 + items.length * 76, "💰 资产": 270};
+    const _starts = [0], _ests = [90 + keys.length * 47];
+    ["🎽 装备栏", "🔨 打造", "⚗️ 炼金台", "🪄 规则道具", "💰 资产"].forEach(function(t){
+      const _p = h.indexOf('<div class="card"><h3>' + t);
+      if(_p >= 0){ _starts.push(_p); _ests.push(_estMap[t]); }
+    });
+    let _best = 1, _gap = Infinity;
+    for(let k = 1; k < _starts.length; k++){
+      let _a = 0, _b = 0;
+      for(let i = 0; i < _starts.length; i++){ if(i < k) _a += _ests[i] || 200; else _b += _ests[i] || 200; }
+      if(Math.abs(_a - _b) < _gap){ _gap = Math.abs(_a - _b); _best = k; }
+    }
+    const _cut = _starts[_best];
+    el.innerHTML = '<div class="qsplit"><div class="qcol">' + h.slice(0, _cut) + '</div><div class="qcol">' + h.slice(_cut) + '</div></div>';
+    return;
+  }
 }
 
 function renderShop(){
@@ -7737,12 +7766,7 @@ function renderShop(){
 
   h += `<div class="card"><h3>活力点兑换（${S.vit} 点）</h3>`;
   VIT_SHOP.forEach((it,i)=>{
-    if(it.incense){                     // 薰香逐级升级，无数量概念
-      h += `<div class="li"><div>${it.n}<div class="muted">${it.d}</div></div>
-        <div class="cnt"><span>${it.vit} 点</span>
-        <button class="btn sm" onclick="buyVit(${i}, 1)">兑换</button></div></div>`;
-      return;
-    }
+    if(it.incense) return;              // v1.61d：薰香移出本列表 → 独立「安眠薰香」卡（与冥念护符同类，只展示下一阶）
     h += shopRow(it, i, "vit", "buyVit", "兑换");
   });
   h += `</div>`;
@@ -7754,23 +7778,30 @@ function renderShop(){
     h += `</div>`;
   }
 
-  // ── 铂金商店（v1.50：全部以铂金币结算；自选包点击后展开可选清单）──
-  if(g >= 6){
+  // ── 铂金商店（v1.50：全部以铂金币结算；v1.61d：解锁 = 持有 ≥1 铂金币——界面保留、内容隐藏）──
+  {
     h += `<div class="card"><h3>🏛 铂金商店（持有 ${Math.floor((S.money||0)/1000000)} 铂金币）</h3>`;
-    PLAT_SHOP.forEach(function(it, i){
-      const _l = shopLimLeft(it, "plat");
-      const _limTxt = it.lim ? `　<span style="color:${_l < 1 ? "var(--red)" : "var(--gold2)"}">📅 本周 ${shopLimUsed(it,"plat")}/${it.lim[1]}</span>` : "";
-      const _selTxt = it.matSel ? `　<b style="color:var(--gold2)">${(it.sel||[]).length} 种自选</b>（点击展开可选清单）` : "";
-      h += `<div class="li"><div>${it.n}<div class="muted">${it.d || ""}${_selTxt}${_limTxt}</div></div>
-        <div class="cnt"><span>${it.platC} 铂金币</span><button class="btn sm ${_l >= 1 ? "pri" : ""}" ${(_l >= 1) ? "" : "disabled"} onclick="buyPlat(${i})">${_l >= 1 ? "购买" : "已购满"}</button></div></div>`;
-    });
+    if(!platShopUnlocked()){
+      h += `<div class="muted" style="font-size:12px;line-height:1.8">🔒 内容隐藏——需持有 <b>≥1 铂金币</b>（100 万铜）后解锁。<br>当前持有：<b>${fmtMoney(S.money||0)}</b>（按当前持有折算，不计历史获得总量）。</div>`;
+    } else {
+      PLAT_SHOP.forEach(function(it, i){
+        const _l = shopLimLeft(it, "plat");
+        const _limTxt = it.lim ? `　<span style="color:${_l < 1 ? "var(--red)" : "var(--gold2)"}">📅 本周 ${shopLimUsed(it,"plat")}/${it.lim[1]}</span>` : "";
+        const _selTxt = it.matSel ? `　<b style="color:var(--gold2)">${(it.sel||[]).length} 种自选</b>（点击展开可选清单）` : "";
+        h += `<div class="li"><div>${it.n}<div class="muted">${it.d || ""}${_selTxt}${_limTxt}</div></div>
+          <div class="cnt"><span>${it.platC} 铂金币</span><button class="btn sm ${_l >= 1 ? "pri" : ""}" ${(_l >= 1) ? "" : "disabled"} onclick="buyPlat(${i})">${_l >= 1 ? "购买" : "已购满"}</button></div></div>`;
+      });
+    }
     h += `</div>`;
   }
 
-  // ── 大师商店（v1.41 I6：完成 ≥4 个不同传奇事件解锁「大师」成就后显示）──
-  if(masterUnlocked()){
-    h += `<div class="card"><h3>🎓 大师商店</h3>
-      <div class="muted" style="font-size:11px;margin-bottom:6px">传奇之上——专属装备一次性购入；货币：铂金币 + 传说材料。</div>`;
+  // ── 大师商店（v1.41 I6；v1.61d：未解锁时界面保留、内容隐藏）──
+  {
+    h += `<div class="card"><h3>🎓 大师商店</h3>`;
+    if(!masterUnlocked()){
+      h += `<div class="muted" style="font-size:12px;line-height:1.8">🔒 内容隐藏——需达成成就「<b>大师</b>」（完成 ≥4 个不同传奇事件）后开放。</div>`;
+    } else {
+      h += `<div class="muted" style="font-size:11px;margin-bottom:6px">传奇之上——专属装备一次性购入；货币：铂金币 + 传说材料。</div>`;
     MASTER_SHOP.gear.forEach(function(it, i){
       const _own = S.gear.indexOf(it.n) >= 0 || Object.keys(S.equipped||{}).some(function(k){ return S.equipped[k] === it.n; });
       const _matTxt = Object.keys(it.mats).map(function(k){ return k+"×"+it.mats[k]; }).join("、");
@@ -7783,6 +7814,7 @@ function renderShop(){
       <div class="cnt"><span>6 铂金币</span><button class="btn sm ${_ml >= 1 ? "pri" : ""}" ${(_ml >= 1) ? "" : "disabled"} onclick="buyMasterMat()">${_ml >= 1 ? "购买" : "已购满"}</button></div></div>`;
     h += `<div class="li"><div>大师的馈赠<div class="muted">活力点 +500（无限兑换）</div></div>
       <div class="cnt"><span>20 铂金币</span><button class="btn sm pri" onclick="buyMasterVit()">兑换</button></div></div>`;
+    }
     h += `</div>`;
   }
 
@@ -7841,7 +7873,7 @@ function renderShop(){
   // ── 冥念护符（v1.41：未解锁的内容隐藏——整卡需第一级解锁；下一级需已解锁才显示）──
   if(charmUnlocked(0)){
     h += `<div class="card"><h3>🌙 冥念护符（${S.charm} / 5 级）</h3>
-      <div class="muted" style="font-size:11px;margin-bottom:8px">终极目标。成功率加成<b>不计入 E 上限</b>。</div>`;
+      <div class="muted" style="font-size:11px;margin-bottom:8px">终极目标。成功率加成<b>不计入 E 上限</b>。与安眠薰香同属「额外饰品」类永久加成（相当于不显示的额外饰品位）。</div>`;
     if(S.charm >= 5){
       h += `<div style="color:var(--gold2);font-size:13px">✨ 已满级：报酬 +30%、成功率 +10%、活力点获取 +20%</div>`;
     } else if(charmUnlocked(S.charm)){
@@ -7852,6 +7884,28 @@ function renderShop(){
           <button class="btn sm ${ok?"pri":""}" onclick="buyCharm()">${c.cost} 活力点</button></div>
         <div class="muted" style="font-size:11px">报酬 +${Math.round(c.pay*100)}%　成功率 +${Math.round(c.rate*100)}%${c.vit?"　活力点获取 +"+Math.round(c.vit*100)+"%":""}${c.other?"　"+c.other:""}</div>
       </div>`;
+    }
+    h += `</div>`;
+  }
+
+  // ── 安眠薰香（v1.61d：与冥念护符同类——「额外饰品」永久加成；只展示下一阶）──
+  {
+    const _ic = S.incense || 0;
+    h += `<div class="card"><h3>🕯️ 安眠薰香（${_ic} / 5 级）</h3>
+      <div class="muted" style="font-size:11px;margin-bottom:8px">永久加成：精力上限递增（Ⅰ~Ⅴ 累计 +40）。与冥念护符同属「额外饰品」类永久加成（相当于不显示的额外饰品位）。</div>`;
+    if(_ic >= 5){
+      h += `<div style="color:var(--gold2);font-size:13px">✨ 已满级：精力上限 +40</div>`;
+    } else {
+      let _nit = null, _nidx = -1;
+      VIT_SHOP.forEach(function(it, i){ if(it.incense === _ic + 1){ _nit = it; _nidx = i; } });
+      if(_nit){
+        const _ok2 = S.vit >= _nit.vit;
+        h += `<div class="li" style="flex-direction:column;align-items:stretch;gap:4px">
+          <div class="row"><b>第 ${_ic + 1} 级</b>
+            <button class="btn sm ${_ok2?"pri":""}" onclick="buyVit(${_nidx}, 1)">${_nit.vit} 活力点</button></div>
+          <div class="muted" style="font-size:11px">${_nit.d}</div>
+        </div>`;
+      }
     }
     h += `</div>`;
   }
@@ -8451,7 +8505,7 @@ function forceFinish(i){ /* 完成判定由服务端 catch_up 处理；保留函
 }
 function sellMat(name){
   if(!canTrade()) return showAlert("交易所尚未开放");
-  if(!S.mats[name]) return;
+  if(!M[name] || !S.mats[name]) return;             // v1.61d：非材料（规则道具等）不可出售
   confirmSpend("交易所", "确定卖出「"+name+"」×1，换得 <b>"+fmtMoney(M[name][2])+"</b> 吗？", function(){
     apiCall("sell", {name:name});
   });
@@ -8526,8 +8580,8 @@ function buyMat(name){                                  // v1.41 H3：交易所�
     apiCall("buy_mat", {name:name});
   });
 }
-function buyPlat(i){                                    // v1.50：铂金商店·统一购买（服务端 buy_plat）
-  if(guildIdx() < 6) return showAlert("铂金商店需公会 <b>S 级</b>（"+CFG.guildReq[6]+" 声望）。", "铂金商店");
+function buyPlat(i){                                    // v1.50：铂金商店·统一购买（服务端 buy_plat）；v1.61d：门槛 = 持有 ≥1 铂金币
+  if(!platShopUnlocked()) return showAlert("铂金商店需持有 <b>≥1 铂金币</b>（当前 "+fmtMoney(S.money||0)+"）。", "铂金商店");
   const it = PLAT_SHOP[i]; if(!it) return;
   const _lim = shopLimCheck(it, 1, "plat");
   if(_lim) return showAlert(_lim, "铂金商店");

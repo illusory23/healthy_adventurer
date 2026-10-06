@@ -111,17 +111,17 @@ s["money"] = 2000000
 s["shop_daily"] = {"date": game.today_str(), "cnt": {}}     # v1.38m：清限购计数（防上次运行残留）
 s["shop_weekly"] = {"week": game.week_key(), "cnt": {}}
 _save(s)
-j = post({"action": "buy", "idx": 2})
+j = post({"action": "buy", "idx": 1})
 check(j["ok"] and len(j["state"]["mats"]) > 0, "材料包购买")
-j = post({"action": "buy", "idx": 0, "n": 2})            # v1.38o：超日限购被拒（清醒符咒 日限 1）
-check(not j["ok"] and "限购" in j.get("error", ""), "超日限购被拒（n=2 > 1）")
+j = post({"action": "buy", "idx": 0, "n": 4})            # v1.61d：普通材料包 日限 3 → 超限被拒
+check(not j["ok"] and "限购" in j.get("error", ""), "超日限购被拒（n=4 > 3）")
 j = post({"action": "buy", "idx": 0, "n": 1})
-check(j["ok"] and j["state"]["items"].get("清醒符咒") == 1, "限购内购买 ×1（n 参数）")
-j = post({"action": "buy_vit", "idx": 5})     # 贡献 +10（需先有活力点）
+check(j["ok"] and len(j["state"]["mats"]) > 0, "限购内购买 ×1（n 参数）")
+j = post({"action": "buy_vit", "idx": 3})     # 贡献 +10（需先有活力点；v1.61d 新索引 3）
 s = _load()
 s["vit"] = 500
 _save(s)
-j = post({"action": "buy_vit", "idx": 5})
+j = post({"action": "buy_vit", "idx": 3})
 check(j["state"]["con"] >= 10, "活力点兑换贡献")
 
 print("=== 8. 探索（v1.25 现实时间制） ===")

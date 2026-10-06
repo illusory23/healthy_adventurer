@@ -241,8 +241,9 @@ hck(html.indexOf('完成 ≥1 次传奇事件') >= 0, '护符 V 解锁条件（v
 hck(html.indexOf('const FESTIVAL_RANGES') >= 0 && html.indexOf('const TASK_ORDER') >= 0,
     'v1.41c：假期区间表 + 任务展示顺序（静态）');
 hck(html.indexOf('yesterday_ack') >= 0, 'v1.41：昨日结算 ack 调用（静态）');
-hck(html.indexOf('id="tab-bag" class="tabpage twocol"') >= 0 && html.indexOf('id="tab-shop" class="tabpage twocol"') >= 0
-    && html.indexOf('id="tab-health" class="tabpage twocol"') < 0, 'v1.47/v1.61b：背包 / 商店页双列（健康页 v1.61b 移除外层 twocol——双栏容器移入 renderHealth 内部，防末位卡片重叠）');
+hck(html.indexOf('id="tab-bag" class="tabpage twocol"') < 0 && html.indexOf('id="tab-bag" class="tabpage"') >= 0
+    && html.indexOf('id="tab-shop" class="tabpage twocol"') >= 0
+    && html.indexOf('id="tab-health" class="tabpage twocol"') < 0, 'v1.47/v1.61b/d：商店页双列；背包页 v1.61d 改 qsplit 两栏等高；健康页 v1.61b 移除外层 twocol');
 hck(html.indexOf('.twocol{column-count:2') >= 0 && html.indexOf('break-inside:avoid') >= 0, 'v1.47：twocol CSS（窄屏单列回退）');
 /* v1.57：手机底部横滑栏 + 内容区手势翻页 */
 hck(html.indexOf('scroll-snap-type:x proximity') >= 0 && html.indexOf('min-width:66px') >= 0
@@ -383,8 +384,8 @@ hck(html.indexOf('const PET_PAT_TXT') >= 0 && html.indexOf('const PET_STORY') >=
     && html.indexOf('PET_NIGHT_TXT') >= 0 && html.indexOf('PET_FEST_SCENE') >= 0 && html.indexOf('PET_FEST_REACT') >= 0,
     'v1.56：文本库 8 组（抚摸 / 故事 / 365 / 心意 / 散步 / 小剧场 / 深夜 / 节日）');
 hck((html.match(/data-t="pet"/g) || []).length >= 2 && html.indexOf('id="tab-pet"') >= 0
-    && html.indexOf('renderPet()') >= 0 && html.indexOf('前往宠物页') >= 0,
-    'v1.56：独立宠物页（导航 / 区块 / render 挂接 / 背包导流卡）');
+    && html.indexOf('renderPet()') >= 0 && html.indexOf('前往宠物页') < 0,
+    'v1.56：独立宠物页（导航 / 区块 / render 挂接；v1.61d 背包导流卡移除）');
 hck(html.indexOf('petWalk:null') >= 0 && html.indexOf('petNick:{}') >= 0
     && html.indexOf('walkCount:0') >= 0 && html.indexOf('petNightDate') >= 0,
     'v1.56：newState 持久字段（petWalk / petNick / walkCount / petNightDate）');
@@ -428,9 +429,8 @@ hck(html.indexOf('favs:{"星尘蜜":18,"星辉花":17,"星核":17,"星陨岩":16
     && html.indexOf('favs:{"龙瞳结晶":17,"大块龙肉":10,"龙涎果":9,"龙鳞":9,"兽肉":6}') >= 0
     && html.indexOf('if(fv === undefined && !WOLF_FOODS.has(foodName)) return {v:0, mv:0, refuse:true};') >= 0,
     'v1.56e：本命材料体系（主题材料入食谱：星尘 / 星核、深渊素材、龙材、月之织物……非本宠拒食）');
-hck(html.indexOf('if(!o.wolf && Array.isArray(o.pets) && o.pets.indexOf("小狼") >= 0) o.wolf = {stage:1, growth:0, mutate:0, fedDate:"", fedCount:0};') >= 0
-    && html.indexOf('_pn = (S.pets || []).filter(function(n){ return n !== "小狼"; }).length') >= 0,
-    'v1.56：小狼迁移修复（falsy 判定，对齐服务端）+ 导流卡计数去重');
+hck(html.indexOf('if(!o.wolf && Array.isArray(o.pets) && o.pets.indexOf("小狼") >= 0) o.wolf = {stage:1, growth:0, mutate:0, fedDate:"", fedCount:0};') >= 0,
+    'v1.56：小狼迁移修复（falsy 判定，对齐服务端；v1.61d 导流卡计数随卡片删除）');
 /* v1.52：B1 难度报酬 / B2 铂金商店 / B4+B6 词条阶梯 / B7 材料补全 / 术语 */
 hck(html.indexOf('"讨伐哥布林","精英","08:00-23:30",120,"普通",16000,') >= 0
     && html.indexOf('"龙血商人的订单","精英","08:00-23:30",300,"困难",260000,') >= 0
@@ -539,6 +539,25 @@ hck(html.indexOf("自由探索开放——完成 12 次 Lv2 委托后解锁") >=
     && html.indexOf('"🗺️ 探索高阶区域开放：腐化森林"') >= 0
     && html.indexOf('"🗺️ 探索高阶区域开放：虚空裂痕"') >= 0,
     'v1.60：LEVEL_INFO 同步（Lv2 探索预告 / Lv3 腐化 / Lv4 虚空裂痕）');
+/* v1.61d：两栏等高 / 背包宠物卡删除 / 铂金商店解锁 / 薰香与护符 / HUD 公会条 / 规则道具守卫 */
+hck(html.indexOf(".qcol{display:flex;flex-direction:column}") >= 0 && html.indexOf(".qcol>.card:last-child{flex:1}") >= 0
+    && html.indexOf("按估算高度取最优前缀切分") >= 0 && html.indexOf("原 v1.56 的「宠物→宠物页」引导卡已删除") >= 0,
+    'v1.61d：委托/背包两栏等高（弹性末卡 + 背包估算切分；背包宠物小界面删除）');
+hck(html.indexOf("const PLAT_UNLOCK_MONEY = 1000000") >= 0
+    && html.indexOf("function platShopUnlocked(){ return (S.money || 0) >= PLAT_UNLOCK_MONEY; }") >= 0
+    && html.indexOf("内容隐藏——需持有") >= 0 && html.indexOf("v1.61d：未解锁时界面保留、内容隐藏") >= 0,
+    'v1.61d：铂金商店解锁 = 持有 ≥1 铂金币（界面前置挡板 + 大师商店同款内容隐藏）');
+hck(html.indexOf('{n:"清醒符咒 ×1", platC:1') >= 0 && html.indexOf('{n:"安眠护符 ×1", platC:1') >= 0
+    && html.indexOf("铜币商店不再出售") >= 0 && html.indexOf("活力商店不再出售") >= 0,
+    'v1.61d：清醒符咒/安眠护符移入铂金商店（铜币/活力商店移除）');
+hck(html.indexOf("it.incense === _ic + 1") >= 0 && html.indexOf("🕯️ 安眠薰香（") >= 0
+    && html.indexOf("与安眠薰香同属「额外饰品」类永久加成") >= 0 && html.indexOf("if(it.incense) return;") >= 0,
+    'v1.61d：薰香/护符只展示下一阶 + 「额外饰品」类永久加成说明');
+hck(html.indexOf('id="hGuildBar"') >= 0 && html.indexOf('id="hGuildTxt"') >= 0 && html.indexOf('class="bar bar-guild"') >= 0
+    && html.indexOf('id="hRep"') < 0 && html.indexOf("⭐声望") < 0,
+    'v1.61d：HUD 公会经验条（声望独立显示移除）');
+hck((html.match(/!M\[name\] \|\| !S\.mats\[name\]/g) || []).length >= 2,
+    'v1.61d：规则道具不可出售（sellMat 非材料守卫 ×2——原型层 + 桥接层）');
 
 let evalFail = 0;
 try { eval(code + test); } catch(e){ console.log('FAIL 加载异常: ' + e.message); evalFail = 1; }

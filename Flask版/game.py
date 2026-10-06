@@ -3888,11 +3888,14 @@ def buy_master_vit(s, msgs):
     return None
 
 
+PLAT_UNLOCK_MONEY = 1000000       # v1.61d：铂金商店解锁 = 当前持有 ≥1 铂金币（前端 PLAT_UNLOCK_MONEY 对齐）
+
 def buy_plat(s, msgs, i=0, mat=None):
-    """v1.50：铂金商店·统一购买（S 级；全部以铂金币结算）
+    """v1.50：铂金商店·统一购买（全部以铂金币结算）
+       v1.61d：解锁 = 当前持有 ≥1 铂金币（不看历史获得总量）
        —— 自选类（matSel）需先选定具体材料；道具类按 itemN 数量发放"""
-    if guild_idx(s) < 6:
-        return "铂金商店需公会 S 级。"
+    if s["money"] < PLAT_UNLOCK_MONEY:
+        return "铂金商店需持有 ≥1 铂金币（100 万铜）。"
     try:
         it = PLAT_SHOP[int(i)]
     except (TypeError, ValueError, IndexError):
