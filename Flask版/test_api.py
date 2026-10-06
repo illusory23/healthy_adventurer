@@ -386,6 +386,34 @@ check(j["state"]["pending_festival"] and j["state"]["pending_festival"]["name"] 
 j = post({"action": "festival_ack"})
 check(j["ok"] and j["state"]["pending_festival"] is None, "festival_ack 清空（不再重弹）")
 
+print("=== 20. v1.61 疗养圣所：病假日评分锁定 59 + 打卡封存（API 端到端） ===")
+s = _load()
+s["sick_days"] = []
+s["health"]["done"] = [0] * 7
+s["health"]["multi"] = [0, 0]
+s["rep"] = 0                                   # 无门槛：0 声望也应能用
+_save(s)
+j = post({"action": "sick_leave", "day": "today"})
+check(j["ok"] and not j.get("error"), "疗养圣所：0 声望即可请今日病假（无门槛）：" + str(j.get("error")))
+s = _load()
+check(s["health"]["date"] in s["sick_days"], "疗养圣所：写入 sick_days")
+check(game.calc_health(s) == 59, "疗养圣所：病假日评分锁定 59（服务端计算）")
+j = post({"action": "checkin", "idx": 1})
+check(not j["ok"] and "封存" in j.get("error", ""), "疗养圣所：打卡被封存（checkin 拒绝）")
+j = post({"action": "meal", "idx": 0})
+check(not j["ok"] and "封存" in j.get("error", ""), "疗养圣所：三餐被封存（meal 拒绝）")
+j = post({"action": "multi", "idx": 0, "delta": 1})
+check(not j["ok"] and "封存" in j.get("error", ""), "疗养圣所：多次任务被封存（multi 拒绝）")
+s = _load()
+s["items"]["活力药水"] = 1
+_save(s)
+j = post({"action": "use_item", "name": "活力药水"})
+check(not j["ok"] and "封存" in j.get("error", ""), "疗养圣所：打卡类道具被封存（use_item 拒绝）")
+s = _load()
+s["sick_days"] = []                            # 收尾：清空病假
+s["health"]["done"] = [0] * 7
+_save(s)
+
 print()
 print("=" * 40)
 print("  API 测试：通过 " + str(PASS) + " 项 | 失败 " + str(FAIL) + " 项 " + ("✅ 全部通过" if FAIL == 0 else "❌"))

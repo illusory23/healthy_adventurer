@@ -220,7 +220,7 @@ def new_state():
     return {
         "name": "", "created": t, "last_tick": now_ms(), "last_day": t,
         "shield_month": "", "shield_days": [],            # v1.38：连击保险（每月 1 次，保住 ≥7 天早睡连击）
-        "sick_days": [],                                  # v1.60：医务室·病假覆盖日（公会 C 级，每月 2 天）
+        "sick_days": [],                                  # v1.61：疗养圣所·病假覆盖日（无门槛，每月 3 天；该日评分锁定 59、打卡封存）
         "festival_shown": "", "anniv_last": 0,            # v1.38：节日提示 / 纪念日发放记录
         "carry_pet": "",                  # v1.38f：当前携带的宠物（"" = 未携带；陪同委托获成长）
         "lv_idx": 0, "exp": 0, "rep": 0, "con": 0, "vit": 0, "money": 0,
@@ -454,6 +454,14 @@ def check_level_up(s):
 
 # ══════════════ 健康 ══════════════
 
+SICK_LOCK_SCORE = 59                   # v1.61：疗养圣所·病假日评分锁定值
+SICK_LOCK_MSG = "今日病假已封存——健康评分锁定 " + str(SICK_LOCK_SCORE) + "，本日无法打卡（好好休息）。"
+
+
+def sick_today(s):
+    """v1.61：今日是否为病假日（评分锁定 59、打卡封存）"""
+    return s["health"]["date"] in (s.get("sick_days") or [])
+
 
 def calc_health(s):
     sc = 0
@@ -464,6 +472,8 @@ def calc_health(s):
     for i, t in enumerate(CFG["multiTasks"]):
         sc += min(h["multi"][i], t[2]) * t[1]
     h["score"] = min(sc, 100)
+    if sick_today(s):                      # v1.61：疗养圣所·病假 → 本日评分锁定 59
+        h["score"] = SICK_LOCK_SCORE
     return h["score"]
 
 
@@ -2107,6 +2117,8 @@ def day_settle(s, msgs):
         s["exempt"]["early"] = week_key(parse_date(d_str))
         msgs.append("🌅 晨曦之冠·早起豁免生效：本日「7:40 前起床」视为达成（每周 1 次）")
     sc = calc_health(s)
+    if sick_today(s):                      # v1.61：疗养圣所·病假 → 该日按 59 分锁定结算
+        msgs.append("🕊️ 疗养圣所·病假：本日评分按 " + str(SICK_LOCK_SCORE) + " 分锁定结算")
     # v1.41 I3：月度世界事件·规律打卡日（当日 7 项完成 ≥6，豁免已计）
     if sum(1 for x in hd if x) >= 6:
         month_event_add(s, msgs, "task")
@@ -2617,7 +2629,7 @@ COMBO_SHIELD_MIN = 7              # v1.38：连击保险门槛（连续早睡天
 
 
 def _sleep_streak(s):
-    """当前连续早睡天数（被「连击保险」/「医务室病假」覆盖的断档日视为保持）"""
+    """当前连续早睡天数（被「连击保险」/「疗养圣所病假」覆盖的断档日视为保持）"""
     shielded = set(s.get("shield_days") or []) | set(s.get("sick_days") or [])
     n = 0
     for h in reversed(s.get("history") or []):
@@ -2645,15 +2657,14 @@ def _try_combo_shield(s, msgs, combo_before):
     return True
 
 
-SICK_MONTHLY = 2                       # v1.60：医务室·每月病假天数
+SICK_MONTHLY = 3                       # v1.61：疗养圣所·每月病假天数（v1.60 原 医务室·2 天）
 
 
 def take_sick_leave(s, day, msgs):
-    """v1.60：医务室（公会 C 级）——生病请假：today 请今日 / yesterday 补请昨日。
+    """v1.61：疗养圣所——生病请假（无门槛）：today 请今日 / yesterday 补请昨日。
+    病假日 = 封存日：评分锁定 59（calc_health 覆盖）、当天无法打卡（打卡与打卡类道具同封存）；
     覆盖日计入「保护日」：sleep_streak / _sleep_streak 视为保持连击（不抵消熬夜惩罚与其他结算）。"""
     catch_up(s)
-    if guild_idx(s) < 3:
-        return "医务室需公会 C 级（850 声望）解锁。"
     d = s["health"]["date"]
     ym = d[:7]
     used = sum(1 for x in (s.get("sick_days") or []) if x[:7] == ym)
@@ -2672,6 +2683,7 @@ def take_sick_leave(s, day, msgs):
             return "昨日已被连击保险覆盖，无需补请。"
         if last.get("sleep"):
             return "昨日已正常早睡，无需补请。"
+        last["score"] = SICK_LOCK_SCORE            # v1.61：补请昨日 → 昨日记录评分改写为 59
     else:
         if (s.get("sick_days") or []).count(target):
             return "今日已请过病假。"
@@ -2679,8 +2691,9 @@ def take_sick_leave(s, day, msgs):
     days.append(target)
     if len(days) > 60:
         del days[:-60]
-    msgs.append("🏥 医务室：已请病假（" + ("今日" if day != "yesterday" else "补请 " + target) + "）——该日断档不计入连续记录")
-    add_log(s, "🏥 医务室：病假覆盖 " + target + "（本月已用 " + str(used + 1) + "/" + str(SICK_MONTHLY) + "）", "gold")
+    calc_health(s)                                  # v1.61：今日病假 → 立即锁定 59
+    msgs.append("🕊️ 疗养圣所：已请病假（" + ("今日" if day != "yesterday" else "补请 " + target) + "）——该日评分锁定 " + str(SICK_LOCK_SCORE) + "，断档不计入连续记录")
+    add_log(s, "🕊️ 疗养圣所：病假覆盖 " + target + "（评分锁定 " + str(SICK_LOCK_SCORE) + "，本月已用 " + str(used + 1) + "/" + str(SICK_MONTHLY) + "）", "gold")
     return None
 
 
@@ -2960,6 +2973,8 @@ def toggle_task(s, i, msgs, now=None):
         return "无效的打卡项。"
     if not (0 <= i < len(CFG["tasks"])):          # v1.50：索引边界校验（原负索引可绕窗口）
         return "无效的打卡项。"
+    if sick_today(s):                              # v1.61：病假封存——本日无法打卡
+        return SICK_LOCK_MSG
     h = s["health"]["done"]
     if _midnight_lock(i, now):                     # v1.50：00:00 后锁定补打卡（无窗口项）
         return MIDNIGHT_LOCK_MSG
@@ -2987,6 +3002,8 @@ def toggle_meal(s, idx, msgs, now=None):
     idx = int(idx)
     if idx < 0 or idx > 2:
         return "无效的餐次。"
+    if sick_today(s):                              # v1.61：病假封存——本日无法打卡
+        return SICK_LOCK_MSG
     h = s["health"]
     meals = h.setdefault("meals", [0, 0, 0])
     # v1.32：窗口外禁止修改任何打卡状态（防误触：原来窗口外可取消，误触后无法恢复）
@@ -3012,6 +3029,8 @@ def add_multi(s, i, delta, msgs, now=None):
         return "无效的多次任务项。"
     if not (0 <= i < len(CFG["multiTasks"])):      # v1.50：索引边界校验
         return "无效的多次任务项。"
+    if sick_today(s):                              # v1.61：病假封存——本日无法打卡
+        return SICK_LOCK_MSG
     if _min_of_day(now) < DAY_CUTOFF_HOUR * 60:    # v1.50：00:00 后锁定补打卡
         return MIDNIGHT_LOCK_MSG
     try:
@@ -3198,6 +3217,8 @@ def use_gale(s, i, msgs):
 def use_item(s, name, msgs):
     if not s["items"].get(name):
         return "没有该道具。"
+    if name in ("安眠护符", "清醒符咒", "活力药水") and sick_today(s):   # v1.61：病假封存——打卡类道具不可用
+        return "今日病假已封存——评分锁定 " + str(SICK_LOCK_SCORE) + "，打卡类道具无法使用。"
     if name == "清醒符咒":
         if _min_of_day() < DAY_CUTOFF_HOUR * 60:   # v1.50：00:00 后锁定补打卡（道具同规则）
             return MIDNIGHT_LOCK_MSG

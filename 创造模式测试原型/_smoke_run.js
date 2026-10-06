@@ -1808,7 +1808,7 @@ console.log("\\n===== 37. v1.59：传奇报酬 / Lv4 简单档 / 弱出口装备
   console.log("  v1.59 传奇 / Lv4 / 弱出口 / 良好档活力点 ✅");
 }
 
-console.log("\\n===== 38. v1.60：大师试炼 250 / 医务室 / 深处 C-A-S / 护符 C-B / 重掷券 B / 虚空裂痕 Lv4 =====");
+console.log("\\n===== 38. v1.60/v1.61：大师试炼 250 / 疗养圣所（无门槛·3 天·59 锁定）/ 深处 C-A-S / 护符 C-B / 重掷券 B / 虚空裂痕 Lv4 =====");
 {
   // ① 大师试炼：完成 250 次 Lv1–4 委托
   const _gm60 = LEGEND.filter(function(L){ return L[0] === "公会大师试炼"; })[0];
@@ -1831,10 +1831,23 @@ console.log("\\n===== 38. v1.60：大师试炼 250 / 医务室 / 深处 C-A-S / 
   check(sleepStreak() === 3, "v1.60：病假覆盖断档日 → 连击保留（3 天）");
   check(sleepStreakProt(3) === true, "v1.60：sleepStreakProt 计入病假日");
   const _ym60 = (S.health.date || todayStr()).slice(0, 7);
-  S.sickDays = [_ym60 + "-01", _ym60 + "-02"];
-  check(sickLeftNow() === 0, "v1.60：医务室每月 2 天上限（本月已用完）");
+  S.sickDays = [_ym60 + "-01", _ym60 + "-02", _ym60 + "-03"];
+  check(sickLeftNow() === 0, "v1.61：疗养圣所每月 3 天上限（本月已用完）");
   S.sickDays = [];
-  check(sickLeftNow() === 2, "v1.60：医务室每月 2 天（新月份满额）");
+  check(sickLeftNow() === 3, "v1.61：疗养圣所每月 3 天（新月份满额）");
+  // v1.61：病假日评分锁定 59 + 打卡封存（无门槛：0 分基线也直接锁定）
+  const _d60 = S.health.done, _m60 = S.health.multi, _sc60 = S.health.score;
+  S.health.done = [0,0,0,0,0,0,0]; S.health.multi = [0,0];
+  check(calcHealth() === 0, "v1.61：无打卡日评分为 0（基线）");
+  S.sickDays = [S.health.date];
+  check(sickToday() === true, "v1.61：sickToday 判定（今日病假）");
+  check(calcHealth() === 59, "v1.61：病假日评分锁定 59（0 分基线 → 59）");
+  const _alB60 = alertN;
+  toggleTask(1);
+  check(S.health.done[1] === 0 && alertN === _alB60 + 1, "v1.61：病假日打卡被封存（toggleTask 拒绝）");
+  S.sickDays = [];
+  check(calcHealth() === 0, "v1.61：取消病假后评分恢复计算口径");
+  S.health.done = _d60; S.health.multi = _m60; S.health.score = _sc60;
   S.history = _h60; S.sickDays = _sk60;
   // ③ 深处 C/A/S 共绑 + 虚空裂痕 Lv4（数据 + regionGate 实测）
   const _reg60 = {}; REGIONS.forEach(function(r){ _reg60[r.n] = r; });
@@ -1868,7 +1881,7 @@ console.log("\\n===== 38. v1.60：大师试炼 250 / 医务室 / 深处 C-A-S / 
   (C["Lv2"] || []).slice(0, 12).forEach(function(q){ S.doneQuests[q[0]] = 1; });
   check(lv2DoneCount() === 12 && lv2DoneCount() >= EXPLORE_LV2_NEED, "v1.60：12 次 Lv2 委托 → 探索解锁门槛达成");
   S.doneQuests = _dq60; S.rep = _rc60; S.charm = _ch60; S.lvIdx = _lv60;
-  console.log("  v1.60 大师试炼 / 医务室 / 深处 / 护符 / 重掷券 / 探索解锁 ✅");
+  console.log("  v1.60/v1.61 大师试炼 / 疗养圣所 / 深处 / 护符 / 重掷券 / 探索解锁 ✅");
 }
 
 console.log("\\n========== 冒烟总结 ==========");
@@ -1906,8 +1919,9 @@ const _h38r = [
   ["v1.59 弱出口装备入表", html.indexOf('"花岗岩重锤","普通","武器",0.01') >= 0 && html.indexOf('"古币坠饰","稀有","饰品",0.08') >= 0],
   ["v1.59b 良好档活力点+1（结算 + 区间奖励）", html.indexOf("else if(sc>=60){ rep=2; con=1; vit=1; }") >= 0 && html.indexOf("else if(sc>=60){ nb.pay=0.05; nb.con=1; nb.vit=1; }") >= 0],
   ["v1.60 大师试炼 250（前后端同值）", html.indexOf("S.doneBelow5 < 250") >= 0 && html.indexOf("累计完成 250 次 Lv5 以下委托") >= 0],
-  ["v1.60 医务室：公会 C / 每月 2 天 / 今日+补请昨日", html.indexOf("function takeSickLeave") >= 0 && html.indexOf("SICK_MONTHLY = 2") >= 0 && html.indexOf('apiCall("sick_leave"') >= 0 && html.indexOf("sickDays:[]") >= 0],
-  ["v1.60 医务室 UI（健康页底部通栏卡 span2）", html.indexOf("<h3>🏥 医务室</h3>") >= 0 && html.indexOf('class="card span2"><h3>🏥 医务室') >= 0 && html.indexOf("onclick=\"takeSickLeave('yesterday')\"") >= 0],
+  ["v1.61 疗养圣所：无门槛 / 每月 3 天 / 59 锁定 / 今日+补请昨日", html.indexOf("function takeSickLeave") >= 0 && html.indexOf("SICK_MONTHLY = 3") >= 0 && html.indexOf("SICK_LOCK_SCORE = 59") >= 0 && html.indexOf("function sickToday") >= 0 && html.indexOf("guildIdx() < 3") < 0 && html.indexOf('apiCall("sick_leave"') >= 0 && html.indexOf("sickDays:[]") >= 0],
+  ["v1.61b 疗养圣所 UI（独立通栏块，移出双栏容器防重叠）", html.indexOf("<h3>🕊️ 疗养圣所</h3>") >= 0 && html.indexOf('<div class="card"><h3>🕊️ 疗养圣所') >= 0 && html.indexOf('<section id="tab-health" class="tabpage twocol"') < 0 && html.indexOf("'<div class=\"twocol\">' + h + '</div>' + hSick") >= 0 && html.indexOf("病假封存 · 评分锁定") >= 0 && html.indexOf("onclick=\"takeSickLeave('yesterday')\"") >= 0],
+  ["v1.61 病假日封存：打卡三入口 + 打卡类道具拒绝（前后端同款）", (html.match(/sickToday\(\)\) return showAlert\("今日病假已封存/g) || []).length >= 6 && html.indexOf("打卡类道具无法使用") >= 0],
   ["v1.60 病假日计入两条连击口径（sleepStreak / sleepStreakProt）", html.indexOf("sick.indexOf(h.date) >= 0") >= 0 && html.indexOf("sk.indexOf(h.date) >= 0") >= 0],
   ["v1.60 深处 C/A/S 共绑", html.indexOf('{n:"星夜洞窟·深处", t:"21:00-23:00", c:5, h:6, lv:4, g:5') >= 0 && html.indexOf('{n:"腐化森林·深处", t:"08:00-23:30", c:7, h:9, lv:5, g:6') >= 0 && html.indexOf('{n:"晨光森林·深处", t:"07:00-09:00", c:4, h:3, lv:3, g:3') >= 0],
   ["v1.60 虚空裂痕地表 Lv4", html.indexOf('{n:"虚空裂痕", t:"22:00-23:30", c:8, lv:4, h:12') >= 0],

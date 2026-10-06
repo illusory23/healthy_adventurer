@@ -241,8 +241,8 @@ hck(html.indexOf('完成 ≥1 次传奇事件') >= 0, '护符 V 解锁条件（v
 hck(html.indexOf('const FESTIVAL_RANGES') >= 0 && html.indexOf('const TASK_ORDER') >= 0,
     'v1.41c：假期区间表 + 任务展示顺序（静态）');
 hck(html.indexOf('yesterday_ack') >= 0, 'v1.41：昨日结算 ack 调用（静态）');
-hck(html.indexOf('id="tab-bag" class="tabpage twocol"') >= 0 && html.indexOf('id="tab-health" class="tabpage twocol"') >= 0
-    && html.indexOf('id="tab-shop" class="tabpage twocol"') >= 0, 'v1.47：背包 / 健康 / 商店页双列（twocol）');
+hck(html.indexOf('id="tab-bag" class="tabpage twocol"') >= 0 && html.indexOf('id="tab-shop" class="tabpage twocol"') >= 0
+    && html.indexOf('id="tab-health" class="tabpage twocol"') < 0, 'v1.47/v1.61b：背包 / 商店页双列（健康页 v1.61b 移除外层 twocol——双栏容器移入 renderHealth 内部，防末位卡片重叠）');
 hck(html.indexOf('.twocol{column-count:2') >= 0 && html.indexOf('break-inside:avoid') >= 0, 'v1.47：twocol CSS（窄屏单列回退）');
 /* v1.57：手机底部横滑栏 + 内容区手势翻页 */
 hck(html.indexOf('scroll-snap-type:x proximity') >= 0 && html.indexOf('min-width:66px') >= 0
@@ -475,13 +475,21 @@ hck(html.indexOf('"花岗岩重锤","普通","武器",0.01,"—","花岗岩×2"'
     && html.indexOf('"铅矿护符","普通","饰品",0.02,"—","铅矿石×1"') >= 0
     && html.indexOf('"古币坠饰","稀有","饰品",0.08,"稀有事件概率+1%","古董钱币×3"') >= 0,
     'v1.59：3 件弱出口装备（花岗岩 / 铅矿石 / 古董钱币）入表');
-/* v1.60：大师试炼 250 / 医务室 / 深处 C-A-S / 护符 C-B / 重掷券 B / 虚空裂痕 Lv4 / 探索解锁 */
+/* v1.60/v1.61：大师试炼 250 / 疗养圣所（v1.61：无门槛·3 天·59 锁定）/ 深处 C-A-S / 护符 C-B / 重掷券 B / 虚空裂痕 Lv4 / 探索解锁 */
 hck(html.indexOf("S.doneBelow5 < 250") >= 0 && html.indexOf("累计完成 250 次 Lv5 以下委托") >= 0,
     'v1.60：大师试炼条件 40 → 250（legendEligible + 条件文案）');
 hck((html.match(/function takeSickLeave/g) || []).length === 2
-    && html.indexOf('apiCall("sick_leave"') >= 0 && html.indexOf("SICK_MONTHLY = 2") >= 0
+    && html.indexOf('apiCall("sick_leave"') >= 0 && html.indexOf("SICK_MONTHLY = 3") >= 0
+    && html.indexOf("SICK_LOCK_SCORE = 59") >= 0 && html.indexOf("function sickToday") >= 0
+    && html.indexOf("guildIdx() < 3") < 0
     && html.indexOf("sickDays:[]") >= 0 && html.indexOf("o.sickDays = []") >= 0,
-    'v1.60：医务室（本地实现 + Flask 桥接覆盖，sick_leave API / 每月 2 天 / 迁移补全）');
+    'v1.61：疗养圣所（无门槛 / 每月 3 天 / 评分锁定 59；本地实现 + Flask 桥接覆盖 + sick_leave API + 迁移）');
+hck((html.match(/sickToday\(\)\) return showAlert\("今日病假已封存/g) || []).length >= 6
+    && html.indexOf("打卡类道具无法使用") >= 0
+    && html.indexOf("疗养圣所") >= 0 && html.indexOf("<h3>🕊️ 疗养圣所</h3>") >= 0
+    && html.indexOf('<section id="tab-health" class="tabpage twocol"') < 0
+    && html.indexOf("'<div class=\"twocol\">' + h + '</div>' + hSick") >= 0,
+    'v1.61：病假日封存（打卡三入口 + 打卡类道具，前后端同款）+ v1.61b 卡片移出双栏容器');
 hck((html.match(/sick\.indexOf\(h\.date\) >= 0|sk\.indexOf\(h\.date\) >= 0|_sickDays\.indexOf\(h\.date\) >= 0/g) || []).length >= 3,
     'v1.60：病假日计入三处连击口径（sleepStreak / sleepStreakProt / 连击显示）');
 hck(html.indexOf('{n:"晨光森林·深处", t:"07:00-09:00", c:4, h:3, lv:3, g:3, deep:1') >= 0

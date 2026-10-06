@@ -944,7 +944,7 @@ const QUEST_STORY = {
 /* 传奇事件：[名称, 标签, 耗时(天), 难度, 报酬, 经验, 材料, 奖励描述, 专属触发条件]
    专属条件（全局门槛之外的，见 03_委托系统.md 3.9）：
      q:"委托名"       需完成指定前置委托
-     q40:true         需累计完成 40 次 Lv5 以下（Lv1-Lv4）委托
+     q40:true         需累计完成 250 次 Lv5 以下（Lv1-Lv4）委托（v1.60：原 40，等级到 Lv4 即自然超 40 → 提高为 250）
      sleep30:true     需连续 30 天 23:30 前入睡
      legend:"事件名"  需完成指定传奇事件
      allLegend:true   需其余传奇事件全部完成
@@ -1094,19 +1094,19 @@ const GEAR = [
 /* 探索区域：[名称, 开放时间, 探索点消耗, 探索耗时(小时), [[掉落物, 概率%], ...]]（空名 = 空手而归） */
 const REGIONS = [
   {n:"晨光森林", t:"07:00-09:00", c:3, h:2, d:[["止血草",35],["晨露花",35],["薄荷叶",30],["白桦木",25],["金盏花",20],["蜂王浆",8],["清醒符咒",7],["",15]]},
-  {n:"晨光森林·深处", t:"07:00-09:00", c:4, h:3, lv:3, g:2, deep:1, d:[["止血草",30],["晨露花",30],["薄荷叶",30],["白桦木",25],["金盏花",25],["蜂王浆",15],["清醒符咒",8],["",10]]},
+  {n:"晨光森林·深处", t:"07:00-09:00", c:4, h:3, lv:3, g:3, deep:1, d:[["止血草",30],["晨露花",30],["薄荷叶",30],["白桦木",25],["金盏花",25],["蜂王浆",15],["清醒符咒",8],["",10]]},
   {n:"午间溪谷", t:"12:00-14:00", c:3, h:3, d:[["蘑菇",35],["河鱼",30],["浆果",30],["南瓜",22],["提神石",15],["蜂蜜",5],["",15]]},
-  {n:"午间溪谷·深处", t:"12:00-14:00", c:4, h:4, lv:3, g:2, deep:1, d:[["蘑菇",30],["河鱼",30],["浆果",30],["南瓜",25],["提神石",22],["蜂蜜",12],["",10]]},
+  {n:"午间溪谷·深处", t:"12:00-14:00", c:4, h:4, lv:3, g:3, deep:1, d:[["蘑菇",30],["河鱼",30],["浆果",30],["南瓜",25],["提神石",22],["蜂蜜",12],["",10]]},
   {n:"黄昏山丘", t:"17:00-19:00", c:4, h:4, d:[["鹿皮",35],["铜矿石",35],["花岗岩",28],["棉线",22],["云杉木",18],["狮鹫羽",6],["松脂",15],["",15]]},
-  {n:"黄昏山丘·深处", t:"17:00-19:00", c:5, h:6, lv:3, g:2, deep:1, d:[["鹿皮",30],["铜矿石",30],["花岗岩",30],["棉线",25],["云杉木",25],["狮鹫羽",10],["松脂",18],["",10]]},
+  {n:"黄昏山丘·深处", t:"17:00-19:00", c:5, h:6, lv:3, g:3, deep:1, d:[["鹿皮",30],["铜矿石",30],["花岗岩",30],["棉线",25],["云杉木",25],["狮鹫羽",10],["松脂",18],["",10]]},
   {n:"星夜洞窟", t:"21:00-23:00", c:4, h:5, d:[["月光草",30],["星尘",25],["铅矿石",20],["黄玉",10],["蛛丝",8],["静心香",15],["安眠护符",8],["",12]]},
-  {n:"星夜洞窟·深处", t:"21:00-23:00", c:5, h:6, lv:4, g:3, deep:1, d:[["月光草",30],["星尘",28],["铅矿石",25],["黄玉",15],["蛛丝",12],["静心香",20],["安眠护符",10],["",8]]},
+  {n:"星夜洞窟·深处", t:"21:00-23:00", c:5, h:6, lv:4, g:5, deep:1, d:[["月光草",30],["星尘",28],["铅矿石",25],["黄玉",15],["蛛丝",12],["静心香",20],["安眠护符",10],["",8]]},
   {n:"废弃矿道", t:"12:00-23:30", c:5, h:6, d:[["铁矿石",30],["白银矿",18],["紫水晶",10],["黑铁矿",10],["血玛瑙",6],["符文岩",4],["秘银合金",3],["旧宝箱",25],["清醒符咒",6],["安眠护符",4],["大理石",20],["黑曜石",12],["",15]]},
-  {n:"废弃矿道·深处", t:"12:00-23:30", c:6, h:7, lv:4, g:3, deep:1, d:[["铁矿石",28],["白银矿",22],["紫水晶",14],["黑铁矿",12],["血玛瑙",8],["符文岩",6],["秘银合金",4],["旧宝箱",25],["清醒符咒",6],["安眠护符",5],["",10]]},
+  {n:"废弃矿道·深处", t:"12:00-23:30", c:6, h:7, lv:4, g:5, deep:1, d:[["铁矿石",28],["白银矿",22],["紫水晶",14],["黑铁矿",12],["血玛瑙",8],["符文岩",6],["秘银合金",4],["旧宝箱",25],["清醒符咒",6],["安眠护符",5],["",10]]},
   {n:"腐化森林", t:"08:00-23:30", c:6, lv:3, h:8, d:[["暗影草",28],["净化石",27],["紫藤花",15],["黑檀木",10],["铁木",10],["龙息草",8],["凤凰草",4],["龙涎果",3],["安眠护符",7],["清醒符咒",5],["活力药水",5],["幸运币",4],["",15]]},
-  {n:"腐化森林·深处", t:"08:00-23:30", c:7, h:9, lv:4, g:4, deep:1, d:[["暗影草",30],["净化石",25],["紫藤花",15],["黑檀木",12],["铁木",12],["龙息草",10],["凤凰草",6],["龙涎果",4],["安眠护符",8],["清醒符咒",6],["活力药水",4],["幸运币",4],["",10]]},
-  {n:"虚空裂痕", t:"22:00-23:30", c:8, lv:3, h:12, d:[["星尘",25],["星辉石",20],["陨铁",15],["月长石",8],["云纹锦",5],["凤凰木",5],["星界罗盘",5],["远古符文",4],["星陨岩",4],["巨龙竖瞳",8],["星辉绸",10],["星辉花",2],["星尘蜜",2],["世界树枝条",2],["时之沙漏",2],["疾风符咒",5],["命运骰子",3],["时之怀表",3],["",14]]},
-  {n:"虚空裂痕·深处", t:"22:00-23:30", c:9, h:14, lv:4, g:4, deep:1, d:[["星尘",25],["星辉石",22],["陨铁",18],["月长石",10],["云纹锦",7],["凤凰木",7],["星界罗盘",7],["远古符文",6],["星陨岩",6],["巨龙竖瞳",8],["星辉绸",10],["星辉花",3],["星尘蜜",3],["世界树枝条",3],["时之沙漏",3],["疾风符咒",5],["命运骰子",3],["时之怀表",3],["",10]]},
+  {n:"腐化森林·深处", t:"08:00-23:30", c:7, h:9, lv:5, g:6, deep:1, d:[["暗影草",30],["净化石",25],["紫藤花",15],["黑檀木",12],["铁木",12],["龙息草",10],["凤凰草",6],["龙涎果",4],["安眠护符",8],["清醒符咒",6],["活力药水",4],["幸运币",4],["",10]]},
+  {n:"虚空裂痕", t:"22:00-23:30", c:8, lv:4, h:12, d:[["星尘",25],["星辉石",20],["陨铁",15],["月长石",8],["云纹锦",5],["凤凰木",5],["星界罗盘",5],["远古符文",4],["星陨岩",4],["巨龙竖瞳",8],["星辉绸",10],["星辉花",2],["星尘蜜",2],["世界树枝条",2],["时之沙漏",2],["疾风符咒",5],["命运骰子",3],["时之怀表",3],["",14]]},
+  {n:"虚空裂痕·深处", t:"22:00-23:30", c:9, h:14, lv:5, g:6, deep:1, d:[["星尘",25],["星辉石",22],["陨铁",18],["月长石",10],["云纹锦",7],["凤凰木",7],["星界罗盘",7],["远古符文",6],["星陨岩",6],["巨龙竖瞳",8],["星辉绸",10],["星辉花",3],["星尘蜜",3],["世界树枝条",3],["时之沙漏",3],["疾风符咒",5],["命运骰子",3],["时之怀表",3],["",10]]},
   /* v1.41 I1：深渊线探索地点——完成对应委托后解锁（03 深渊链）；后续链可续挂新地点 */
   {n:"深渊裂隙", t:"08:00-23:30", c:10, h:10, unlock:{quest:"深渊裂隙调查"}, d:[["陨铁",20],["暗影草",24],["龙息草",14],["凤凰草",10],["龙涎果",8],["星辉石",8],["月长石",6],["龙血",5],["龙心",3],["安眠护符",6],["清醒符咒",6],["",12]]},
   {n:"深渊深处", t:"08:00-23:30", c:12, h:14, unlock:{quest:"深渊领主封印"}, d:[["星核",18],["星辉绸",12],["世界树汁液",12],["龙心",10],["世界树心",8],["世界树皮",8],["凤凰木",6],["疾风符咒",4],["时之沙漏",3],["命运骰子",3],["世界树枝条",3],["",13]]},
@@ -1120,7 +1120,12 @@ const REGIONS = [
   {n:"沉船海沟", t:"08:00-23:30", c:9, h:10, unlock:{quest:"深海船骸"}, d:[["河鱼",30],["星尘",22],["白银矿",20],["月长石",14],["星辉绸",10],["远古石板",10],["幽魂灯",8],["深海遗珠",4],["",12]]},
   {n:"圣兽雪原", t:"08:00-23:30", c:8, h:8, unlock:{quest:"雪原巡礼"}, d:[["雪盐",30],["野兔皮",30],["月长石",18],["魔狼鬃毛",16],["星辉绸",12],["云纹锦",4],["圣兽之蜕",2],["冰晶果",4],["",12]]}
 ];
-/* v1.41 I1/I2：区域进入门槛（委托解锁 / 公会等级 / 等级）——返回 null 可进，否则为原因文案 */
+/* v1.41 I1/I2：区域进入门槛（委托解锁 / 公会等级 / 等级）——返回 null 可进，否则为原因文案
+   v1.60：7 处「深处」双门槛按两条线的实际到达时点重排为 C/A/S 共绑——
+     晨光/午间/黄昏·深处 = Lv3 + C（两条线均约第 22~30 天）
+     星夜/废弃矿道·深处 = Lv4 + A（均约第 47~57 天）
+     腐化/虚空裂痕·深处 = Lv5 + S（终段，S 第 ~100 天为实际门槛）
+   原 Lv3+D / Lv4+C / Lv4+B 中公会线（D12/C22/B30）全部早于等级线，等效单门槛；虚空裂痕地表 Lv3 → Lv4 */
 function regionGate(r){
   if(r.unlock && !(S.doneQuests && S.doneQuests[r.unlock.quest])) return "需完成委托「"+r.unlock.quest+"」";
   if(r.g !== undefined && guildIdx() < r.g) return "需公会 "+CFG.guildName[r.g]+" 级";
@@ -1211,6 +1216,7 @@ function newState(){
     name:"",
     created:t, lastTick:Date.now(), lastDay:t,
     shieldMonth:"", shieldDays:[],            // v1.38：连击保险（每月 1 次，保住 ≥7 天早睡连击）
+    sickDays:[],                              // v1.61：疗养圣所·病假覆盖日（无门槛，每月 3 天；该日评分锁定 59、打卡封存，断档不计入连续记录）
     festivalShown:"", annivLast:0,            // v1.38：节日提示 / 纪念日发放记录
     carryPet:"",                              // v1.38f：当前携带的宠物（"" = 看家中；陪同委托获成长）
     lvIdx:0, exp:0, rep:0, con:0, vit:0, money:0,
@@ -1430,6 +1436,7 @@ function migrate(o){
   if(o.buffNext === undefined) o.buffNext = null;
   if(typeof o.weekSettled !== "string") o.weekSettled = "";
   if(typeof o.monthSettled !== "string") o.monthSettled = "";
+  if(!Array.isArray(o.sickDays)) o.sickDays = [];                    // v1.60：疗养圣所·病假覆盖日（原「医务室」）
   return o;
 }
 function load(){
@@ -1561,6 +1568,7 @@ function calcHealth(){
   CFG.tasks.forEach((t,i)=>{ if(S.health.done[i]) s += t[1]; });
   CFG.multiTasks.forEach((t,i)=>{ s += Math.min(S.health.multi[i], t[2]) * t[1]; });
   S.health.score = Math.min(s, 100);
+  if(sickToday()) S.health.score = SICK_LOCK_SCORE;   // v1.61：疗养圣所·病假 → 本日评分锁定 59
   return S.health.score;
 }
 
@@ -2838,8 +2846,8 @@ function applyBuffClaim(){
 }
 /* 断连保护（02_健康系统 2.5）：连续 n 天早睡 = 最近 n 天达标 ≥ n−3（每月 3 次容错） */
 function sleepStreakProt(n){
-  const sh = S.shieldDays || [];
-  const okDay = function(h){ return h.sleep || sh.indexOf(h.date) >= 0; };   // v1.40：连击保险日计入（保险真正保住连击，不再只是显示）
+  const sh = S.shieldDays || [], sk = S.sickDays || [];   // v1.60：病假日与连击保险同为「保护日」
+  const okDay = function(h){ return h.sleep || sh.indexOf(h.date) >= 0 || sk.indexOf(h.date) >= 0; };   // v1.40：连击保险日计入（保险真正保住连击，不再只是显示）
   const last = S.history.slice(-n);
   if(last.length < n) return last.length > 0 && last.every(okDay);
   return last.filter(okDay).length >= n - 3;
@@ -3034,11 +3042,11 @@ function monthlySettle(endDateStr){
 }
 /* ── v1.38：连击保险 —— 连续早睡满 7 天后，每月 1 次断档自动保护，连击不断 ── */
 function sleepStreak(){
-  const shielded = S.shieldDays || [];
+  const shielded = S.shieldDays || [], sick = S.sickDays || [];   // v1.60：病假日计入保护
   let n = 0;
   for(let i = (S.history||[]).length - 1; i >= 0; i--){
     const h = S.history[i];
-    if(h.sleep || shielded.indexOf(h.date) >= 0) n++; else break;
+    if(h.sleep || shielded.indexOf(h.date) >= 0 || sick.indexOf(h.date) >= 0) n++; else break;
   }
   return n;
 }
@@ -3052,6 +3060,33 @@ function tryComboShield(combo){
   if(S.shieldDays.length > 60) S.shieldDays = S.shieldDays.slice(-60);
   addLog("🛡️ 连击保险：连续早睡 "+combo+" 天，昨夜断档被保险覆盖，连击保留（每月 1 次）","gold");
   return true;
+}
+/* ── v1.61：疗养圣所——生病请假：每月 3 天，无门槛（v1.60 原「医务室」·公会 C·每月 2 天）──
+   病假日 = 封存日：评分锁定 59、当天无法打卡（打卡与打卡类道具均不可用）；该日早睡断档不计入连续记录 ── */
+const SICK_MONTHLY = 3;
+const SICK_LOCK_SCORE = 59;                              // v1.61：病假日评分锁定值
+function sickToday(){ return (S.sickDays || []).indexOf(S.health.date) >= 0; }
+function sickLeftNow(){
+  const ym = (S.health.date || todayStr()).slice(0,7);
+  return Math.max(0, SICK_MONTHLY - (S.sickDays || []).filter(function(d){ return d.slice(0,7) === ym; }).length);
+}
+function takeSickLeave(day){
+  if(sickLeftNow() <= 0) return showAlert("本月病假已用完（每月 "+SICK_MONTHLY+" 天）。", "疗养圣所");
+  const txt = day === "yesterday" ? "为<b>昨日</b>补请病假" : "请<b>今日</b>病假";
+  confirmSpend("疗养圣所", "确定"+txt+"吗？<br>病假日评分锁定 <b>"+SICK_LOCK_SCORE+" 分</b>"+(day==="yesterday"?"（改写昨日记录）":"、当天无法打卡")+"，早睡断档不计入连续记录（本月剩余病假 "+(sickLeftNow()-1)+" 天）。", function(){
+    // 本地实现（原型）；Flask 版由桥接层覆盖为服务端权威
+    const dStr = S.health.date || todayStr();
+    let target = dStr;
+    if(day === "yesterday"){ const t = parseDate(dStr); t.setDate(t.getDate()-1); target = todayStr(t); }
+    S.sickDays = S.sickDays || [];
+    if(S.sickDays.indexOf(target) < 0) S.sickDays.push(target);
+    if(S.sickDays.length > 60) S.sickDays = S.sickDays.slice(-60);
+    if(day === "yesterday" && (S.history||[]).length) S.history[S.history.length-1].score = SICK_LOCK_SCORE;   // v1.61：昨日记录评分改写为 59
+    calcHealth();                                        // v1.61：今日病假 → 立即锁定 59
+    addLog("🕊️ 疗养圣所：病假覆盖 "+target+"（评分锁定 "+SICK_LOCK_SCORE+"，本月已用 "+SICK_MONTHLY+" - "+sickLeftNow()+" / "+SICK_MONTHLY+"）","gold");
+    save(); render();
+    showAlert("已请病假：该日评分锁定 "+SICK_LOCK_SCORE+" 分"+(day==="yesterday"?"":"、打卡封存")+"，断档不计入连续记录（本月剩余 "+sickLeftNow()+" 天）。", "疗养圣所");
+  });
 }
 function daySettle(){
   /* ① 豁免结算（必须在算分之前）：晨曦之冠·早起（每周1次）——安神吊坠·早睡豁免已于 v1.38p 移除（v1.40 清残留） */
@@ -3294,7 +3329,7 @@ async function _settleInner(a, now){
   S.daily.rep  += rep;
   S.daily.con  += con;
   S.daily.quests.push({name:q[0], grade:q[4], ok:ok});
-  // 累积完成统计（供传奇事件条件：前置委托 / 40 次 Lv5 以下委托）
+  // 累积完成统计（供传奇事件条件：前置委托 / 250 次 Lv5 以下委托）
   if(ok){
     S.doneQuests[q[0]] = (S.doneQuests[q[0]]||0) + 1;
     // v1.41 I1：链推进提示（该委托是某链节点的前置时，提示后续线索）
@@ -3398,17 +3433,19 @@ function sameDay(ts1, ts2){
 /* v1.38r：升级详情（升级时弹窗——新解锁 + 能力提升；数值对齐实装） */
 const LEVEL_INFO = {
   1:{ unlock:["🏛 公会系统开放——「公会」页可用（商店 / 技能树 / 交易所按声望逐步解锁）",
-              "💰 交易所开放：可卖出材料"],
+              "💰 交易所开放：可卖出材料",
+              "🧭 自由探索开放——完成 12 次 Lv2 委托后解锁（委托页右侧）"],
       gain:["🎲 每次刷新抽取 1 → <b>3</b> 个（仍选 1）",
             "⚡ 精力上限 60 → <b>80</b>",
             "📦 委托池扩充至 Lv2——报酬更高的委托开始出现"] },
   2:{ unlock:["⚔️ 精英类委托登场",
               "🎁 公会额外委托——每日 20% 概率多出 1 个委托（不占每日次数与同时进行位）",
-              "🗺️ 探索高阶区域开放：腐化森林 / 虚空裂痕"],
+              "🗺️ 探索高阶区域开放：腐化森林"],
       gain:["🎲 抽取 3 → <b>5</b> 个",
             "⚡ 精力上限 80 → <b>110</b>",
             "🐎 同时进行上限 1 → <b>2</b>"] },
-  3:{ unlock:["🎯 Lv4 委托池开放——单次报酬跃升至金币级（5~12 金币）"],
+  3:{ unlock:["🎯 Lv4 委托池开放——单次报酬跃升至金币级（5~12 金币）",
+              "🗺️ 探索高阶区域开放：虚空裂痕"],
       gain:["🎲 抽取 5 → <b>6</b> 个",
             "⚡ 精力上限 110 → <b>250</b>"] },
   4:{ unlock:["👑 Lv5 委托池开放——终盘内容（报酬 15~60 金币）",
@@ -3469,7 +3506,7 @@ function acceptQuest(idx){
   const _dur = Math.round(q[3] * (1 + (todayFestEff().dur || 0)));   // v1.41f：儿童节·委托耗时 −30%
   S.active.push({
     q:q, rate:rate,
-    qlv: S.lvIdx+1,              // 接取时的委托等级（供传奇事件条件统计：完成 40 次 Lv5 以下委托）
+    qlv: S.lvIdx+1,              // 接取时的委托等级（供传奇事件条件统计：完成 250 次 Lv5 以下委托）
     meal: activeMeal(),          // 记录接取当下生效的料理（只影响这一次委托）
     acceptTs: Date.now(),
     dur:_dur,
@@ -3672,7 +3709,7 @@ const CON_SHOP = [
   {n:"指定精良材料×3", con:50,  lim:["日",2], d:"自选精良材料 ×3",  matSel:["精良",3]},
   {n:"指定稀有材料×2", con:120, lim:["周",3], d:"自选稀有材料 ×2",  matSel:["稀有",2]},
   {n:"指定史诗材料×1", con:300, lim:["周",2], d:"自选史诗材料 ×1",  matSel:["史诗",1]},   // v1.38l 实装；v1.41 H2 自选
-  {n:"精英委托重掷券", con:240, lim:["日",1], g:3, reroll:true, d:"重新抽取当前委托栏（原结果作废）· B 级解锁"},   // v1.41 H2：按 06 设计实装
+  {n:"精英委托重掷券", con:240, lim:["日",1], g:4, reroll:true, d:"重新抽取当前委托栏（原结果作废）· B 级解锁"},   // v1.41 H2：按 06 设计实装；v1.60：g 3→4（原实际 C 级解锁，与文案/文档的 B 级不一致）
 ];
 /* v1.41 H1：铂金商店（06 设计实装）——S 级解锁；指定传说材料 2 铂金币·周 3；活力药水 20 金币·周 1 */
 /* v1.50：铂金商店重构——全部以铂金币结算；扩充 5 项；自选包购买时展开可选清单 */
@@ -4158,6 +4195,7 @@ function questAnimWait(r){        // front 结算队列用：等待动画播完�
 }
 /* 健康打卡 */
 function toggleTask(i){
+  if(sickToday()) return showAlert("今日病假已封存——评分锁定 "+SICK_LOCK_SCORE+"，本日无法打卡，好好休息 🕊️", "疗养圣所");   // v1.61
   if(midnightLocked(i)) return showAlert(MIDNIGHT_LOCK_MSG, "健康打卡");   // v1.50：00:00 后锁定补打卡
   // v1.32：时间窗——窗口外禁止修改任何打卡状态（防误触：原来窗口外可取消，误触后无法恢复）
   const win = taskWinNow(i);                             // v1.41c：节日窗口扩展（入睡/起床尾部 +1 小时）
@@ -4185,6 +4223,7 @@ function toggleTask(i){
 }
 /* 三餐打卡（v1.28）：早/午/晚各一个按钮，三项全点才得「完整吃三餐」15 分（全有全无） */
 function toggleMeal(idx){
+  if(sickToday()) return showAlert("今日病假已封存——评分锁定 "+SICK_LOCK_SCORE+"，本日无法打卡，好好休息 🕊️", "疗养圣所");   // v1.61
   const _scBefore = S.health.score;                    // v1.35：打卡反馈飘字
   const meals = S.health.meals || (S.health.meals = [0,0,0]);
   const win = mealWinNow(idx);                           // v1.41c：节日窗口扩展（前后各 +30 分钟）
@@ -4205,6 +4244,7 @@ function toggleMeal(idx){
   save(); render(); flushResults();
 }
 function addMulti(i, delta){
+  if(sickToday()) return showAlert("今日病假已封存——评分锁定 "+SICK_LOCK_SCORE+"，本日无法打卡，好好休息 🕊️", "疗养圣所");   // v1.61
   if(new Date().getHours() < CFG.dayCutoffHour) return showAlert(MIDNIGHT_LOCK_MSG, "健康打卡");   // v1.50：00:00 后锁定补打卡
   const t = CFG.multiTasks[i];
   const _scBefore = S.health.score;                    // v1.35：打卡反馈飘字
@@ -4574,7 +4614,7 @@ function legendUnlocked(){
 function legendEligible(L){
   const c = L[8] || {};
   if(c.q && !(S.doneQuests[c.q] > 0)) return false;
-  if(c.q40 && S.doneBelow5 < 40) return false;
+  if(c.q40 && S.doneBelow5 < 250) return false;   // v1.60：40 → 250（到 Lv4 自然量已 ≈175，40 形同白送）
   if(c.sleep30 && !sleepStreakProt(30)) return false;   // v1.19：含断连保护（最近 30 天 ≥27 天）
   if(c.legend && S.legendDone.indexOf(c.legend) < 0) return false;
   if(c.gear && (S.gear || []).indexOf(c.gear) < 0) return false;   // v1.51 A3：需拥有指定传说装备
@@ -4592,7 +4632,7 @@ function legendTitle(){ return Math.random() < 0.5 ? "传奇事件" : "世界级
 function legendCondText(L){
   const c = L[8] || {};
   if(c.q) return "条件：完成前置委托「"+c.q+"」✅";
-  if(c.q40) return "条件：累计完成 40 次 Lv5 以下委托（"+Math.min(S.doneBelow5,40)+"/40）";
+  if(c.q40) return "条件：累计完成 250 次 Lv5 以下委托（"+Math.min(S.doneBelow5,250)+"/250）";
   if(c.sleep30) return "条件：最近 30 天 ≥27 天 23:30 前入睡（含断连保护）";
   if(c.legend) return "条件：完成传奇事件「"+c.legend+"」✅";
   if(c.gear) return "条件：需拥有传说装备「"+c.gear+"」"+((S.gear||[]).indexOf(c.gear)>=0?" ✅":"（尚未拥有）");   // v1.51 A3
@@ -4840,8 +4880,8 @@ function upSkill(name){
    冥念护符（终极目标）
    ══════════════════════════════════════════════════ */
 const CHARM = [
-  {lv:1, need:2,  cost:300,  pay:0.06, rate:0.02, vit:0,    other:"",                                  req:"公会 C 级"},
-  {lv:2, need:3,  cost:600,  pay:0.12, rate:0.04, vit:0.05, other:"",                                  req:"公会 B 级"},
+  {lv:1, need:3,  cost:300,  pay:0.06, rate:0.02, vit:0,    other:"",                                  req:"公会 C 级"},   // v1.60：need 2→3（对齐文案/文档：I 级=C）
+  {lv:2, need:4,  cost:600,  pay:0.12, rate:0.04, vit:0.05, other:"",                                  req:"公会 B 级"},   // v1.60：need 3→4（对齐：II 级=B）
   {lv:3, need:5,  cost:1000, pay:0.18, rate:0.06, vit:0.10, other:"",                                  req:"公会 A 级"},
   {lv:4, need:6,  cost:1500, pay:0.24, rate:0.08, vit:0.15, other:"",                                  req:"公会 S 级"},
   {lv:5, need:6,  cost:1800, pay:0.30, rate:0.10, vit:0.20, other:"传奇事件出现概率 +5%",              req:"完成 1 次传奇事件"}
@@ -6028,9 +6068,13 @@ function healthRateBonus(){
   const titleBonus = titleActive("安眠守护者") ? 0.02 : 0;   // 当月称号「安眠守护者」：+2pp
   return H * 0.002 * (1 + gearEffects().healthUp) + roomBonus + titleBonus;
 }
+/* v1.60：自由探索解锁条件 = Lv2 + 累计完成 12 次 Lv2 委托（按委托名统计，旧档可追溯） */
+function lv2DoneCount(){ return (C["Lv2"] || []).reduce(function(a,q){ return a + ((S.doneQuests && S.doneQuests[q[0]]) || 0); }, 0); }
+const EXPLORE_LV2_NEED = 12;
 function doExplore(i){
   const r = REGIONS[i];
   if(S.lvIdx < 1) return showAlert("自由探索需要达到 Lv2 后解锁。", "探索");
+  if(lv2DoneCount() < EXPLORE_LV2_NEED) return showAlert("自由探索需要完成 "+EXPLORE_LV2_NEED+" 次 Lv2 委托后解锁（当前 "+lv2DoneCount()+"/"+EXPLORE_LV2_NEED+"）。", "探索");
   if(S.exploreActive) return showAlert("已经有一次探索正在进行中。<br><br>等待它完成，或中途返回（不会有任何收获）。", "探索");
   const _gate = regionGate(r);   // v1.41 I1/I2：委托解锁 / 公会等级 / 等级门槛
   if(_gate) return showAlert("「" + r.n + "」尚未开放。<br><br>" + _gate + "。", "探索");
@@ -6381,6 +6425,8 @@ function useItem(name){
         [{text:"取消", fn:null}]);
     return;
   }
+  if(sickToday() && ["安眠护符","清醒符咒","活力药水"].indexOf(name) >= 0)
+    return showAlert("今日病假已封存——评分锁定 "+SICK_LOCK_SCORE+"，打卡类道具无法使用。", "疗养圣所");   // v1.61
   if(name === "清醒符咒"){
     if(S.health.done[1]) return showAlert("今天已经打过「7:40 前起床」的卡了。", "清醒符咒");
     S.health.done[1] = 1; S.items[name]--;
@@ -6658,10 +6704,13 @@ function checkLastNightHint(){
     if(localStorage.getItem("adv_nighthint") === todayStr()) return;
     localStorage.setItem("adv_nighthint", todayStr());
     const shielded = (S.shieldDays || []).indexOf(last.date) >= 0;
+    const sickCov = (S.sickDays || []).indexOf(last.date) >= 0;   // v1.61：疗养圣所病假覆盖
     setTimeout(function(){ try{
       toast(shielded
         ? "🛡 昨晚没早睡——连击保险替你挡下了（每月 1 次），今晚继续 🌙"
-        : "🌙 昨晚的入睡打卡错过了（差一点点）。今晚 23:30 前记得——公会给你的房间留了灯");
+        : (sickCov
+          ? "🕊️ 昨晚没早睡——疗养圣所病假已覆盖，连击保留，好好休息 🌙"
+          : "🌙 昨晚的入睡打卡错过了（差一点点）。今晚 23:30 前记得——公会给你的房间留了灯"));
     }catch(e){} }, 2600);
   }catch(e){}
 }
@@ -6953,9 +7002,13 @@ function renderQuest(){
     ${(S.pets||[]).length?`<div class="li"><span>🐾 携带宠物</span><b>${carryPetLabel() ? carryPetLabel() + (petBonusNote(S.carryPet) ? '<span class="muted" style="font-size:11px">　' + petBonusNote(S.carryPet) + '</span>' : "") : '<span class="muted">看家中——到「🐾 宠物」页点「📌 携带」开启加成</span>'}</b></div>`:""}
   </div>`;
 
-  // ── 自由探索（v1.41：达到 Lv2 前整卡隐藏；未解锁区域不显示）──
+  // ── 自由探索（v1.41：达到 Lv2 前整卡隐藏；未解锁区域不显示；v1.60：解锁条件 = Lv2 + 完成 12 次 Lv2 委托）──
   const ph = prevHealthScore();
-  if(S.lvIdx >= 1){
+  if(S.lvIdx >= 1 && lv2DoneCount() < EXPLORE_LV2_NEED){
+    hR += `<div class="card"><h3>🧭 自由探索</h3>
+      <div class="muted" style="line-height:1.9">🔒 完成 <b>${EXPLORE_LV2_NEED} 次 Lv2 委托</b>后开放（当前 <b>${lv2DoneCount()} / ${EXPLORE_LV2_NEED}</b>）。<br>探索点按前一日健康评分生成。</div>
+    </div>`;
+  } else if(S.lvIdx >= 1){
   hR += `<div class="card"><h3>🧭 自由探索</h3>
     <div class="row" style="margin-bottom:8px">
       <span class="muted">探索点</span>
@@ -7088,6 +7141,7 @@ function renderTavern(){
 let _lastShownScore = null;      // v1.35：健康分数字跳动动画用
 function renderHealth(){
   const el = document.getElementById("tab-health");
+  const _sickToday = sickToday();   // v1.61：病假封存日 → 打卡按钮置灰禁用
   // v1.35：100 分构成可视化（每格 = 一项任务满分占比；亮度 = 完成度）
   let _segHtml = "";
   TASK_ORDER.forEach(function(i){          // v1.41c：与任务列表同序（起床置顶、入睡置底）
@@ -7105,14 +7159,15 @@ function renderHealth(){
     <div class="total${_scChanged?" pop":""}">${S.health.score}<small> / 100</small></div>
     <div style="display:flex;gap:2px;height:9px;margin:10px 2px 4px">${_segHtml}</div>
     <div class="muted" style="text-align:center;font-size:11px">金色=每日任务 · 绿色=多次任务 · 亮度=完成度</div>
-    <div class="muted" style="text-align:center;margin-top:4px">${grade(S.health.score)}</div>
+    <div class="muted" style="text-align:center;margin-top:4px">${_sickToday ? "🕊️ 病假封存 · 评分锁定 " + SICK_LOCK_SCORE : grade(S.health.score)}</div>
   </div>`;
   // v1.48b：当前连击移至评分卡之后（双列布局：评分卡通栏，连击位于左列顶部）——原 v1.35 连击可见化
   let _stSleep = 0, _stSport = 0;
   const _hist = S.history || [];
   const _shieldDays = S.shieldDays || [];                        // v1.38：连击保险覆盖日（视为保持连击）
+  const _sickDays = S.sickDays || [];                            // v1.61：疗养圣所病假覆盖日（视为保持连击）
   const _shieldUsed = !!(S.shieldMonth && S.health.date && S.shieldMonth === S.health.date.slice(0,7));
-  for(let i = _hist.length-1; i >= 0; i--){ const h = _hist[i]; if(h.sleep || _shieldDays.indexOf(h.date) >= 0) _stSleep++; else break; }
+  for(let i = _hist.length-1; i >= 0; i--){ const h = _hist[i]; if(h.sleep || _shieldDays.indexOf(h.date) >= 0 || _sickDays.indexOf(h.date) >= 0) _stSleep++; else break; }
   for(let i = _hist.length-1; i >= 0; i--){ if((_hist[i].tasks||[])[4]) _stSport++; else break; }
   h += `<div class="card"><h3>🔥 当前连击</h3>
     <div class="li"><span>连续早睡</span><b style="color:var(--gold2)">${_stSleep} 天${S.health.done[0] ? "（今日已打卡 ✓）" : ""}</b></div>
@@ -7152,7 +7207,7 @@ function renderHealth(){
         <div class="muted">早/午/晚三项全打卡才得分（当前 ${cnt}/3）</div></div>
         <div class="cnt">` + MEAL_NAMES.map(function(nm, mi){
           const on = meals[mi], ok = inWindowNow(mealWinNow(mi));
-          return `<button class="btn meal-btn ${on?"pri":""}" style="${(!on&&!ok)?"opacity:.45":""}" onclick="toggleMeal(${mi})">${nm}${on?" ✓":""}</button>`;
+          return `<button class="btn meal-btn ${on?"pri":""}" style="${(!on&&!ok)||_sickToday?"opacity:.45":""}" onclick="toggleMeal(${mi})" ${_sickToday?"disabled":""}>${nm}${on?" ✓":""}</button>`;
         }).join("") + `</div></div>`;
       return;
     }
@@ -7160,7 +7215,7 @@ function renderHealth(){
     const win = taskWinNow(i);                 // v1.41c：节日窗口扩展（入睡/起床尾部 +1 小时）
     const off = win && !on && !inWindowNow(win);
     h += `<div class="hitem"><div class="nm">${t[0]}<span class="pt">+${t[1]}</span>${win?`<div class="muted">打卡时段 ${winStr(win)}</div>`:""}</div>
-      <button class="btn sm ${on?"pri":""}" style="${off?"opacity:.45":""}" onclick="toggleTask(${i})">${on?"✓ 已达成":"打卡"}</button></div>`;
+      <button class="btn sm ${on?"pri":""}" style="${off||_sickToday?"opacity:.45":""}" onclick="toggleTask(${i})" ${_sickToday?"disabled":""}>${on?"✓ 已达成":"打卡"}</button></div>`;
   });
   h += `</div>`;
 
@@ -7168,9 +7223,9 @@ function renderHealth(){
   CFG.multiTasks.forEach((t,i)=>{
     h += `<div class="hitem"><div class="nm">${t[0]}<span class="pt">+${t[1]}/次</span>
       <div class="muted">最多 ${t[2]} 次</div></div>
-      <div class="cnt"><button onclick="addMulti(${i},-1)">−</button>
+      <div class="cnt" style="${_sickToday?"opacity:.45":""}"><button onclick="addMulti(${i},-1)" ${_sickToday?"disabled":""}>−</button>
       <span>${S.health.multi[i]}</span>
-      <button onclick="addMulti(${i},1)">+</button></div></div>`;
+      <button onclick="addMulti(${i},1)" ${_sickToday?"disabled":""}>+</button></div></div>`;
   });
   h += `</div>`;
 
@@ -7202,7 +7257,8 @@ function renderHealth(){
     <b style="color:var(--gold2)">【当日 23:30 结算】声望 / 贡献 / 活力点</b><br>
     · 90–100 完美 → 声望 +8、贡献 +6、活力点 +5<br>
     · 75–89 优秀 → 声望 +5、贡献 +3、活力点 +3<br>
-    · 60–74 良好 → 声望 +2、贡献 +1、活力点 +1<br><br>
+    · 60–74 良好 → 声望 +2、贡献 +1、活力点 +1<br>
+    · 🕊️ 病假日（疗养圣所）→ 评分锁定 59、当天无法打卡<br><br>
     <b style="color:var(--gold2)">【次日区间奖励】自动生效</b><br>
     · 90–100 完美 → 委托报酬 +15%、精力上限 +10、贡献 +6、活力点 +5<br>
     · 75–89 优秀 → 委托报酬 +10%、贡献 +3、活力点 +3<br>
@@ -7226,6 +7282,33 @@ function renderHealth(){
     · 委托黄金 → 称号「公会中坚」：+5% 委托报酬（30 天）<br><br>
     <b style="color:var(--gold2)">🏅 成就</b> ${(S.achv||[]).length >= ACHV.length ? (ACHV.length + " / " + ACHV.length + " ✓ 已全部达成 ✨<br>　" + (S.achv||[]).join("、")) : ((S.achv||[]).length + " / ? —— 达成条件与总数隐藏")}
   </div></div>`;
+
+  /* v1.61：疗养圣所——生病请假：每月 3 天，无门槛；病假日评分锁定 59 + 打卡封存（通栏卡，健康页最下方） */
+  {
+    const _sickLeft = sickLeftNow();
+    const _todayCovered = sickToday();
+    let _yStr = null, _yCan = false, _yWhy = "";
+    if((S.history||[]).length){
+      const _t = parseDate(S.health.date); _t.setDate(_t.getDate()-1);
+      _yStr = todayStr(_t);
+      const _last = S.history[S.history.length-1];
+      if((S.sickDays||[]).indexOf(_yStr) >= 0){ _yWhy = "已补请"; }
+      else if((S.shieldDays||[]).indexOf(_yStr) >= 0){ _yWhy = "连击保险已覆盖"; }
+      else if(_last.date === _yStr && _last.sleep){ _yWhy = "昨日已早睡"; }
+      else if(_last.date === _yStr && !_last.sleep){ _yCan = true; }
+      else { _yWhy = "无昨日记录"; }
+    } else { _yWhy = "暂无记录"; }
+    const _tBtnOk = !_todayCovered && _sickLeft > 0;
+    h += `<div class="card span2"><h3>🕊️ 疗养圣所</h3>
+      <div class="li"><span>本月剩余病假</span><b style="color:${_sickLeft>0?"var(--green)":"#8a8aa0"}">${_sickLeft} / ${SICK_MONTHLY} 天</b></div>
+      ${_todayCovered ? `<div class="li"><span>今日状态</span><b style="color:var(--gold2)">病假封存 · 评分锁定 ${SICK_LOCK_SCORE} · 打卡关闭</b></div>` : ""}
+      <div class="row" style="gap:8px;margin-top:6px">
+        <button class="btn sm ${_tBtnOk?"pri":""}" ${_tBtnOk?"":'style="opacity:.55"'} onclick="takeSickLeave('today')" ${_tBtnOk?"":"disabled"}>${_todayCovered ? "今日已请假 ✓" : "🤒 请今日病假"}</button>
+        <button class="btn sm ${(_yCan&&_sickLeft>0)?"pri":""}" ${(_yCan&&_sickLeft>0)?"":'style="opacity:.55"'} onclick="takeSickLeave('yesterday')" ${(_yCan&&_sickLeft>0)?"":"disabled"}>🛌 补请昨日${_yStr&&_yCan?"（"+_yStr.slice(5)+"）":""}</button>
+      </div>
+      <div class="muted" style="font-size:11px;margin-top:6px">生病静养：病假日评分锁定 ${SICK_LOCK_SCORE} 分、当天无法打卡（打卡类道具同封存），该日早睡断档不计入，「连续早睡」等连续记录保留。每月 ${SICK_MONTHLY} 天；补请昨日仅当昨日断档且未被连击保险覆盖时可用${_yWhy&&!_yCan?"（昨日状态："+_yWhy+"）":""}。</div>
+    </div>`;
+  }
 
   el.innerHTML = h;
 }

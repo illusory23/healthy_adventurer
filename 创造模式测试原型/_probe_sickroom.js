@@ -1,4 +1,4 @@
-// 探针：验证「医务室」卡片渲染——公会 C 显示（含 span2 通栏）/ 公会 F 隐藏
+// 探针：验证「疗养圣所」卡片渲染——v1.61：无门槛（0 声望可见）/ 每月 3 天 / 病假日评分锁定 59 + 打卡封存
 // 运行：node _probe_sickroom.js
 const fs = require('fs');
 
@@ -40,42 +40,57 @@ function seed(rep){
   S = newState();
   S.rep = rep;
   S.health.date = todayStr();
+  S.health.done = [0,0,0,0,0,0,0]; S.health.multi = [0,0];
   S.history = []; S.sickDays = []; S.shieldDays = [];
+  save = function(){}; render = function(){};   // 探针内跳过全量渲染/存档
 }
 
-/* 场景 1：F 级 → 完全隐藏（v1.41 可见性规则） */
-seed(10); renderHealth();
-const hF = document.getElementById("tab-health").innerHTML;
-check(hF.length > 0, "健康页应正常渲染（F 级）");
-check(hF.indexOf("医务室") < 0, "F 级(rep=10)不应显示医务室");
+/* 场景 1：0 声望（F 级）→ 卡片即可见（v1.61 无门槛） */
+seed(0); renderHealth();
+const h0 = document.getElementById("tab-health").innerHTML;
+check(h0.indexOf("🕊️ 疗养圣所") >= 0, "0 声望即显示疗养圣所卡");
+check(h0.indexOf('<div class="card"><h3>🕊️ 疗养圣所') >= 0, "独立通栏块");
+check(h0.indexOf('</div><div class="card"><h3>🕊️ 疗养圣所') >= 0, "卡片位于双栏容器之后（v1.61b 防重叠结构）");
+check(h0.indexOf("3 / 3 天") >= 0, "初始剩余 3/3 天");
+check(h0.indexOf("takeSickLeave('today')") >= 0 && h0.indexOf("takeSickLeave('yesterday')") >= 0, "两个按钮均在");
+check(h0.indexOf('onclick="takeSickLeave(\\'today\\')" disabled') < 0, "今日按钮可用");
+check(h0.indexOf('onclick="takeSickLeave(\\'yesterday\\')" disabled') >= 0, "昨日按钮禁用（无记录）");
+check(h0.indexOf("暂无记录") >= 0, "提示昨日状态：暂无记录");
+check(h0.indexOf("评分锁定 59") >= 0, "卡面说明含 59 锁定规则");
 
-/* 场景 2：差一点到 C（849）→ 仍隐藏 */
-seed(849); renderHealth();
-check(document.getElementById("tab-health").innerHTML.indexOf("医务室") < 0, "rep=849 不应显示");
-
-/* 场景 3：C 级（850）→ 显示，初始 2/2，今日可请、昨日因无记录禁用 */
-seed(850); renderHealth();
-const hC = document.getElementById("tab-health").innerHTML;
-check(hC.indexOf("🏥 医务室") >= 0, "C 级(rep=850)应显示医务室卡");
-check(hC.indexOf("本月剩余病假") >= 0, "应显示剩余病假计数");
-check(hC.indexOf('class="card span2"') >= 0, "应为通栏 span2");
-check(hC.indexOf("2 / 2 天") >= 0, "初始剩余应为 2/2");
-check(hC.indexOf("takeSickLeave('today')") >= 0, "请今日病假按钮");
-check(hC.indexOf("takeSickLeave('yesterday')") >= 0, "补请昨日按钮");
-check(hC.indexOf('onclick="takeSickLeave(\\'today\\')" disabled') < 0, "今日按钮应可用");
-check(hC.indexOf('onclick="takeSickLeave(\\'yesterday\\')" disabled') >= 0, "昨日按钮应禁用（无记录）");
-check(hC.indexOf("暂无记录") >= 0, "应提示昨日状态：暂无记录");
-
-/* 场景 4：本月已用 1 天病假 + 昨日断档 → 剩 1/2，补请昨日可用 */
-seed(850);
-const _y = parseDate(S.health.date); _y.setDate(_y.getDate()-1);
-S.history = [{date: todayStr(_y), sleep:false, score:50}];
-S.sickDays = [S.health.date.slice(0,7) + "-01"];   // 本月 1 日已用一天
+/* 场景 2：今日病假 → 评分锁定 59 / 打卡按钮置灰 / 评分卡显示封存 */
+seed(0);
+S.sickDays = [S.health.date];
+check(sickToday() === true, "sickToday 判定");
+check(calcHealth() === 59, "0 分基线 → 锁定 59");
 renderHealth();
-const hY = document.getElementById("tab-health").innerHTML;
-check(hY.indexOf("1 / 2 天") >= 0, "剩余病假应显示 1/2（本月已用 1 天）");
-check(hY.indexOf('onclick="takeSickLeave(\\'yesterday\\')" disabled') < 0, "昨日断档且未被覆盖 → 补请按钮应可用");
-check(hY.indexOf("补请昨日（") >= 0, "补请按钮应带日期");
+const hS = document.getElementById("tab-health").innerHTML;
+check(hS.indexOf("病假封存 · 评分锁定 59 · 打卡关闭") >= 0, "卡片显示今日封存状态");
+check(hS.indexOf("病假封存 · 评分锁定 59") >= 0 && hS.indexOf("今日健康评分") >= 0, "评分卡显示病假封存");
+check(hS.indexOf('onclick="toggleTask(1)" disabled') >= 0, "任务按钮置灰禁用");
+check(hS.indexOf('onclick="toggleMeal(0)" disabled') >= 0, "三餐按钮置灰禁用");
+check(hS.indexOf('onclick="addMulti(0,1)" disabled') >= 0, "多次任务按钮置灰禁用");
+check(hS.indexOf("今日已请假 ✓") >= 0, "今日按钮变为已请假");
+
+/* 场景 3：补请昨日（本地实现）→ 昨日记录评分改写 59 / 月度剩 2 */
+seed(0);
+const _y = parseDate(S.health.date); _y.setDate(_y.getDate()-1);
+S.history = [{date: todayStr(_y), sleep: false, score: 30, done: 0, tasks: [], multi: [0,0]}];
+const _cs = confirmSpend; confirmSpend = function(t, b, fn){ fn && fn(); };
+takeSickLeave("yesterday");
+confirmSpend = _cs;
+check(S.sickDays.indexOf(todayStr(_y)) >= 0, "补请昨日写入 sick_days");
+check(S.history[S.history.length-1].score === 59, "昨日记录评分改写为 59");
+check(sickLeftNow() === 2, "本月剩余病假 2/3");
+
+/* 场景 4：月度 3 天上限 */
+seed(0);
+const _m = S.health.date.slice(0,7);
+S.sickDays = [_m + "-01", _m + "-02", _m + "-03"];
+check(sickLeftNow() === 0, "用满 3 天 → 剩余 0");
+renderHealth();
+const hF = document.getElementById("tab-health").innerHTML;
+check(hF.indexOf('onclick="takeSickLeave(\\'today\\')" disabled') >= 0, "额度用尽 → 今日按钮禁用");
 
 console.log("  RENDER PASS=" + PASS + " FAIL=" + FAIL);
 if(FAIL) process.exitCode = 1;

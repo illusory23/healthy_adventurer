@@ -2043,7 +2043,7 @@ check(all(game.gear_def(k) is not None and game.gear_def(k)[5] == v for k, v in 
 _mains59 = {g[5].split("×")[0] for g in game.GEAR if g[5] != "—"}
 check({"花岗岩", "铅矿石", "古董钱币"} <= _mains59, "花岗岩 / 铅矿石 / 古董钱币 取得装备主材出口（弱出口清零）")
 
-print("=== 59. v1.60：大师试炼 250 / 医务室 / 深处 C-A-S / 护符 C-B / 重掷券 B / 虚空裂痕 Lv4 ===")
+print("=== 59. v1.60/v1.61：大师试炼 250 / 疗养圣所（无门槛·每月3天·59 锁定·打卡封存） / 深处 C-A-S / 护符 C-B / 重掷券 B / 虚空裂痕 Lv4 ===")
 
 
 def _base59(rep=0, lv=4):
@@ -2061,29 +2061,39 @@ check(game.legend_eligible(_s59a, _gm59) is False, "大师试炼：249 次未达
 _s59a["done_below5"] = 250
 check(game.legend_eligible(_s59a, _gm59) is True, "大师试炼：250 次达标放行")
 
-# ② 医务室（病假）：公会 C 解锁 / 每月 2 天 / 今日与补请昨日 / 覆盖断档保连击
-_s59b = _base59(rep=400)                       # D 级
-bad = game.take_sick_leave(_s59b, "today", [])
-check(bad is not None and "C 级" in bad, "医务室：公会 D 未解锁被拦")
-_s59b["rep"] = 850                             # C 级
+# ② 疗养圣所（病假，v1.61：无门槛 / 每月 3 天 / 评分锁定 59 + 打卡封存；v1.60 原「医务室」·公会 C·每月 2 天）
+_s59b = _base59(rep=0)                         # 0 声望（F 级）——无门槛，直接可用
 check(game.take_sick_leave(_s59b, "today", []) is None and _s59b["sick_days"] == [game.today_str()],
-      "医务室：公会 C 请今日病假成功（写入 sick_days）")
+      "疗养圣所：0 声望即可请今日病假（写入 sick_days）")
+check(game.calc_health(_s59b) == 59, "疗养圣所：病假日评分锁定 59")
+bad = game.toggle_task(_s59b, 1, [])
+check(bad is not None and "封存" in bad, "疗养圣所：病假日打卡被封存（toggle_task 拒绝）")
+bad = game.toggle_meal(_s59b, 0, [])
+check(bad is not None and "封存" in bad, "疗养圣所：病假日三餐被封存（toggle_meal 拒绝）")
+bad = game.add_multi(_s59b, 0, 1, [])
+check(bad is not None and "封存" in bad, "疗养圣所：病假日多次任务被封存（add_multi 拒绝）")
+_s59u = _base59(rep=0)
+_s59u["sick_days"] = [game.today_str()]
+_s59u["items"] = {"活力药水": 1}
+bad = game.use_item(_s59u, "活力药水", [])
+check(bad is not None and "封存" in bad, "疗养圣所：病假日打卡类道具被封存（活力药水拒绝）")
 bad = game.take_sick_leave(_s59b, "today", [])
-check(bad is not None, "医务室：同日重复请假被拒")
+check(bad is not None, "疗养圣所：同日重复请假被拒")
 _ym59 = _s59b["health"]["date"][:7]
-_s59c = _base59(rep=850)
-_s59c["sick_days"] = [_ym59 + "-01", _ym59 + "-02"]
+_s59c = _base59(rep=0)
+_s59c["sick_days"] = [_ym59 + "-01", _ym59 + "-02", _ym59 + "-03"]
 bad = game.take_sick_leave(_s59c, "today", [])
-check(bad is not None and "用完" in bad, "医务室：每月 2 天上限（第 3 次被拒）")
+check(bad is not None and "用完" in bad, "疗养圣所：每月 3 天上限（第 4 次被拒）")
 _y59 = (game.parse_date(game.today_str()) - timedelta(days=1)).strftime("%Y-%m-%d")
-_s59d = _base59(rep=850)
-_s59d["history"] = [{"date": _y59, "sleep": False, "done": 0, "tasks": [], "multi": [0, 0]}]
-check(game.take_sick_leave(_s59d, "yesterday", []) is None and _s59d["sick_days"] == [_y59],
-      "医务室：昨日断档 → 补请成功")
-_s59d2 = _base59(rep=850)
-_s59d2["history"] = [{"date": _y59, "sleep": True, "done": 0, "tasks": [], "multi": [0, 0]}]
+_s59d = _base59(rep=0)
+_s59d["history"] = [{"date": _y59, "sleep": False, "done": 0, "tasks": [], "multi": [0, 0], "score": 30}]
+check(game.take_sick_leave(_s59d, "yesterday", []) is None and _s59d["sick_days"] == [_y59]
+      and _s59d["history"][-1]["score"] == 59,
+      "疗养圣所：昨日断档 → 补请成功且昨日评分改写为 59")
+_s59d2 = _base59(rep=0)
+_s59d2["history"] = [{"date": _y59, "sleep": True, "done": 0, "tasks": [], "multi": [0, 0], "score": 80}]
 bad = game.take_sick_leave(_s59d2, "yesterday", [])
-check(bad is not None, "医务室：昨日已早睡 → 补请被拒")
+check(bad is not None, "疗养圣所：昨日已早睡 → 补请被拒")
 # 病假覆盖 = 连击保护（_sleep_streak 与 sleep_streak 同口径）
 _s59e = _base59()
 _s59e["history"] = [
