@@ -112,13 +112,16 @@ _sRows.push(["交易所","E","金币/银币", "买入材料（买入价 = 卖出
 csv("商店商品.csv",
   ["商店","解锁","货币","商品","价格","限购","说明"], _sRows);
 
-/* ── ⑥ 料理总表（21 道 · 品阶门槛）── */
+/* ── ⑥ 料理总表（25 道 · 品阶门槛；v1.61l：配方列改读 main/sub——v1.50 重构后 ing 字段已不存在，此前恒为空）── */
 csv("料理总表.csv",
   ["料理","品阶","开放等级","配方","效果","生效方式"],
   D.CFG.recipes.map(function(r){
     const t = D.cookTier(r);
     const mode = (r.bonus || r.rate) ? "接取前最后食用生效" : (r.cap ? "当日精力上限" : "即时");
-    return [r.n, t, "Lv" + (QI(t) + 1), fmtIng(r.ing), r.desc || "", mode];
+    const ing = {};
+    for(const k in (r.main || {})) ing[k] = r.main[k];
+    for(const k in (r.sub || {})) ing[k] = r.sub[k];
+    return [r.n, t, "Lv" + (QI(t) + 1), fmtIng(ing), r.desc || "", mode];
   }));
 
 /* ── ⑦ 传奇事件总表（12 个 · 含静态条件）── */

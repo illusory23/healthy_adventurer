@@ -1619,7 +1619,7 @@ console.log("\\n===== 29. v1.41f5/f6：料理平衡调整 =====");
   const _feast44 = CFG.recipes.filter(function(r){ return r.n === "巨龙盛宴"; })[0];
   { const _gf44 = recipeIng(_feast44);
   check(Object.keys(_gf44).length === 10 && _gf44["世界树汁液"] === 1 && _gf44["星核"] === 1
-    && _gf44["龙心"] === 2 && _gf44["大块龙肉"] === 5, "v1.44：盛宴大杂烩（10 材：龙系加重 + 世界树/星界/凤凰/蜜）"); }
+    && _gf44["龙心"] === 3 && _gf44["大块龙肉"] === 5, "v1.44：盛宴大杂烩（10 材：龙系加重 + 世界树/星界/凤凰/蜜；v1.61l 主材 +1）"); }
   const _allQ42 = C["Lv1"].concat(C["Lv2"], C["Lv3"], C["Lv4"], C["Lv5"]).map(function(q){ return q[0]; });
   check(["狩猎火龙","驱赶绿龙","与白龙探讨魔法","金龙宝藏的谈判","平息蓝龙之怒","追踪黑龙的阴翳"]
     .every(function(n){ return _allQ42.indexOf(n) >= 0; }), "v1.42：6 个龙种委托入池");
@@ -1820,8 +1820,8 @@ console.log("\\n===== 35. v1.49：主题套装补齐（25 件） =====");
   check((_ef49.rate["短时"]||0) === 0.03 && _ef49.nightmare === 0.03, "v1.49：组合词条（混沌之刃 短时+噩梦；v1.52 阶梯对齐 2→3）");
   S.equipped = _eqBak49;
   // 主材料解析（打造链）
-  check(craftMainMat("世界树长弓").mat === "世界树枝条" && craftMainMat("再生蛇髓护符").cnt === 4,
-    "v1.49：主材料解析（世界树长弓 / 再生蛇髓护符）");
+  check(craftMainMat("世界树长弓").mat === "世界树枝条" && craftMainMat("再生蛇髓护符").cnt === 5,
+    "v1.49：主材料解析（世界树长弓 / 再生蛇髓护符；v1.61l 主材 +1）");
   console.log("  v1.49 主题套装 ✅");
 }
 
@@ -1980,6 +1980,7 @@ console.log("\\n===== 38. v1.60/v1.61：大师试炼 250 / 疗养圣所（无门
 console.log("\\n========== 冒烟总结 ==========");
 console.log("  断言通过 " + PASS + " 项 | 异常 " + FAIL + " 项 " + (FAIL ? "❌" : "✅ 全部通过"));
 console.log("  （弹窗拦截 " + alertN + " 次）");
+globalThis.__smokeFail = FAIL;   // v1.61l：运行时应答失败数暴露给外层退出码（eval 作用域隔离）
 })();
 `;
 
@@ -2049,4 +2050,4 @@ const _h38r = [
 ];
 let _h38rBad = 0;
 _h38r.forEach(function(x){ console.log("  " + (x[1] ? "✅" : "❌") + " " + x[0]); if(!x[1]) _h38rBad++; });
-setTimeout(function(){ process.exit((_srcDupList.length || _h38rBad) ? 1 : 0); }, 4000);
+setTimeout(function(){ process.exit((_srcDupList.length || _h38rBad || globalThis.__smokeFail) ? 1 : 0); }, 4000);   // v1.61l：运行时应答失败（FAIL）也计入退出码——此前只影响打印，run_all_tests 漏报

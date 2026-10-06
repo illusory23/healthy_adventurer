@@ -4284,7 +4284,8 @@ def craft_cost(quality):
 
 
 def sub_mat_count(quality, slot):
-    base = {"普通": 2, "精良": 3, "稀有": 4, "史诗": 6, "传说": 8}.get(quality, 3)
+    # v1.61l：材料获取途径增加，副材料每档 +1（原 2/3/4/6/8）
+    base = {"普通": 3, "精良": 4, "稀有": 5, "史诗": 7, "传说": 9}.get(quality, 3)
     return base + (1 if slot == "护甲" else 0)
 
 
