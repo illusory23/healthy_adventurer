@@ -1,0 +1,13 @@
+{
+  "name": "健康的冒险者的一天",
+  "short_name": "健康冒险者",
+  "description": "把健康打卡变成奇幻冒险——早睡、运动、好好吃饭，冒险者就会更强。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1c30",
+  "theme_color": "#1a1c30",
+  "icons": [
+    {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}
