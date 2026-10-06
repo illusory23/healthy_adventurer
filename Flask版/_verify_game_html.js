@@ -245,9 +245,12 @@ hck(html.indexOf('id="tab-bag" class="tabpage twocol"') < 0 && html.indexOf('id=
     && html.indexOf('id="tab-shop" class="tabpage twocol"') >= 0
     && html.indexOf('id="tab-health" class="tabpage twocol"') < 0, 'v1.47/v1.61b/d：商店页双列；背包页 v1.61d 改 qsplit 两栏等高；健康页 v1.61b 移除外层 twocol');
 hck(html.indexOf('.twocol{column-count:2') >= 0 && html.indexOf('break-inside:avoid') >= 0, 'v1.47：twocol CSS（窄屏单列回退）');
-/* v1.57：手机底部横滑栏 + 内容区手势翻页 */
+/* v1.57：手机横滑栏 + 内容区手势翻页（v1.61m：横滑栏移至顶部） */
 hck(html.indexOf('scroll-snap-type:x proximity') >= 0 && html.indexOf('min-width:66px') >= 0
-    && html.indexOf('scroll-snap-align:center') >= 0, 'v1.57：底栏横滑 CSS（吸附 + 最小宽度 + 图标两行式）');
+    && html.indexOf('scroll-snap-align:center') >= 0, 'v1.57：横滑栏 CSS（吸附 + 最小宽度 + 图标两行式）');
+hck(html.indexOf('v1.61m：移至顶部（钱币信息下方）') >= 0 && html.indexOf('#tabs{position:fixed;bottom:0') < 0
+    && html.indexOf('body{padding-bottom:64px}') < 0,
+    'v1.61m：手机页签栏移至顶部（钱币信息下方）——移除贴底固定与底部留白（横滑不再撞系统手势）');
 hck((html.match(/<span class="tb-i">/g) || []).length === 8, 'v1.57：8 个页签全部带图标（tb-i）');
 hck(html.indexOf('b.scrollIntoView({inline:"center"') >= 0, 'v1.57：当前页签自动滚入视野');
 hck(html.indexOf('main.addEventListener("touchstart"') >= 0 && html.indexOf('Math.abs(dx) < 70') >= 0

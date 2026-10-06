@@ -233,13 +233,11 @@ main{padding:14px;max-width:980px;margin:0 auto}
 .qd-rate{text-align:center;font-size:34px;font-weight:700;color:var(--gold2);margin:8px 0;text-shadow:0 0 24px rgba(232,181,74,.4)}
 .qd-rate small{font-size:13px;color:var(--dim);display:block;font-weight:400}
 @media(min-width:700px){ #tabs button{flex:none;padding:10px 22px;font-size:13px} }
-@media(max-width:700px){   /* v1.38：手机底部导航（拇指可达）；v1.57：改为横向滑动栏——一屏约 5 个、图标+文字、当前页自动滚入视野 */
-  #tabs{position:fixed;bottom:0;left:0;right:0;z-index:90;border-bottom:none;border-top:1px solid var(--line);box-shadow:0 -6px 22px rgba(0,0,0,.38);
-        overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scroll-padding:0 50%}
+@media(max-width:700px){   /* v1.38：手机导航（拇指可达）→ v1.57：横向滑动栏 → v1.61m：移至顶部（钱币信息下方）——贴底横滑易与系统手势（返回桌面/切换应用）冲突 */
+  #tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scroll-padding:0 50%}
   #tabs button{flex:0 0 auto;flex-direction:column;gap:1px;min-width:66px;padding:6px 6px 8px;font-size:10.5px;line-height:1.2;scroll-snap-align:center;border-bottom-width:2px}
   #tabs .tb-i{font-size:17px}
   #tabs button.on{border-bottom-color:var(--gold)}
-  body{padding-bottom:64px}
 }
 </style>
 </head>

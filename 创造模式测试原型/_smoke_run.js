@@ -2046,7 +2046,8 @@ const _h38r = [
   ["v1.61h 宠物礼物池（每宠 4~6 种 · 权重 100 · 偏好决定类型）", html.indexOf("const PET_GIFTS = {") >= 0 && html.indexOf('"魔狼鬃毛"') >= 0 && html.indexOf('"星辉绸"') >= 0 && html.indexOf("function petGiftRoll(") >= 0 && html.indexOf("PET_WALK_GIFT") < 0],
   ["v1.61i 携宠拾取（池 = 内容产出 · 3 种/4 个上限 · 失败 1 种/2 个 · 传说可捡概率极低）", html.indexOf("const PET_FIND = {") >= 0 && html.indexOf('petFindRoll("quest", q[8]') >= 0 && html.indexOf('petFindRoll("explore", r.d') >= 0 && html.indexOf('petFindRoll("legend", _lgPool') >= 0 && html.indexOf("failTypes:1, failQty:2") >= 0],
   ["v1.61j 失败时触发率减半（failMul:0.5——委托失败 6%→3% / 传奇失败 12%→6%，含心情修正后减半）", html.indexOf("failMul:0.5") >= 0 && html.indexOf("if(fail) pct *= PET_FIND.failMul;") >= 0],
-  ["v1.61k 拾取权重 = 内容自身产出结构（委托期望数量 / 区域掉率% / 传奇必得数量 —— tierW 全品阶权重移除）", html.indexOf("tierW") < 0 && html.indexOf("v1.61k：拾取权重 = 内容自身的产出结构") >= 0 && html.indexOf("v1.61k：权重 = 掉表期望数量") >= 0 && html.indexOf("v1.61k：权重 = 区域掉率%") >= 0 && html.indexOf("v1.61k：权重 = 必得数量") >= 0]
+  ["v1.61k 拾取权重 = 内容自身产出结构（委托期望数量 / 区域掉率% / 传奇必得数量 —— tierW 全品阶权重移除）", html.indexOf("tierW") < 0 && html.indexOf("v1.61k：拾取权重 = 内容自身的产出结构") >= 0 && html.indexOf("v1.61k：权重 = 掉表期望数量") >= 0 && html.indexOf("v1.61k：权重 = 区域掉率%") >= 0 && html.indexOf("v1.61k：权重 = 必得数量") >= 0],
+  ["v1.61m 手机页签栏移至顶部（钱币信息下方——贴底横滑撞系统手势）", html.indexOf("v1.61m：移至顶部（钱币信息下方）") >= 0 && html.indexOf("#tabs{position:fixed;bottom:0") < 0 && html.indexOf("body{padding-bottom:64px}") < 0]
 ];
 let _h38rBad = 0;
 _h38r.forEach(function(x){ console.log("  " + (x[1] ? "✅" : "❌") + " " + x[0]); if(!x[1]) _h38rBad++; });
