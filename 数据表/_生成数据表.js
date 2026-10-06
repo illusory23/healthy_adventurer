@@ -20,7 +20,7 @@ const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const EXPO = ["CFG","M","GEAR","LEGEND","ACHV","ACHV_DESC","MAT_DESC","MAT_USE","ITEM_DESC",
   "SKILLS","SKILL_COST","MONTH_EVENTS","REGIONS","C","SHOP","VIT_SHOP","CON_SHOP","PLAT_SHOP",
   "MASTER_SHOP","BP_SHOP","QUALITY_ORDER","MORDER","QUEST_REQ","QUEST_TURNIN","CHARM","MAT_ICON",
-  "WOLF_STAGES","PET_LINES","PET_FIXED","TITLE_DESC","FESTIVALS","FESTIVAL_RANGES","CN_FEST_META","CN_LUNAR_FEST","FEST_EFF",
+  "WOLF_STAGES","PET_LINES","PET_FIXED","PET_GIFTS","PET_FIND","TITLE_DESC","FESTIVALS","FESTIVAL_RANGES","CN_FEST_META","CN_LUNAR_FEST","FEST_EFF",
   "CRAFT","QUEST_ITEM"];
 const FN = ["fmtMoney","fmtDur","cookTier","gearMainTxt","legendRep"];
 eval(code + "\n;global.__DS = {" +
@@ -455,4 +455,32 @@ csv("委托准备物表.csv",
       qs.join("、"), qs.length];
   }));
 
-console.log("全部完成 ✅（共 18 张表）");
+/* ── ⑲ 宠物礼物表（v1.61h：每宠专属礼物池——偏好决定类型；权重和 100）── */
+{
+  const _giftRows = [];
+  const _qtyOf = function(tier){ return (tier === "普通" || tier === "精良") ? "1~2" : "1"; };
+  Object.keys(D.PET_GIFTS).forEach(function(n){
+    D.PET_GIFTS[n].forEach(function(x){
+      const _tier = D.M[x[0]] ? D.M[x[0]][1] : "?";
+      _giftRows.push([n, x[0], _tier, D.M[x[0]] ? D.fmtMoney(D.M[x[0]][2]) : "", x[1] + "%", _qtyOf(_tier)]);
+    });
+  });
+  csv("宠物礼物表.csv", ["宠物","礼物","品阶","基准价","权重","数量"], _giftRows);
+}
+
+/* ── ⑳ 宠物拾取表（v1.61h：携带宠物在委托/探索/传奇额外带回材料——艾露猫式）── */
+{
+  const _findRows = [];
+  const _ctxName = {quest: "委托结算", explore: "探索归来", legend: "传奇事件"};
+  ["quest", "explore", "legend"].forEach(function(ctx){
+    const _base = D.PET_FIND.chance[ctx];
+    const _tiers = (ctx === "legend") ? D.PET_FIND.legendTiers : D.PET_FIND.tiers;
+    _tiers.forEach(function(x){
+      _findRows.push([_ctxName[ctx], Math.round(_base * 100) + "%", "心情 ≥70 +2% / <30 −2%", x[0], x[1] + "%",
+        (x[0] === "普通" || x[0] === "精良") ? "1~2" : "1"]);
+    });
+  });
+  csv("宠物拾取表.csv", ["场景","触发概率","心情修正","品阶","品级概率","数量"], _findRows);
+}
+
+console.log("全部完成 ✅（共 20 张表）");

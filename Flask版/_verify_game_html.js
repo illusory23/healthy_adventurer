@@ -564,6 +564,13 @@ hck(html.indexOf("心情值 <b") >= 0 && html.indexOf("</b> / 100") >= 0 && html
 hck(html.indexOf("神秘小礼物") >= 0 && html.indexOf("连续 7 天会收到心意礼物") < 0
     && html.indexOf("连续 7 天好心情会收到心意礼物") < 0,
     'v1.61g：宠物礼物改暗示文案（不剧透 7 天规则）');
+hck(html.indexOf("const PET_GIFTS = {") >= 0 && html.indexOf("function petGiftRoll(") >= 0
+    && html.indexOf('"魔狼鬃毛"') >= 0 && html.indexOf('"星辉绸"') >= 0 && html.indexOf("PET_WALK_GIFT") < 0,
+    'v1.61h：宠物礼物池（每宠 4~6 种 · 权重 100 · 偏好决定类型）');
+hck(html.indexOf("const PET_FIND = {") >= 0 && html.indexOf('petFindRoll("quest")') >= 0
+    && html.indexOf('petFindRoll("explore")') >= 0 && html.indexOf('petFindRoll("legend")') >= 0
+    && html.indexOf("legendTiers") >= 0,
+    'v1.61h：携带宠物拾取（委托 / 探索 / 传奇三钩子 + 品级池含传说）');
 
 let evalFail = 0;
 try { eval(code + test); } catch(e){ console.log('FAIL 加载异常: ' + e.message); evalFail = 1; }

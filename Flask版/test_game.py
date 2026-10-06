@@ -2168,6 +2168,132 @@ check(game.charm_unlocked(_s59h, 1) is True, "护符 II：公会 B 解锁")
 _rr59 = next(it for it in game.CON_SHOP if "重掷券" in it["n"])
 check(_rr59.get("g") == 4, "精英委托重掷券：解锁公会 B 级（g=4）")
 
+# ═══════════ v1.61h：宠物礼物池 + 携带宠物拾取（艾露猫式） ═══════════
+print()
+print("=== 50h. v1.61h 宠物礼物池 / 携带宠物拾取 ===")
+
+# ① 礼物池结构：每宠 4~6 种、权重和 = 100、材料齐备、覆盖全部宠物
+_bad_pool = []
+for _pn, _pool in game.PET_GIFTS.items():
+    if not (4 <= len(_pool) <= 6):
+        _bad_pool.append(_pn + "：种类 " + str(len(_pool)))
+    if abs(sum(x[1] for x in _pool) - 100) > 0.001:
+        _bad_pool.append(_pn + "：权重和 " + str(sum(x[1] for x in _pool)))
+    for _it, _w in _pool:
+        if _it not in game.M:
+            _bad_pool.append(_pn + "：" + _it + " 不在材料表")
+check(not _bad_pool, "礼物池结构：每宠 4~6 种 / 权重和 100 / 材料齐备" + ("；问题: " + str(_bad_pool) if _bad_pool else ""))
+check(set(game.PET_GIFTS) == (set(game.PET_LINES) | {"小狼"}), "礼物池覆盖全部宠物（8 养成线 + 小狼）")
+
+# ② 加权抽取（stub 随机序列）
+_orig_random = game.random.random
+_seq = [0.0, 0.0]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.0
+try:
+    _g1 = game.pet_gift_roll(None, "小狼")
+finally:
+    game.random.random = _orig_random
+check(_g1 == ("兽肉", 1), "礼物抽取：权重 0 → 首项（小狼 → 兽肉 ×1）")
+_seq = [0.9996]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.999
+try:
+    _g2 = game.pet_gift_roll(None, "小狼")
+finally:
+    game.random.random = _orig_random
+check(_g2 == ("魔狼鬃毛", 1), "礼物抽取：权重尾 → 低概率稀有物（小狼 → 魔狼鬃毛 · 史诗 ×1）")
+
+# ③ 拾取触发概率（心情修正）
+_s61h = new_state()
+check(game.pet_find_roll(_s61h, "quest") is None, "拾取：未携带宠物 → 不触发")
+_s61h["carry_pet"] = "小狼"
+_s61h["wolf"] = {"stage": 4, "growth": 0, "mutate": 0, "fedDate": "", "fedCount": 0, "mood": 50}
+_seq = [0.055, 0.0, 0.0, 0.0, 0.0]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.0
+try:
+    _pf0 = game.pet_find_roll(_s61h, "quest")
+finally:
+    game.random.random = _orig_random
+check(_pf0 is not None and _pf0["name"] in game.M, "拾取：心情 50 / 委托 6% —— 0.055 命中（" + str(_pf0) + "）")
+_seq = [0.065]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.99
+try:
+    _pf1 = game.pet_find_roll(_s61h, "quest")
+finally:
+    game.random.random = _orig_random
+check(_pf1 is None, "拾取：心情 50 —— 0.065 不触发（严格小于概率）")
+_s61h["wolf"]["mood"] = 80
+_seq = [0.075, 0.0, 0.0, 0.0, 0.0]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.0
+try:
+    _pf2 = game.pet_find_roll(_s61h, "quest")
+finally:
+    game.random.random = _orig_random
+check(_pf2 is not None, "拾取：心情 80 → 概率 8%（0.075 命中，心情加成生效）")
+_s61h["wolf"]["mood"] = 20
+_seq = [0.05]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.99
+try:
+    _pf2b = game.pet_find_roll(_s61h, "quest")
+finally:
+    game.random.random = _orig_random
+check(_pf2b is None, "拾取：心情 20 → 概率 4%（0.05 不触发，心情减成生效）")
+
+# ④ 品级池：常规尾 = 史诗（无传说）/ 传奇尾 = 传说
+_s61h["wolf"]["mood"] = 50
+_seq = [0.05, 0.999]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.5
+try:
+    _pf3 = game.pet_find_roll(_s61h, "quest")
+finally:
+    game.random.random = _orig_random
+check(_pf3 is not None and game.M[_pf3["name"]][1] == "史诗", "拾取：常规场景品级池尾 = 史诗（无传说）")
+_seq = [0.11, 0.999]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.5
+try:
+    _pf4 = game.pet_find_roll(_s61h, "legend")
+finally:
+    game.random.random = _orig_random
+check(_pf4 is not None and game.M[_pf4["name"]][1] == "传说", "拾取：传奇场景品级池尾 = 传说（2%）")
+
+# ⑤ 结算钩子：委托 / 探索 / 传奇（替换 pet_find_roll 验证入账与结果数组）
+_orig_find = game.pet_find_roll
+_s61h2 = new_state()
+_s61h2["carry_pet"] = "小狼"
+_q61 = list(game.C[game.CFG["levels"][0]][0])
+_a61 = {"name": _q61[0], "q": _q61, "rate": 0.9, "acceptTs": game.now_ms(), "finishTs": game.now_ms() + 1000, "pending": True}
+_s61h2["active"] = [_a61]
+_m61 = _s61h2["mats"].get("蘑菇", 0)
+game.pet_find_roll = lambda s, ctx: {"name": "蘑菇", "n": 2} if ctx == "quest" else None
+try:
+    _res61 = game.settle(_s61h2, _a61, [])
+finally:
+    game.pet_find_roll = _orig_find
+check(_s61h2["mats"].get("蘑菇", 0) >= _m61 + 2 and any("🐾" in g for g in _res61["got"]),
+      "结算集成：委托携宠拾取入账（材料 +2 且 results.got 含 🐾）")
+
+_s61h3 = new_state()
+_s61h3["carry_pet"] = "小狼"
+_s61h3["explore_active"] = {"idx": 0, "n": "晨光森林", "c": 3, "h": 2,
+                            "startTs": game.now_ms() - 1000, "finishTs": game.now_ms() - 1}
+game.pet_find_roll = lambda s, ctx: {"name": "蘑菇", "n": 1} if ctx == "explore" else None
+try:
+    game.explore_finish_check(_s61h3, [])
+finally:
+    game.pet_find_roll = _orig_find
+check(_s61h3.get("explore_result") and "🐾" in _s61h3["explore_result"]["msg"],
+      "结算集成：探索携宠拾取出现在探索结果（🐾 文案）")
+
+_s61h4 = new_state()
+_s61h4["carry_pet"] = "小狼"
+_lg61 = next(L for L in game.LEGEND)
+_a61L = {"name": _lg61[0], "q": [], "rate": 0.5, "legend": _lg61, "lname": "测试传奇"}
+game.pet_find_roll = lambda s, ctx: {"name": "蘑菇", "n": 1} if ctx == "legend" else None
+try:
+    _res61L = game.settle(_s61h4, _a61L, [])
+finally:
+    game.pet_find_roll = _orig_find
+check(any("🐾" in g for g in _res61L["got"]), "结算集成：传奇携宠拾取进入 results.got（成败均判定）")
+
 print()
 print("=" * 40)
 print("  通过 " + str(PASS) + " 项 | 失败 " + str(FAIL) + " 项 " + ("✅ 全部通过" if FAIL == 0 else "❌"))

@@ -957,7 +957,74 @@ PET_MOOD_HAPPY = 70          # 心情 ≥ 此值 = 😊（连续 7 天触发心�
 PET_MOOD_LOW = 30            # 心情 < 此值 = 😴
 PET_BOND_MILES = [7, 30, 100, 365]                     # 羁绊里程碑（天）→ 解锁专属故事
 PET_WALK_MS = 30 * 60 * 1000                           # 散步约半小时后回来（下次打开结算）
-PET_WALK_GIFT = ["蘑菇", "止血草", "香草", "晨露花", "河鱼", "泉水"]   # 散步可能带回的小礼物（普通/精良）
+# v1.61h：宠物礼物池（每只宠物各不相同——偏好决定礼物类型；4~6 种，末位为低概率稀有物）
+# 权重之和 = 100；普通/精良礼物数量 1~2，稀有及以上 1 个
+PET_GIFTS = {
+    "小狼":     [["兽肉", 32], ["河鱼", 26], ["蘑菇", 20], ["止血草", 14], ["山珍", 7], ["魔狼鬃毛", 1]],
+    "月光狐":   [["晨露花", 36], ["金盏花", 28], ["紫藤花", 22], ["月光草", 12], ["月影纱", 1.5], ["月长石", 0.5]],
+    "绒球兽":   [["天鹅绒", 32], ["香草", 28], ["蘑菇", 22], ["止血草", 16], ["山珍", 1.5], ["蜂王浆", 0.5]],
+    "史莱姆":   [["泉水", 34], ["蘑菇", 26], ["止血草", 20], ["蜂蜜", 14], ["石英", 5], ["净化石", 1]],
+    "捣蛋鬼":   [["蜂蜜", 34], ["蘑菇", 26], ["河鱼", 20], ["哥布林图腾", 12], ["古董钱币", 7], ["蜂王浆", 1]],
+    "星界幼龙": [["石英", 46], ["星尘", 44], ["月长石", 8], ["星辉绸", 2]],
+    "龙神幼崽": [["兽肉", 52], ["山珍", 30], ["龙涎果", 14], ["龙鳞", 3], ["龙血", 1]],
+    "幼龙群":   [["兽肉", 56], ["山珍", 24], ["龙骨", 12], ["巨人骨", 6], ["大块龙肉", 2]],
+    "深渊之眼": [["河鱼", 48], ["净化石", 24], ["暗影草", 20], ["虚空结晶", 6], ["混沌碎片", 2]],
+}
+# v1.61h：携带宠物拾取（艾露猫式）——委托 / 探索 / 传奇事件结算时极低概率额外带回材料（无论成败）
+PET_FIND = {
+    "chance": {"quest": 0.06, "explore": 0.08, "legend": 0.12},   # 各场景触发基础概率（心情 ≥70 +2% / <30 −2%，下限 2%）
+    "moodUp": 0.02, "moodDown": 0.02, "minChance": 0.02,
+    "tiers": [["普通", 57], ["精良", 30], ["稀有", 10.5], ["史诗", 2.5]],              # 常规场景（委托 / 探索）品级池
+    "legendTiers": [["普通", 35], ["精良", 32], ["稀有", 22], ["史诗", 9], ["传说", 2]],   # 传奇事件专属品级池（含传说）
+    "favPref": 0.5,                                                # 偏好命中率：礼物池中有该品级材料时 50% 直接取偏好项
+}
+
+
+def pet_gift_roll(s, n):
+    """v1.61h：按宠物礼物池加权抽取（散步归来 / 心意事件共用）——返回 (name, qty)"""
+    pool = PET_GIFTS.get(n) or PET_GIFTS["小狼"]
+    tot = sum(x[1] for x in pool)
+    r = random.random() * tot
+    pick = pool[0]
+    for x in pool:
+        r -= x[1]
+        if r < 0:
+            pick = x
+            break
+    tier = M.get(pick[0], ["", "普通", 0])[1]
+    qty = (1 + int(random.random() * 2)) if tier in ("普通", "精良") else 1
+    return pick[0], qty
+
+
+def pet_find_roll(s, ctx):
+    """v1.61h：携带宠物拾取判定（ctx：quest / explore / legend）——返回 {"name","n"} 或 None"""
+    p = s.get("carry_pet") or ""
+    if not p or p not in PET_GIFTS:
+        return None
+    m = pet_meta_of(s, p)
+    mood = m.get("mood", 50) if m else 50
+    pct = PET_FIND["chance"].get(ctx, 0) + (PET_FIND["moodUp"] if mood >= PET_MOOD_HAPPY else 0) \
+        - (PET_FIND["moodDown"] if mood < PET_MOOD_LOW else 0)
+    pct = max(PET_FIND["minChance"], pct)
+    if random.random() >= pct:
+        return None
+    tiers = PET_FIND["legendTiers"] if ctx == "legend" else PET_FIND["tiers"]
+    tot = sum(x[1] for x in tiers)
+    r = random.random() * tot
+    tier = tiers[0][0]
+    for x in tiers:
+        r -= x[1]
+        if r < 0:
+            tier = x[0]
+            break
+    favs = [x[0] for x in PET_GIFTS[p] if M.get(x[0]) and M[x[0]][1] == tier]
+    if favs and random.random() < PET_FIND["favPref"]:
+        name = favs[int(random.random() * len(favs))]
+    else:
+        pool = [k for k, v in M.items() if v[1] == tier]
+        name = pool[int(random.random() * len(pool))]
+    qty = (1 + int(random.random() * 2)) if tier in ("普通", "精良") else 1
+    return {"name": name, "n": qty}
 
 # v1.56：抚摸回复（每宠 3 条，按性格）
 PET_PAT_TXT = {
@@ -1148,11 +1215,11 @@ def pet_mood_daily(s, msgs, sc, slept):
         else:
             m["happyStreak"] = 0
         if m["happyStreak"] and m["happyStreak"] % 7 == 0:      # 连续 7 天好心情 → 心意事件
-            gift = random.choice(PET_WALK_GIFT)
-            s["mats"][gift] = (s.get("mats") or {}).get(gift, 0) + 1
+            gift, gq = pet_gift_roll(s, n)   # v1.61h：按宠物专属礼物池
+            s["mats"][gift] = (s.get("mats") or {}).get(gift, 0) + gq
             txt = PET_HEART_TXT.replace("{N}", pet_show_name(s, n))
-            add_log(s, "💗 " + txt, "gold")
-            msgs.append("💗 " + txt + "（" + gift + " ×1）")
+            add_log(s, "💗 " + txt + "（" + gift + " ×" + str(gq) + "）", "gold")
+            msgs.append("💗 " + txt + "（" + gift + " ×" + str(gq) + "）")
 
 
 def pet_bond_tick(s, msgs):
@@ -1233,8 +1300,7 @@ def pet_walk_settle(s, msgs):
     txt = random.choice(PET_WALK_TXT).replace("{N}", show)
     extra = ""
     if random.random() < 0.30:
-        gift = random.choice(PET_WALK_GIFT)
-        cnt = random.randint(1, 2)
+        gift, cnt = pet_gift_roll(s, n)   # v1.61h：按宠物专属礼物池（普通/精良 1~2 个，稀有及以上 1 个）
         s["mats"][gift] = (s.get("mats") or {}).get(gift, 0) + cnt
         extra = "\n它还带回来了：" + gift + " ×" + str(cnt) + "。"
     m = pet_meta_of(s, n)
@@ -1962,9 +2028,15 @@ def settle(s, a, msgs):
             if L[0] not in s["legend_done"]:
                 s["legend_done"].append(L[0])   # v1.50：去重——防重复完成同一传奇刷「大师」成就 / 重复入档
             check_achievements(s, msgs)
+        got2 = [L[7]] if ok2 else []
+        _pf = pet_find_roll(s, "legend")     # v1.61h：携带宠物拾取（传奇场景——品级池含传说；成败均判定）
+        if _pf:
+            s["mats"][_pf["name"]] = s["mats"].get(_pf["name"], 0) + _pf["n"]
+            got2.append("🐾" + _pf["name"] + "×" + str(_pf["n"]))
+            add_log(s, "🐾 " + pet_show_name(s, s["carry_pet"]) + " 在事件途中翻出了 " + _pf["name"] + " ×" + str(_pf["n"]), "gold")
         res = {"name": L[0], "type": (L[1] or "精英").split("+")[0], "roll": roll2, "need": round(rate * 100),
                "title": (lname + "完成！") if ok2 else "失败",
-               "gold": g2, "exp": e2, "got": [L[7]] if ok2 else [], "cls": "gold" if ok2 else "bad"}
+               "gold": g2, "exp": e2, "got": got2, "cls": "gold" if ok2 else "bad"}
         _push_capped(s, "results", res)   # v1.39（B6）：封顶 50
         add_log(s, "🌍 " + lname + "「" + L[0] + "」掷出 " + str(roll2) + " → " + ("成功" if ok2 else "失败")
                 + "（+" + fmt_money(g2) + " / +" + str(e2) + "经验"
@@ -2041,6 +2113,14 @@ def settle(s, a, msgs):
     con = int(round(q_lv * (1 + _eff["con"]))) if ok else 0
     s["rep"] += rep
     s["con"] += con
+
+    # v1.61h：携带宠物拾取（委托场景；成败均判定——艾露猫式）
+    _pf = pet_find_roll(s, "quest")
+    if _pf:
+        s["mats"][_pf["name"]] = s["mats"].get(_pf["name"], 0) + _pf["n"]
+        got.append("🐾" + _pf["name"] + "×" + str(_pf["n"]))
+        got_obj[_pf["name"]] = got_obj.get(_pf["name"], 0) + _pf["n"]
+        add_log(s, "🐾 " + pet_show_name(s, s["carry_pet"]) + " 在任务途中翻出了 " + _pf["name"] + " ×" + str(_pf["n"]), "gold")
 
     if not s.get("daily") or s["daily"].get("date") != today_str():
         s["daily"] = _blank_daily(today_str())
@@ -3483,6 +3563,12 @@ def explore_finish_check(s, msgs):
             n = 1 + random.randint(0, 2)
             s["mats"][name] = s["mats"].get(name, 0) + n
             gains.append(name + " ×" + str(n))
+    # v1.61h：携带宠物拾取（探索场景）
+    _pf = pet_find_roll(s, "explore")
+    if _pf:
+        s["mats"][_pf["name"]] = s["mats"].get(_pf["name"], 0) + _pf["n"]
+        gains.append("🐾 " + pet_show_name(s, s["carry_pet"]) + " 翻出了 " + _pf["name"] + " ×" + str(_pf["n"]))
+
     msg = "获得：" + "、".join(gains) if gains else "空手而归……什么都没找到。"
     add_log(s, "🧭 探索「" + r["n"] + "」完成 → " + msg, "gold" if gains else "")
     s["explore_result"] = {"region": r["n"], "msg": msg}

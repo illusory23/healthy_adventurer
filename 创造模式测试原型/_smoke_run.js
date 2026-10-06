@@ -718,6 +718,48 @@ console.log("\\n===== 12. 背包筛选与详情补全 =====");
     && (dlgCap.b || "").indexOf(">" + _pmB.mood + "</b> / 100") >= 0
     && (dlgCap.b || "").indexOf("width:" + _pmB.mood + "%;background:") >= 0,
     "showPetDetail：具体心情值（数值 / 100 + 进度条）");
+  /* v1.61h：宠物礼物池 + 携带宠物拾取（艾露猫式） */
+  let _poolBad61 = [];
+  Object.keys(PET_GIFTS).forEach(function(k){
+    const _pl = PET_GIFTS[k];
+    if(_pl.length < 4 || _pl.length > 6) _poolBad61.push(k + " 种类 " + _pl.length);
+    const _sm = _pl.reduce(function(a, x){ return a + x[1]; }, 0);
+    if(Math.abs(_sm - 100) > 0.001) _poolBad61.push(k + " 权重和 " + _sm);
+    _pl.forEach(function(x){ if(!M[x[0]]) _poolBad61.push(k + " " + x[0]); });
+  });
+  check(!_poolBad61.length, "礼物池结构：每宠 4~6 种 / 权重和 100 / 材料齐备" + (_poolBad61.length ? "（" + _poolBad61.join("；") + "）" : ""));
+  const _rndG61 = Math.random;
+  Math.random = function(){ return 0; };
+  const _gg61 = petGiftRoll("史莱姆");
+  Math.random = _rndG61;
+  check(_gg61.name === "泉水" && _gg61.n === 1, "礼物抽取：权重 0 → 首项（史莱姆 → 泉水 ×1，实得 " + _gg61.name + "×" + _gg61.n + "）");
+  Math.random = function(){ return 0.99999; };
+  const _gg61b = petGiftRoll("星界幼龙");
+  Math.random = _rndG61;
+  check(_gg61b.name === "星辉绸" && _gg61b.n === 1, "礼物抽取：权重尾 → 低概率稀有物（星界幼龙 → 星辉绸 ×1，实得 " + _gg61b.name + "×" + _gg61b.n + "）");
+  const _carryBak61 = S.carryPet;
+  const _moodBak61 = S.wolf ? S.wolf.mood : null;
+  if(S.wolf) S.wolf.mood = 50;
+  S.carryPet = null;
+  check(petFindRoll("quest") === null, "拾取：未携带宠物 → 不触发");
+  S.carryPet = "小狼";
+  const _seq61 = [0.05, 0.0, 0.0, 0.0, 0.0];
+  Math.random = function(){ return _seq61.length ? _seq61.shift() : 0.5; };
+  const _pf61A = petFindRoll("quest");
+  Math.random = _rndG61;
+  check(_pf61A && _pf61A.name === "兽肉" && _pf61A.n === 1, "拾取：触发 → 普通品级 + 偏好项（小狼 → 兽肉 ×1，实得 " + (_pf61A ? _pf61A.name + "×" + _pf61A.n : "null") + "）");
+  const _seq61b = [0.05, 0.999, 0.99, 0.5];
+  Math.random = function(){ return _seq61b.length ? _seq61b.shift() : 0.5; };
+  const _pf61B = petFindRoll("quest");
+  Math.random = _rndG61;
+  check(_pf61B && M[_pf61B.name][1] === "史诗", "拾取：常规品级池尾 = 史诗（无传说，实得 " + (_pf61B ? _pf61B.name : "null") + "）");
+  const _seq61c = [0.05, 0.999, 0.99, 0.5];
+  Math.random = function(){ return _seq61c.length ? _seq61c.shift() : 0.5; };
+  const _pf61C = petFindRoll("legend");
+  Math.random = _rndG61;
+  check(_pf61C && M[_pf61C.name][1] === "传说", "拾取：传奇品级池尾 = 传说（2%，实得 " + (_pf61C ? _pf61C.name : "null") + "）");
+  S.carryPet = _carryBak61;
+  if(S.wolf && _moodBak61 !== null) S.wolf.mood = _moodBak61;
   render();
   check((document.getElementById("tab-log").innerHTML || "").indexOf("宠物（") >= 0
     && (document.getElementById("tab-log").innerHTML || "").indexOf("月光狐") >= 0, "信息页：全宠物总览（不再只显示小狼）");
@@ -1975,7 +2017,9 @@ const _h38r = [
   ["v1.61d HUD 公会经验条（声望独立显示移除）", html.indexOf('id="hGuildBar"') >= 0 && html.indexOf('id="hGuildTxt"') >= 0 && html.indexOf('class="bar bar-guild"') >= 0 && html.indexOf('id="hRep"') < 0 && html.indexOf("⭐声望") < 0],
   ["v1.61d 规则道具不可出售（sellMat 非材料守卫 ×2）", (html.match(/!M\[name\] \|\| !S\.mats\[name\]/g) || []).length >= 2],
   ["v1.61f 宠物详情显示具体心情值（数值 / 100 + 进度条 + 卡片提示）", html.indexOf("心情值 <b") >= 0 && html.indexOf("</b> / 100") >= 0 && html.indexOf("（${mood}/100）") >= 0],
-  ["v1.61g 宠物礼物改暗示文案（不剧透 7 天规则）", html.indexOf("神秘小礼物") >= 0 && html.indexOf("连续 7 天会收到心意礼物") < 0 && html.indexOf("连续 7 天好心情会收到心意礼物") < 0]
+  ["v1.61g 宠物礼物改暗示文案（不剧透 7 天规则）", html.indexOf("神秘小礼物") >= 0 && html.indexOf("连续 7 天会收到心意礼物") < 0 && html.indexOf("连续 7 天好心情会收到心意礼物") < 0],
+  ["v1.61h 宠物礼物池（每宠 4~6 种 · 权重 100 · 偏好决定类型）", html.indexOf("const PET_GIFTS = {") >= 0 && html.indexOf('"魔狼鬃毛"') >= 0 && html.indexOf('"星辉绸"') >= 0 && html.indexOf("function petGiftRoll(") >= 0 && html.indexOf("PET_WALK_GIFT") < 0],
+  ["v1.61h 携带宠物拾取（委托 / 探索 / 传奇三钩子 + 品级池含传说）", html.indexOf("const PET_FIND = {") >= 0 && html.indexOf('petFindRoll("quest")') >= 0 && html.indexOf('petFindRoll("explore")') >= 0 && html.indexOf('petFindRoll("legend")') >= 0 && html.indexOf("legendTiers") >= 0]
 ];
 let _h38rBad = 0;
 _h38r.forEach(function(x){ console.log("  " + (x[1] ? "✅" : "❌") + " " + x[0]); if(!x[1]) _h38rBad++; });
