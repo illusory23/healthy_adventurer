@@ -468,19 +468,17 @@ csv("委托准备物表.csv",
   csv("宠物礼物表.csv", ["宠物","礼物","品阶","基准价","权重","数量"], _giftRows);
 }
 
-/* ── ⑳ 宠物拾取表（v1.61h：携带宠物在委托/探索/传奇额外带回材料——艾露猫式）── */
+/* ── ⑳ 宠物拾取表（v1.61i：池 = 内容自身产出；3 种/4 个上限，失败 1 种/2 个）── */
 {
-  const _findRows = [];
-  const _ctxName = {quest: "委托结算", explore: "探索归来", legend: "传奇事件"};
-  ["quest", "explore", "legend"].forEach(function(ctx){
-    const _base = D.PET_FIND.chance[ctx];
-    const _tiers = (ctx === "legend") ? D.PET_FIND.legendTiers : D.PET_FIND.tiers;
-    _tiers.forEach(function(x){
-      _findRows.push([_ctxName[ctx], Math.round(_base * 100) + "%", "心情 ≥70 +2% / <30 −2%", x[0], x[1] + "%",
-        (x[0] === "普通" || x[0] === "精良") ? "1~2" : "1"]);
-    });
-  });
-  csv("宠物拾取表.csv", ["场景","触发概率","心情修正","品阶","品级概率","数量"], _findRows);
+  const _tw = Object.keys(D.PET_FIND.tierW).map(function(k){ return k + " " + D.PET_FIND.tierW[k]; }).join(" / ");
+  const _findRows = [
+    ["委托结算", "6%", "心情 ≥70 +2% / <30 −2%", "本委托掉表全部材料", _tw, "3 种 / 合计 4 个"],
+    ["委托失败", "6%", "同上", "本委托掉表全部材料", _tw, "1 种 / 合计 2 个"],
+    ["探索归来", "8%", "同上", "本区域掉表全部材料", _tw, "3 种 / 合计 4 个"],
+    ["传奇事件", "12%", "同上", "本事件必得材料", _tw, "3 种 / 合计 4 个"],
+    ["传奇失败", "12%", "同上", "本事件必得材料", _tw, "1 种 / 合计 2 个"]
+  ];
+  csv("宠物拾取表.csv", ["场景","触发概率","心情修正","材料池","品阶权重","数量上限"], _findRows);
 }
 
 console.log("全部完成 ✅（共 20 张表）");

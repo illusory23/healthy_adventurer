@@ -741,23 +741,30 @@ console.log("\\n===== 12. 背包筛选与详情补全 =====");
   const _moodBak61 = S.wolf ? S.wolf.mood : null;
   if(S.wolf) S.wolf.mood = 50;
   S.carryPet = null;
-  check(petFindRoll("quest") === null, "拾取：未携带宠物 → 不触发");
+  check(petFindRoll("quest", ["兽肉"], false) === null, "拾取：未携带宠物 → 不触发");
   S.carryPet = "小狼";
-  const _seq61 = [0.05, 0.0, 0.0, 0.0, 0.0];
+  const _seq61 = [0.05, 0.0, 0.0, 0.0];
   Math.random = function(){ return _seq61.length ? _seq61.shift() : 0.5; };
-  const _pf61A = petFindRoll("quest");
+  const _pf61A = petFindRoll("quest", ["兽肉", "河鱼"], false);
   Math.random = _rndG61;
-  check(_pf61A && _pf61A.name === "兽肉" && _pf61A.n === 1, "拾取：触发 → 普通品级 + 偏好项（小狼 → 兽肉 ×1，实得 " + (_pf61A ? _pf61A.name + "×" + _pf61A.n : "null") + "）");
-  const _seq61b = [0.05, 0.999, 0.99, 0.5];
+  check(_pf61A && _pf61A.length === 1 && _pf61A[0].name === "兽肉" && _pf61A[0].n === 1,
+    "拾取：命中 → 限本内容材料池（实得 " + JSON.stringify(_pf61A) + "）");
+  const _seq61b = [0.05, 0.0, 0.9999];
   Math.random = function(){ return _seq61b.length ? _seq61b.shift() : 0.5; };
-  const _pf61B = petFindRoll("quest");
+  const _pf61B = petFindRoll("quest", ["蘑菇", "龙心"], false);
   Math.random = _rndG61;
-  check(_pf61B && M[_pf61B.name][1] === "史诗", "拾取：常规品级池尾 = 史诗（无传说，实得 " + (_pf61B ? _pf61B.name : "null") + "）");
-  const _seq61c = [0.05, 0.999, 0.99, 0.5];
+  check(_pf61B && _pf61B[0].name === "龙心", "拾取：传说品阶可捡到（池含龙心 · 权重尾命中，实得 " + (_pf61B ? _pf61B[0].name : "null") + "）");
+  const _seq61c = [0.05, 0.0, 0.99];
   Math.random = function(){ return _seq61c.length ? _seq61c.shift() : 0.5; };
-  const _pf61C = petFindRoll("legend");
+  const _pf61C = petFindRoll("quest", ["蘑菇", "河鱼", "泉水"], true);
   Math.random = _rndG61;
-  check(_pf61C && M[_pf61C.name][1] === "传说", "拾取：传奇品级池尾 = 传说（2%，实得 " + (_pf61C ? _pf61C.name : "null") + "）");
+  check(_pf61C && _pf61C.length === 1 && _pf61C[0].n <= 2, "拾取：失败上限 1 种 / ≤2 个（实得 " + JSON.stringify(_pf61C) + "）");
+  const _seq61d = [0.05, 0.99, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+  Math.random = function(){ return _seq61d.length ? _seq61d.shift() : 0.5; };
+  const _pf61D = petFindRoll("quest", ["蘑菇", "河鱼", "泉水", "蜂蜜"], false);
+  Math.random = _rndG61;
+  check(_pf61D && _pf61D.length === 3 && _pf61D.reduce(function(a, g){ return a + g.n; }, 0) <= 4,
+    "拾取：上限 3 种 / 合计 ≤4（实得 " + JSON.stringify(_pf61D) + "）");
   S.carryPet = _carryBak61;
   if(S.wolf && _moodBak61 !== null) S.wolf.mood = _moodBak61;
   render();
@@ -2019,7 +2026,7 @@ const _h38r = [
   ["v1.61f 宠物详情显示具体心情值（数值 / 100 + 进度条 + 卡片提示）", html.indexOf("心情值 <b") >= 0 && html.indexOf("</b> / 100") >= 0 && html.indexOf("（${mood}/100）") >= 0],
   ["v1.61g 宠物礼物改暗示文案（不剧透 7 天规则）", html.indexOf("神秘小礼物") >= 0 && html.indexOf("连续 7 天会收到心意礼物") < 0 && html.indexOf("连续 7 天好心情会收到心意礼物") < 0],
   ["v1.61h 宠物礼物池（每宠 4~6 种 · 权重 100 · 偏好决定类型）", html.indexOf("const PET_GIFTS = {") >= 0 && html.indexOf('"魔狼鬃毛"') >= 0 && html.indexOf('"星辉绸"') >= 0 && html.indexOf("function petGiftRoll(") >= 0 && html.indexOf("PET_WALK_GIFT") < 0],
-  ["v1.61h 携带宠物拾取（委托 / 探索 / 传奇三钩子 + 品级池含传说）", html.indexOf("const PET_FIND = {") >= 0 && html.indexOf('petFindRoll("quest")') >= 0 && html.indexOf('petFindRoll("explore")') >= 0 && html.indexOf('petFindRoll("legend")') >= 0 && html.indexOf("legendTiers") >= 0]
+  ["v1.61i 携宠拾取（池 = 内容产出 · 3 种/4 个上限 · 失败 1 种/2 个 · 传说可捡概率极低）", html.indexOf("const PET_FIND = {") >= 0 && html.indexOf("tierW") >= 0 && html.indexOf('petFindRoll("quest", q[8]') >= 0 && html.indexOf('petFindRoll("explore", r.d') >= 0 && html.indexOf('petFindRoll("legend", _lgPool') >= 0 && html.indexOf("failTypes:1, failQty:2") >= 0]
 ];
 let _h38rBad = 0;
 _h38r.forEach(function(x){ console.log("  " + (x[1] ? "✅" : "❌") + " " + x[0]); if(!x[1]) _h38rBad++; });

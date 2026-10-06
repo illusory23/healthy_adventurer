@@ -1874,13 +1874,15 @@ const PET_GIFTS = {
   "幼龙群":   [["兽肉",56],["山珍",24],["龙骨",12],["巨人骨",6],["大块龙肉",2]],
   "深渊之眼": [["河鱼",48],["净化石",24],["暗影草",20],["虚空结晶",6],["混沌碎片",2]]
 };
-/* v1.61h：携带宠物拾取（艾露猫式）——委托 / 探索 / 传奇事件结算时极低概率额外带回材料（无论成败） */
+/* v1.61i：携带宠物拾取（艾露猫式）——结算时极低概率额外带回材料（无论成败）
+   材料池 = 该内容自身的产出池（委托掉表 / 区域掉表 / 传奇必得材料）——"内容产什么，它就可能捡到什么"；
+   池内按品阶加权（传说也可捡到，但概率极低）；一次最多 3 种、合计最多 4 个；失败时最多 1 种、合计最多 2 个 */
 const PET_FIND = {
   chance: {quest:0.06, explore:0.08, legend:0.12},   // 各场景触发基础概率（心情 ≥70 +2% / <30 −2%，下限 2%）
   moodUp:0.02, moodDown:0.02, minChance:0.02,
-  tiers:       [["普通",57],["精良",30],["稀有",10.5],["史诗",2.5]],              // 常规场景（委托 / 探索）品级池
-  legendTiers: [["普通",35],["精良",32],["稀有",22],["史诗",9],["传说",2]],       // 传奇事件专属品级池（含传说）
-  favPref:0.5                                        // 偏好命中率：礼物池中有该品级材料时 50% 直接取偏好项
+  tierW: {"普通":100, "精良":30, "稀有":9, "史诗":2.5, "传说":0.6},   // 池内加权：品阶越高越难被翻出（传说 ≈0.5%）
+  maxTypes:3, maxQty:4,                               // 上限：3 种 / 合计 4 个
+  failTypes:1, failQty:2                              // 失败时：1 种 / 合计 2 个
 };
 /* v1.61h：按宠物礼物池加权抽取（散步归来 / 心意事件共用） */
 function petGiftRoll(n){
@@ -1892,8 +1894,9 @@ function petGiftRoll(n){
   const qty = (tier === "普通" || tier === "精良") ? 1 + Math.floor(Math.random() * 2) : 1;
   return {name: pick[0], n: qty};
 }
-/* v1.61h：携带宠物拾取判定（ctx：quest / explore / legend）——返回 {name, n} 或 null */
-function petFindRoll(ctx){
+/* v1.61i：携带宠物拾取判定（ctx：quest / explore / legend；pool = 该内容产出材料名；fail = 失败场景）
+   返回 [{name, n}, ...]（1~3 种）或 null */
+function petFindRoll(ctx, pool, fail){
   const p = S.carryPet;
   if(!p || !PET_GIFTS[p]) return null;
   const m = petMetaOf(p);
@@ -1901,20 +1904,27 @@ function petFindRoll(ctx){
   let pct = (PET_FIND.chance[ctx] || 0) + (mood >= PET_MOOD_HAPPY ? PET_FIND.moodUp : 0) - (mood < PET_MOOD_LOW ? PET_FIND.moodDown : 0);
   pct = Math.max(PET_FIND.minChance, pct);
   if(Math.random() >= pct) return null;
-  const tiers = (ctx === "legend" ? PET_FIND.legendTiers : PET_FIND.tiers);
-  const tot = tiers.reduce(function(a, x){ return a + x[1]; }, 0);
-  let r = Math.random() * tot, tier = tiers[0][0];
-  for(const x of tiers){ r -= x[1]; if(r < 0){ tier = x[0]; break; } }
-  const favNames = (PET_GIFTS[p] || []).filter(function(x){ return M[x[0]] && M[x[0]][1] === tier; }).map(function(x){ return x[0]; });
-  let name;
-  if(favNames.length && Math.random() < PET_FIND.favPref){
-    name = favNames[Math.floor(Math.random() * favNames.length)];
-  } else {
-    const pool = Object.keys(M).filter(function(k){ return M[k][1] === tier; });
-    name = pool[Math.floor(Math.random() * pool.length)];
+  const cand = [];
+  (pool || []).forEach(function(k){ if(M[k] && cand.indexOf(k) < 0) cand.push(k); });
+  if(!cand.length) return null;
+  const maxT = fail ? PET_FIND.failTypes : PET_FIND.maxTypes;
+  const maxQ = fail ? PET_FIND.failQty : PET_FIND.maxQty;
+  const nT = 1 + Math.floor(Math.random() * maxT);
+  const picks = [];
+  let total = 0;
+  for(let i = 0; i < nT && cand.length; i++){
+    let tot = 0; cand.forEach(function(k){ tot += (PET_FIND.tierW[M[k][1]] || 1); });
+    let r = Math.random() * tot, chosen = cand[0];
+    for(const k of cand){ r -= (PET_FIND.tierW[M[k][1]] || 1); if(r < 0){ chosen = k; break; } }
+    const tier = M[chosen][1];
+    let qty = (tier === "普通" || tier === "精良") ? 1 + Math.floor(Math.random() * 2) : 1;
+    if(total + qty > maxQ) qty = maxQ - total;
+    if(qty <= 0) break;
+    picks.push({name: chosen, n: qty});
+    total += qty;
+    cand.splice(cand.indexOf(chosen), 1);
   }
-  const n = (tier === "普通" || tier === "精良") ? 1 + Math.floor(Math.random() * 2) : 1;
-  return {name: name, n: n};
+  return picks.length ? picks : null;
 }
 const PET_PAT_TXT = {
   "小狼": ["它先绷紧了背，然后慢慢放松下来，把脑袋蹭进你手心。旧伤的那条腿轻轻搭在你腕上。",
@@ -3311,11 +3321,11 @@ async function _settleInner(a, now){
       checkAchievements();                       // v1.19：传奇成就（屠龙者 / 创世者）
     }
     const _gotL = [ok2?(L[7]||"").replace(/；/g,"　"):""].filter(Boolean);
-    const _pfL = petFindRoll("legend");        // v1.61h：携带宠物拾取（传奇场景——品级池含传说）
+    const _lgPool = (L[6]||"").split("、").map(function(pair){ const _m = pair.match(/^(.+?)×(\d+)$/); return _m ? _m[1] : ""; }).filter(Boolean);
+    const _pfL = petFindRoll("legend", _lgPool, !ok2);   // v1.61i：池 = 传奇必得材料（传说也可翻到，概率极低；败则限 1 种/2 个）
     if(_pfL){
-      S.mats[_pfL.name] = (S.mats[_pfL.name]||0) + _pfL.n;
-      _gotL.push("🐾" + _pfL.name + "×" + _pfL.n);
-      addLog("🐾 " + petShowName(S.carryPet) + " 在事件途中翻出了 " + matIcon(_pfL.name) + _pfL.name + " ×" + _pfL.n, "gold");
+      _pfL.forEach(function(g){ S.mats[g.name] = (S.mats[g.name]||0) + g.n; _gotL.push("🐾" + g.name + "×" + g.n); });
+      addLog("🐾 " + petShowName(S.carryPet) + " 在事件途中翻出了 " + _pfL.map(function(g){ return matIcon(g.name)+g.name+" ×"+g.n; }).join("、"), "gold");
     }
     resultQueue.push({name:L[0], type:(L[1]||"精英").split("+")[0], roll:roll2, need:Math.round(a.rate*100),
       title: ok2?lname+"完成！":"失败", gold:g2, exp:e2,
@@ -3379,13 +3389,11 @@ async function _settleInner(a, now){
   const con = ok ? Math.round(questCon(q) * (1 + _eff.con)) : 0;
   S.rep += rep; S.con += con;
 
-  // v1.61h：携带宠物拾取（委托场景；成败均判定——艾露猫式）
-  const _pfQ = petFindRoll("quest");
+  // v1.61i：携带宠物拾取（委托场景；材料池 = 本委托掉表；成败均判定——败则限 1 种/2 个）
+  const _pfQ = petFindRoll("quest", q[8] ? Object.keys(q[8]) : [], !ok);
   if(_pfQ){
-    S.mats[_pfQ.name] = (S.mats[_pfQ.name]||0) + _pfQ.n;
-    got.push("🐾" + _pfQ.name + "×" + _pfQ.n);
-    gotObj[_pfQ.name] = (gotObj[_pfQ.name]||0) + _pfQ.n;
-    addLog("🐾 " + petShowName(S.carryPet) + " 在任务途中翻出了 " + matIcon(_pfQ.name) + _pfQ.name + " ×" + _pfQ.n, "gold");
+    _pfQ.forEach(function(g){ S.mats[g.name] = (S.mats[g.name]||0) + g.n; got.push("🐾"+g.name+"×"+g.n); gotObj[g.name] = (gotObj[g.name]||0) + g.n; });
+    addLog("🐾 " + petShowName(S.carryPet) + " 在任务途中翻出了 " + _pfQ.map(function(g){ return matIcon(g.name)+g.name+" ×"+g.n; }).join("、"), "gold");
   }
 
   // 当日统计（供次日「昨日结算」展示）
@@ -6281,11 +6289,11 @@ function exploreFinishCheck(){
     }
   }
 
-  // v1.61h：携带宠物拾取（探索场景）
-  const _pfE = petFindRoll("explore");
+  // v1.61i：携带宠物拾取（探索场景；材料池 = 本区域掉表）
+  const _pfE = petFindRoll("explore", r.d.map(function(x){ return x[0]; }), false);
   if(_pfE){
-    S.mats[_pfE.name] = (S.mats[_pfE.name]||0) + _pfE.n;
-    gains.push("🐾 " + petShowName(S.carryPet) + " 翻出了 " + _pfE.name + " ×" + _pfE.n);
+    _pfE.forEach(function(g){ S.mats[g.name] = (S.mats[g.name]||0) + g.n; });
+    gains.push("🐾 " + petShowName(S.carryPet) + " 翻出了 " + _pfE.map(function(g){ return g.name + " ×" + g.n; }).join("、"));
   }
 
   let msg, cls = "";

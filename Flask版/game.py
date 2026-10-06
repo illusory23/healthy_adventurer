@@ -970,13 +970,15 @@ PET_GIFTS = {
     "幼龙群":   [["兽肉", 56], ["山珍", 24], ["龙骨", 12], ["巨人骨", 6], ["大块龙肉", 2]],
     "深渊之眼": [["河鱼", 48], ["净化石", 24], ["暗影草", 20], ["虚空结晶", 6], ["混沌碎片", 2]],
 }
-# v1.61h：携带宠物拾取（艾露猫式）——委托 / 探索 / 传奇事件结算时极低概率额外带回材料（无论成败）
+# v1.61i：携带宠物拾取（艾露猫式）——结算时极低概率额外带回材料（无论成败）
+# 材料池 = 该内容自身的产出池（委托掉表 / 区域掉表 / 传奇必得材料）——"内容产什么，它就可能捡到什么"；
+# 池内按品阶加权（传说也可捡到，但概率极低）；一次最多 3 种、合计最多 4 个；失败时最多 1 种、合计最多 2 个
 PET_FIND = {
     "chance": {"quest": 0.06, "explore": 0.08, "legend": 0.12},   # 各场景触发基础概率（心情 ≥70 +2% / <30 −2%，下限 2%）
     "moodUp": 0.02, "moodDown": 0.02, "minChance": 0.02,
-    "tiers": [["普通", 57], ["精良", 30], ["稀有", 10.5], ["史诗", 2.5]],              # 常规场景（委托 / 探索）品级池
-    "legendTiers": [["普通", 35], ["精良", 32], ["稀有", 22], ["史诗", 9], ["传说", 2]],   # 传奇事件专属品级池（含传说）
-    "favPref": 0.5,                                                # 偏好命中率：礼物池中有该品级材料时 50% 直接取偏好项
+    "tierW": {"普通": 100, "精良": 30, "稀有": 9, "史诗": 2.5, "传说": 0.6},   # 池内加权：品阶越高越难被翻出（传说 ≈0.5%）
+    "maxTypes": 3, "maxQty": 4,                                   # 上限：3 种 / 合计 4 个
+    "failTypes": 1, "failQty": 2,                                 # 失败时：1 种 / 合计 2 个
 }
 
 
@@ -996,8 +998,9 @@ def pet_gift_roll(s, n):
     return pick[0], qty
 
 
-def pet_find_roll(s, ctx):
-    """v1.61h：携带宠物拾取判定（ctx：quest / explore / legend）——返回 {"name","n"} 或 None"""
+def pet_find_roll(s, ctx, pool, fail):
+    """v1.61i：携带宠物拾取判定（ctx：quest / explore / legend；pool = 该内容产出材料名；fail = 失败场景）
+    返回 [{"name","n"}, ...]（1~3 种、合计 ≤4；失败 ≤1 种、≤2）或 None"""
     p = s.get("carry_pet") or ""
     if not p or p not in PET_GIFTS:
         return None
@@ -1008,23 +1011,38 @@ def pet_find_roll(s, ctx):
     pct = max(PET_FIND["minChance"], pct)
     if random.random() >= pct:
         return None
-    tiers = PET_FIND["legendTiers"] if ctx == "legend" else PET_FIND["tiers"]
-    tot = sum(x[1] for x in tiers)
-    r = random.random() * tot
-    tier = tiers[0][0]
-    for x in tiers:
-        r -= x[1]
-        if r < 0:
-            tier = x[0]
+    cand = []
+    for k in (pool or []):
+        if k in M and k not in cand:
+            cand.append(k)
+    if not cand:
+        return None
+    max_t = PET_FIND["failTypes"] if fail else PET_FIND["maxTypes"]
+    max_q = PET_FIND["failQty"] if fail else PET_FIND["maxQty"]
+    n_types = 1 + int(random.random() * max_t)
+    picks = []
+    total = 0
+    for _ in range(n_types):
+        if not cand:
             break
-    favs = [x[0] for x in PET_GIFTS[p] if M.get(x[0]) and M[x[0]][1] == tier]
-    if favs and random.random() < PET_FIND["favPref"]:
-        name = favs[int(random.random() * len(favs))]
-    else:
-        pool = [k for k, v in M.items() if v[1] == tier]
-        name = pool[int(random.random() * len(pool))]
-    qty = (1 + int(random.random() * 2)) if tier in ("普通", "精良") else 1
-    return {"name": name, "n": qty}
+        tot = sum(PET_FIND["tierW"].get(M[k][1], 1) for k in cand)
+        r = random.random() * tot
+        chosen = cand[0]
+        for k in cand:
+            r -= PET_FIND["tierW"].get(M[k][1], 1)
+            if r < 0:
+                chosen = k
+                break
+        tier = M[chosen][1]
+        qty = (1 + int(random.random() * 2)) if tier in ("普通", "精良") else 1
+        if total + qty > max_q:
+            qty = max_q - total
+        if qty <= 0:
+            break
+        picks.append({"name": chosen, "n": qty})
+        total += qty
+        cand.remove(chosen)
+    return picks or None
 
 # v1.56：抚摸回复（每宠 3 条，按性格）
 PET_PAT_TXT = {
@@ -2029,11 +2047,14 @@ def settle(s, a, msgs):
                 s["legend_done"].append(L[0])   # v1.50：去重——防重复完成同一传奇刷「大师」成就 / 重复入档
             check_achievements(s, msgs)
         got2 = [L[7]] if ok2 else []
-        _pf = pet_find_roll(s, "legend")     # v1.61h：携带宠物拾取（传奇场景——品级池含传说；成败均判定）
+        _lg_pool = [m2.group(1) for m2 in (re.match(r"^(.+?)×(\d+)$", pair) for pair in (L[6] or "").split("、")) if m2]
+        _pf = pet_find_roll(s, "legend", _lg_pool, not ok2)   # v1.61i：池 = 传奇必得材料；败则限 1 种/2 个
         if _pf:
-            s["mats"][_pf["name"]] = s["mats"].get(_pf["name"], 0) + _pf["n"]
-            got2.append("🐾" + _pf["name"] + "×" + str(_pf["n"]))
-            add_log(s, "🐾 " + pet_show_name(s, s["carry_pet"]) + " 在事件途中翻出了 " + _pf["name"] + " ×" + str(_pf["n"]), "gold")
+            for _g in _pf:
+                s["mats"][_g["name"]] = s["mats"].get(_g["name"], 0) + _g["n"]
+                got2.append("🐾" + _g["name"] + "×" + str(_g["n"]))
+            add_log(s, "🐾 " + pet_show_name(s, s["carry_pet"]) + " 在事件途中翻出了 "
+                    + "、".join(_g2["name"] + " ×" + str(_g2["n"]) for _g2 in _pf), "gold")
         res = {"name": L[0], "type": (L[1] or "精英").split("+")[0], "roll": roll2, "need": round(rate * 100),
                "title": (lname + "完成！") if ok2 else "失败",
                "gold": g2, "exp": e2, "got": got2, "cls": "gold" if ok2 else "bad"}
@@ -2114,13 +2135,15 @@ def settle(s, a, msgs):
     s["rep"] += rep
     s["con"] += con
 
-    # v1.61h：携带宠物拾取（委托场景；成败均判定——艾露猫式）
-    _pf = pet_find_roll(s, "quest")
+    # v1.61i：携带宠物拾取（委托场景；材料池 = 本委托掉表；成败均判定——败则限 1 种/2 个）
+    _pf = pet_find_roll(s, "quest", list(q[8].keys()) if q[8] else [], not ok)
     if _pf:
-        s["mats"][_pf["name"]] = s["mats"].get(_pf["name"], 0) + _pf["n"]
-        got.append("🐾" + _pf["name"] + "×" + str(_pf["n"]))
-        got_obj[_pf["name"]] = got_obj.get(_pf["name"], 0) + _pf["n"]
-        add_log(s, "🐾 " + pet_show_name(s, s["carry_pet"]) + " 在任务途中翻出了 " + _pf["name"] + " ×" + str(_pf["n"]), "gold")
+        for _g in _pf:
+            s["mats"][_g["name"]] = s["mats"].get(_g["name"], 0) + _g["n"]
+            got.append("🐾" + _g["name"] + "×" + str(_g["n"]))
+            got_obj[_g["name"]] = got_obj.get(_g["name"], 0) + _g["n"]
+        add_log(s, "🐾 " + pet_show_name(s, s["carry_pet"]) + " 在任务途中翻出了 "
+                + "、".join(_g2["name"] + " ×" + str(_g2["n"]) for _g2 in _pf), "gold")
 
     if not s.get("daily") or s["daily"].get("date") != today_str():
         s["daily"] = _blank_daily(today_str())
@@ -3563,11 +3586,13 @@ def explore_finish_check(s, msgs):
             n = 1 + random.randint(0, 2)
             s["mats"][name] = s["mats"].get(name, 0) + n
             gains.append(name + " ×" + str(n))
-    # v1.61h：携带宠物拾取（探索场景）
-    _pf = pet_find_roll(s, "explore")
+    # v1.61i：携带宠物拾取（探索场景；材料池 = 本区域掉表）
+    _pf = pet_find_roll(s, "explore", [pair2[0] for pair2 in r["d"]], False)
     if _pf:
-        s["mats"][_pf["name"]] = s["mats"].get(_pf["name"], 0) + _pf["n"]
-        gains.append("🐾 " + pet_show_name(s, s["carry_pet"]) + " 翻出了 " + _pf["name"] + " ×" + str(_pf["n"]))
+        for _g in _pf:
+            s["mats"][_g["name"]] = s["mats"].get(_g["name"], 0) + _g["n"]
+        gains.append("🐾 " + pet_show_name(s, s["carry_pet"]) + " 翻出了 "
+                     + "、".join(_g2["name"] + " ×" + str(_g2["n"]) for _g2 in _pf))
 
     msg = "获得：" + "、".join(gains) if gains else "空手而归……什么都没找到。"
     add_log(s, "🧭 探索「" + r["n"] + "」完成 → " + msg, "gold" if gains else "")
