@@ -40,7 +40,7 @@ const test = `
 (function(){
 _roll3D = false;
 S = newState();                       // 干净档：无装备 / 无宠物 / 无料理 / 无历史（仅默认字段）
-const OUT = { successRate: [], matDropRate: [], matQtyRange: [],
+const OUT = { successRate: [], matDropRate: [], matQtyRange: [], moodDaily: [],
               expNeed: CFG.expNeed, sucBase: CFG.sucBase,
               matDrop: CFG.matDrop, drawCount: CFG.drawCount };
 const diffs = ["简单", "普通", "困难", "噩梦"];
@@ -58,6 +58,15 @@ S.lvIdx = 0;
 for(const k in M){ OUT.matDropRate.push({ name: k, out: matDropRate(k) }); }
 [[1, 3], [2, 2], 5, [4, 6]].forEach(function(v){
   OUT.matQtyRange.push({ v: v, out: matQtyRange(v) });
+});
+/* v1.61s：心情日结算增量（收敛式——向健康分补差距的 25%，四舍五入；早睡 +5）。
+   全枚举含负差值 / 舍入边界（±0.5）/ 0 值心情（0 不再被 || 视为缺省） */
+[0, 20, 50, 66, 80, 89, 90, 95, 99, 100].forEach(function(mood){
+  [0, 30, 50, 70, 90, 95, 100].forEach(function(sc){
+    [false, true].forEach(function(sl){
+      OUT.moodDaily.push({ mood: mood, sc: sc, slept: sl, out: petMoodDelta(mood, sc, sl) });
+    });
+  });
 });
 /* v1.48e：硬编码表双端一致性（防未来加表时两端漂移）+ CFG 全量 */
 OUT.tables = {
@@ -90,4 +99,5 @@ if(!global.__PARITY__){ console.error("parity dump 失败"); process.exit(1); }
 fs.writeFileSync(__dirname + '/_parity_out.json', JSON.stringify(global.__PARITY__, null, 1));
 console.log("parity dump: successRate " + global.__PARITY__.successRate.length
   + " 组 / matDropRate " + global.__PARITY__.matDropRate.length
-  + " 种 / 常量表 4 组 → _parity_out.json");
+  + " 种 / moodDaily " + global.__PARITY__.moodDaily.length
+  + " 组 / 常量表 4 组 → _parity_out.json");

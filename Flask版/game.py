@@ -5,6 +5,7 @@
 状态为纯 dict，持久化交给 db.py（SQLite 单行 JSON）。
 """
 import json
+import math
 import random
 import re
 import time
@@ -1203,8 +1204,18 @@ def pet_bond_days(s, n):
         return 0
 
 
+def pet_mood_delta(mood, sc, slept):
+    """v1.61s：心情日结算增量——向昨日健康分收敛：补上「健康分 − 当前心情」差距的 25%（四舍五入）；早睡 +5。
+    与前端 petMoodDelta 同式（math.floor(x*0.25+0.5) ↔ Math.floor(x*0.25+0.5)）。"""
+    dm = math.floor((sc - mood) * 0.25 + 0.5)
+    if slept:
+        dm += 5
+    return dm
+
+
 def pet_mood_daily(s, msgs, sc, slept):
-    """v1.56：宠物心情日结算——由主人昨日的现实健康驱动（只反映，不惩罚数值）"""
+    """v1.56：宠物心情日结算——由主人昨日的现实健康驱动（只反映，不惩罚数值）
+    v1.61s：分档制退役 → 收敛式——心情是「最近健康水平的平滑投影」，互动（抚摸/散步/早睡）为加法脉冲"""
     names = list(s.get("pets") or [])
     if s.get("wolf"):
         names.append("小狼")
@@ -1212,10 +1223,9 @@ def pet_mood_daily(s, msgs, sc, slept):
         m = pet_meta_of(s, n)
         if not m:
             continue
-        dm = 10 if sc >= 90 else (5 if sc >= 60 else -5)
-        if slept:
-            dm += 5
-        m["mood"] = max(0, min(100, m.get("mood", 50) + dm))
+        mv = m.get("mood", 50)
+        dm = pet_mood_delta(mv, sc, slept)
+        m["mood"] = max(0, min(100, mv + dm))
         if m["mood"] >= PET_MOOD_HAPPY:
             m["happyStreak"] = m.get("happyStreak", 0) + 1
         else:

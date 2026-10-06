@@ -2358,6 +2358,23 @@ check(bool(_pool61l.get("l")) and all(isinstance(e, tuple) and isinstance(e[1], 
       and set(e[0] for e in _pool61l["l"]) == _lgn61,
       "钩子：传奇拾取权重 = 必得数量（" + str(_pool61l.get("l")) + "）")
 
+# ⑥ v1.61s：心情日结算改收敛式（向昨日健康分补差距的 25%，四舍五入；早睡 +5）
+check(game.pet_mood_delta(50, 95, False) == 11, "心情增量：50→95 差 45 ×25% = 11.25 → 四舍五入 +11")
+check(game.pet_mood_delta(50, 95, True) == 16, "心情增量：早睡达标额外 +5（11+5=16）")
+check(game.pet_mood_delta(90, 50, False) == -10, "心情增量：90→50 差 −40 ×25% = −10（对称下行）")
+check(game.pet_mood_delta(100, 50, False) == -12, "心情增量：满格摆烂 −50 ×25% = −12.5 → −12（负值同舍入）")
+check(game.pet_mood_delta(95, 95, False) == 0, "心情增量：与健康分持平 → 0（收敛稳态）")
+check(game.pet_mood_delta(0, 100, False) == 25, "心情增量：0 值心情以 0 为基数（缺省 50 只在字段缺失时生效）")
+_md = new_state()
+_md["wolf"] = {"stage": 4, "growth": 0, "mutate": 0, "fedDate": "", "fedCount": 0, "mood": 50}
+game.pet_mood_daily(_md, [], 95, False)
+check(_md["wolf"]["mood"] == 61, "日结算集成：小狼 50 · 健康分 95 → 61（实际 " + str(_md["wolf"]["mood"]) + "）")
+game.pet_mood_daily(_md, [], 95, True)
+check(_md["wolf"]["mood"] == 75, "日结算集成：次日 61 · 健康分 95 · 早睡 → 75（+9+5，涨幅随差距收窄）")
+_md["wolf"]["mood"] = 99
+game.pet_mood_daily(_md, [], 100, True)
+check(_md["wolf"]["mood"] == 100, "日结算集成：99 → 100 封顶（增量 5 后 clamp）")
+
 print()
 print("=" * 40)
 print("  通过 " + str(PASS) + " 项 | 失败 " + str(FAIL) + " 项 " + ("✅ 全部通过" if FAIL == 0 else "❌"))

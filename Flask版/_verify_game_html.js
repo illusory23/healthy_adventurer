@@ -257,9 +257,11 @@ hck(html.indexOf('padding:calc(8px + env(safe-area-inset-top,0)) 12px 8px') >= 0
 hck(html.indexOf('主材料 普通 3 / 精良 4 / 稀有 5 / 史诗 6 / 传说 7（饰品 −1）；副材料 3 / 4 / 5 / 7 / 9（护甲 +1）') >= 0
     && html.indexOf('主材料 普通 2 / 精良 3 / 稀有 4 / 史诗 5 / 传说 6') < 0,
     'v1.61o：打造说明文案与 v1.61l 数据同步（背包·打造卡可见文案 3/4/5/6/7 + 3/4/5/7/9）');
-hck(html.indexOf('≥90 分 +10 / ≥60 分 +5 / 不足 60 −5') >= 0 && html.indexOf('优秀 +10 / 良好 +5') < 0
-    && html.indexOf('sc >= 90 ? 10 : (sc >= 60 ? 5 : -5)') >= 0,
-    'v1.61q：心情日结算文案按真实分档（≥90 +10 / ≥60 +5 / <60 −5——原「优秀/良好」措辞与阈值不符）');
+hck(html.indexOf('心情补上差距的 25%') >= 0
+    && html.indexOf('Math.floor((sc - mood) * 0.25 + 0.5)') >= 0
+    && html.indexOf('m.mood == null ? 50 : m.mood') >= 0
+    && html.indexOf('≥90 分 +10') < 0 && html.indexOf('sc >= 90 ? 10 : (sc >= 60 ? 5 : -5)') < 0,
+    'v1.61s：心情日结算改收敛式（向昨日健康分补差距 25%·四舍五入·早睡 +5——原分档 +10/+5/−5 与文案退役；0 值心情不再归缺省）');
 hck(html.indexOf('散步</b>同时只能派 1 只') >= 0 && html.indexOf('每天可派 1 只<b>散步</b>') < 0,
     'v1.61r：散步说明对齐实现（同时只能 1 只、无每日上限——原「每天可派 1 只」不符）');
 hck((html.match(/<span class="tb-i">/g) || []).length === 8, 'v1.57：8 个页签全部带图标（tb-i）');

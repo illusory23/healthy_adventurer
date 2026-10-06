@@ -84,6 +84,16 @@ for item in out["matQtyRange"]:
 check(not bad5, "数量区间归一一致（" + str(len(out["matQtyRange"])) + " 组）"
       + ("；不一致: " + ", ".join(bad5) if bad5 else ""))
 
+print("=== 5b. petMoodDelta ↔ pet_mood_delta（v1.61s：心情收敛式——向健康分补差距 25%，四舍五入；早睡 +5） ===")
+bad5b = []
+for item in out["moodDaily"]:
+    got = game.pet_mood_delta(item["mood"], item["sc"], item["slept"])
+    if got != item["out"]:
+        bad5b.append("mood=%d sc=%d slept=%s 双端 %s/%s"
+                     % (item["mood"], item["sc"], item["slept"], item["out"], got))
+check(not bad5b, "心情日结算增量一致（" + str(len(out["moodDaily"])) + " 组）"
+      + ("；不一致 " + str(len(bad5b)) + " 组: " + "; ".join(bad5b[:5]) if bad5b else ""))
+
 print("=== 6. 硬编码表双端一致（v1.48e：防洪移漂移） ===")
 _T = out["tables"]
 

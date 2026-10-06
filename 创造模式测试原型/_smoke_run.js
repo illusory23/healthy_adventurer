@@ -2050,7 +2050,7 @@ const _h38r = [
   ["v1.61m 手机页签栏移至顶部（钱币信息下方——贴底横滑撞系统手势）", html.indexOf("v1.61m：移至顶部（钱币信息下方）") >= 0 && html.indexOf("#tabs{position:fixed;bottom:0") < 0 && html.indexOf("body{padding-bottom:64px}") < 0],
   ["v1.61n HUD 底部内边距修正（inset-top 误用 → 下 8px；页签栏与钱币信息间不再多出空隙）", html.indexOf("padding:calc(8px + env(safe-area-inset-top,0)) 12px 8px") >= 0 && html.indexOf("padding:8px 12px calc(8px + env(safe-area-inset-top,0))") < 0],
   ["v1.61o 打造说明文案与 v1.61l 数据同步（主材料 3/4/5/6/7 · 副材料 3/4/5/7/9）", html.indexOf("主材料 普通 3 / 精良 4 / 稀有 5 / 史诗 6 / 传说 7（饰品 −1）；副材料 3 / 4 / 5 / 7 / 9（护甲 +1）") >= 0 && html.indexOf("主材料 普通 2 / 精良 3 / 稀有 4 / 史诗 5 / 传说 6") < 0],
-  ["v1.61q 心情日结算文案按真实分档（≥90 +10 / ≥60 +5 / <60 −5）", html.indexOf("≥90 分 +10 / ≥60 分 +5 / 不足 60 −5") >= 0 && html.indexOf("优秀 +10 / 良好 +5") < 0],
+  ["v1.61s 心情日结算改收敛式（向健康分补差距 25% · 四舍五入 · 早睡 +5——原分档退役）", html.indexOf("心情补上差距的 25%") >= 0 && html.indexOf("Math.floor((sc - mood) * 0.25 + 0.5)") >= 0 && html.indexOf("≥90 分 +10") < 0 && html.indexOf("sc >= 90 ? 10 : (sc >= 60 ? 5 : -5)") < 0],
   ["v1.61r 散步说明对齐实现（同时只能派 1 只——原「每天可派 1 只」不符）", html.indexOf("散步</b>同时只能派 1 只") >= 0 && html.indexOf("每天可派 1 只<b>散步</b>") < 0]
 ];
 let _h38rBad = 0;

@@ -2082,6 +2082,11 @@ function petBondDays(n){
 }
 function petMoodLabel(v){ return v >= PET_MOOD_HAPPY ? "😊" : (v < PET_MOOD_LOW ? "😴" : "😐"); }
 function petMoodTxt(v){ return v >= PET_MOOD_HAPPY ? "心情很好" : (v < PET_MOOD_LOW ? "有点蔫蔫" : "心情平静"); }
+function petMoodDelta(mood, sc, slept){            // v1.61s：日结算增量——向昨日健康分收敛：补上差距的 25%（四舍五入）；早睡 +5
+  let dm = Math.floor((sc - mood) * 0.25 + 0.5);
+  if(slept) dm += 5;
+  return dm;
+}
 function petMoodDaily(sc, slept){                  // 心情日结算（现实作息驱动；只反映，不惩罚）
   const names = (S.pets||[]).slice();
   if(S.wolf) names.push("小狼");
@@ -2089,9 +2094,9 @@ function petMoodDaily(sc, slept){                  // 心情日结算（现实�
   names.forEach(function(n){
     if(seen[n]) return; seen[n] = 1;
     const m = petMetaOf(n); if(!m) return;
-    let dm = sc >= 90 ? 10 : (sc >= 60 ? 5 : -5);
-    if(slept) dm += 5;
-    m.mood = Math.max(0, Math.min(100, (m.mood || 50) + dm));
+    const mv = (m.mood == null ? 50 : m.mood);     // v1.61s：0 值不再被 || 归为缺省（与服务端 m.get("mood", 50) 同语义）
+    const dm = petMoodDelta(mv, sc, slept);        // v1.61s：收敛式（原 v1.56 分档制退役）
+    m.mood = Math.max(0, Math.min(100, mv + dm));
     m.happyStreak = m.mood >= PET_MOOD_HAPPY ? ((m.happyStreak || 0) + 1) : 0;
     if(m.happyStreak && m.happyStreak % 7 === 0){  // 连续 7 天 → 心意事件（v1.61h：按宠物专属礼物池）
       const g = petGiftRoll(n);
@@ -5759,7 +5764,7 @@ function petMetaHtml(n){                 // 详情公共段：心情 / 羁绊 / 
     + petMoodLabel(mood) + ' <b style="color:' + moodCol + '">' + petMoodTxt(mood) + '</b>'
     + '　心情值 <b style="color:' + moodCol + '">' + mood + '</b> / 100'
     + '<div class="bar" style="height:6px;margin:5px 0 2px"><i style="width:' + mood + '%;background:' + moodCol + '"></i></div>'
-    + '<span class="muted" style="font-size:11px">由你的现实作息驱动——早睡、运动、按时吃饭，它都会开心（每日按昨日健康分结算：≥90 分 +10 / ≥60 分 +5 / 不足 60 −5，早睡再 +5；抚摸 +5、散步 +3。连着好些天都是开开心心的日子——也许，它会偷偷给你准备一份神秘小礼物……）</span><br>'
+    + '<span class="muted" style="font-size:11px">由你的现实作息驱动——早睡、运动、按时吃饭，它都会开心（每日按昨日健康分结算：心情补上差距的 25%，早睡再 +5；抚摸 +5、散步 +3。连着好些天都是开开心心的日子——也许，它会偷偷给你准备一份神秘小礼物……）</span><br>'
     + '💞 羁绊 <b>' + bond + '</b> 天';
   m.bondDone.forEach(function(mile){
     h += '　📖 <a href="javascript:;" onclick="showPetStory(\'' + n + '\',' + mile + ')" style="color:var(--gold2)">' + mile + ' 天</a>';
