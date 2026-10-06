@@ -98,10 +98,9 @@ main{padding:14px;max-width:980px;margin:0 auto}
 .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .grid{display:grid;gap:8px}
 .grid2{grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
-/* ── 委托页双栏布局（v1.61d：背包页同样改用 qsplit——两栏等高）── */
+/* ── 委托页双栏布局（v1.61d：背包页同样改用 qsplit；v1.61e：不强制末卡拉伸——「尽可能」等长，美观优先）── */
 .qsplit{display:grid;grid-template-columns:1fr;gap:0}
 .qcol{display:flex;flex-direction:column}
-.qcol>.card:last-child{flex:1}   /* v1.61d：两栏等高——较短一栏的末卡自动弹缩补齐（用户指定） */
 @media(min-width:900px){
   main:has(#tab-quest.on),main:has(#tab-bag.on){max-width:1400px}
   .qsplit{grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:10px}
@@ -6875,7 +6874,7 @@ function renderQuest(){
 
   // ═══ 左栏 · 委托流 ═══
   const _nAct = activeNormalCount(), _nLeg = S.active.length - _nAct;
-  hL += `<div class="card" style="min-height:150px"><div class="row"><h3>正在进行的委托（${_nAct}/${simCapNow()}${_nLeg ? " · 传奇 "+_nLeg : ""}）</h3>
+  hL += `<div class="card" style="min-height:220px"><div class="row"><h3>正在进行的委托（${_nAct}/${simCapNow()}${_nLeg ? " · 传奇 "+_nLeg : ""}）</h3>
         <span class="muted">今日已接 ${S.accepted}/${limit}</span></div>`;
   if(!S.active.length) hL += `<div class="muted">暂无进行中的委托</div>`;
   S.active.forEach((a, i)=>{
@@ -6898,7 +6897,7 @@ function renderQuest(){
   // ── 当前刷新池 ──
   const lp = latestPoint(new Date());
   const _prevDay = poolPointIsPrevDay(lp);   // v1.38l：新游戏日首个刷新点未到（如 6:00–8:00），不显示昨日刷新点
-  hL += `<div class="card" style="min-height:150px"><h3>${_prevDay ? "🌅 委托刷新 · 今日尚未刷新" : "委托刷新 · " + String(lp.h).padStart(2,"0") + ":00"}</h3>`;
+  hL += `<div class="card" style="min-height:220px"><h3>${_prevDay ? "🌅 委托刷新 · 今日尚未刷新" : "委托刷新 · " + String(lp.h).padStart(2,"0") + ":00"}</h3>`;
   if(_prevDay){
     hL += `<div class="muted">新的一天开始了——本日首个刷新点 <b>${String(CFG.refreshHours[0]).padStart(2,"0")}:00</b>，到点后自动刷新。<br>
       今日刷新点：${CFG.refreshHours.map(x=>String(x).padStart(2,"0")+":00").join(" / ")}（常规 1 小时；最后一次 ${String(CFG.refreshHours[CFG.refreshHours.length-1]).padStart(2,"0")}:00 至 23:30）</div>`;
@@ -7719,21 +7718,39 @@ function renderBag(){
     <div class="li"><span>材料估值</span><b>${fmtMoney(total)}</b></div>
   </div>`;
 
-  // ══ v1.61d：两栏等高（用户指定）——扫描各卡起点 → 按估算高度取最优前缀切分（较短一栏的末卡自动弹缩补齐）══
+  // ══ v1.61e：两栏「尽可能」等长（用户指定：不强制等长、不留无意义空位）——
+  //    背包可见时按真实卡片高度测最优切分点（整列渲染 → 量测 → 重排，同一帧完成无闪烁）；隐藏时退回估算 ══
   {
-    const _estMap = {"🎽 装备栏": 430, "🔨 打造": 170 + owned.length * 64, "⚗️ 炼金台": 140 + Object.keys(CRAFT).length * 92, "🪄 规则道具": 130 + items.length * 76, "💰 资产": 270};
-    const _starts = [0], _ests = [90 + keys.length * 47];
-    ["🎽 装备栏", "🔨 打造", "⚗️ 炼金台", "🪄 规则道具", "💰 资产"].forEach(function(t){
-      const _p = h.indexOf('<div class="card"><h3>' + t);
-      if(_p >= 0){ _starts.push(_p); _ests.push(_estMap[t]); }
-    });
-    let _best = 1, _gap = Infinity;
-    for(let k = 1; k < _starts.length; k++){
-      let _a = 0, _b = 0;
-      for(let i = 0; i < _starts.length; i++){ if(i < k) _a += _ests[i] || 200; else _b += _ests[i] || 200; }
-      if(Math.abs(_a - _b) < _gap){ _gap = Math.abs(_a - _b); _best = k; }
+    const _offAll = [];                              // h 中全部卡片起点（HTML 顺序）
+    for(let _i = h.indexOf('<div class="card"'); _i >= 0; _i = h.indexOf('<div class="card"', _i + 1)) _offAll.push(_i);
+    let _cut = -1;
+    if(el.offsetWidth > 0 && _offAll.length > 1){
+      el.innerHTML = '<div class="qsplit"><div class="qcol" id="__bagM">' + h + '</div></div>';
+      const _col = el.querySelector("#__bagM");
+      const _cs = _col ? Array.prototype.slice.call(_col.children) : [];
+      if(_cs.length === _offAll.length){             // DOM 子元素与卡片一一对应才可测（否则退回估算）
+        const _hs = _cs.map(function(c){ return c.offsetHeight + (parseFloat(getComputedStyle(c).marginBottom) || 0); });
+        let _tot = 0; _hs.forEach(function(x){ _tot += x; });
+        let _acc = 0, _best = 1, _gap = Infinity;
+        for(let k = 1; k < _hs.length; k++){ _acc += _hs[k-1]; const _g = Math.abs(_tot - 2*_acc); if(_g < _gap){ _gap = _g; _best = k; } }
+        _cut = _offAll[_best];
+      }
     }
-    const _cut = _starts[_best];
+    if(_cut < 0){                                    // 标签页隐藏 / 量测失败 → 估算兜底（v1.61d 系数）
+      const _estMap = {"🎽 装备栏": 430, "🔨 打造": 170 + owned.length * 64, "⚗️ 炼金台": 140 + Object.keys(CRAFT).length * 92, "🪄 规则道具": 130 + items.length * 76, "💰 资产": 270};
+      const _starts = [0], _ests = [90 + keys.length * 47];
+      ["🎽 装备栏", "🔨 打造", "⚗️ 炼金台", "🪄 规则道具", "💰 资产"].forEach(function(t){
+        const _p = h.indexOf('<div class="card"><h3>' + t);
+        if(_p >= 0){ _starts.push(_p); _ests.push(_estMap[t]); }
+      });
+      let _best = 1, _gap = Infinity;
+      for(let k = 1; k < _starts.length; k++){
+        let _a = 0, _b = 0;
+        for(let i = 0; i < _starts.length; i++){ if(i < k) _a += _ests[i] || 200; else _b += _ests[i] || 200; }
+        if(Math.abs(_a - _b) < _gap){ _gap = Math.abs(_a - _b); _best = k; }
+      }
+      _cut = _starts[_best];
+    }
     el.innerHTML = '<div class="qsplit"><div class="qcol">' + h.slice(0, _cut) + '</div><div class="qcol">' + h.slice(_cut) + '</div></div>';
     return;
   }
@@ -8065,6 +8082,7 @@ document.querySelectorAll("#tabs button").forEach(b=>{
     document.querySelectorAll(".tabpage").forEach(x=>x.classList.remove("on"));
     b.classList.add("on");
     document.getElementById("tab-"+b.dataset.t).classList.add("on");
+    if(b.dataset.t === "bag") renderBag();   // v1.61e：切到背包页时按真实高度重排两栏（量测需可见）
     // v1.57：底栏为横向滑动栏——当前页签自动滚入视野居中（手机端；桌面端无滚动）
     try { b.scrollIntoView({inline:"center", block:"nearest", behavior:"smooth"}); } catch(e){}
   };

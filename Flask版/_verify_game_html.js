@@ -269,7 +269,7 @@ hck(html.indexOf('"巨龙竖瞳":["兽材","传说",520000]') >= 0 && html.index
 hck(html.indexOf('"世界树皮":["特殊","传说",450000,["织物","草药"]]') >= 0,
     'v1.48c：世界树皮多品类（特殊 + 织物 + 草药）');
 hck(html.indexOf('"龙瞳结晶":[1,2]') >= 0, 'v1.48c：古龙遗骸采集掉落龙瞳结晶');
-hck(html.indexOf('min-height:150px') >= 0, 'v1.48c：委托页两卡加高（min-height:150px）');
+hck((html.match(/min-height:220px/g) || []).length >= 2, 'v1.48c/v1.61e：委托页两卡加高（150px → 220px）');
 hck(html.indexOf('📖 委托说明') >= 0 && html.indexOf('刷新与窗口') >= 0 && html.indexOf('今日接取上限') >= 0 && html.indexOf('【更多机会】') < 0,
     'v1.48d：委托说明卡（接取上限文案更新 / 移出「更多机会」）');
 hck(html.indexOf('传奇事件占独立槽位') >= 0, 'v1.48d：特殊事件卡自带独立槽位说明');
@@ -540,9 +540,10 @@ hck(html.indexOf("自由探索开放——完成 12 次 Lv2 委托后解锁") >=
     && html.indexOf('"🗺️ 探索高阶区域开放：虚空裂痕"') >= 0,
     'v1.60：LEVEL_INFO 同步（Lv2 探索预告 / Lv3 腐化 / Lv4 虚空裂痕）');
 /* v1.61d：两栏等高 / 背包宠物卡删除 / 铂金商店解锁 / 薰香与护符 / HUD 公会条 / 规则道具守卫 */
-hck(html.indexOf(".qcol{display:flex;flex-direction:column}") >= 0 && html.indexOf(".qcol>.card:last-child{flex:1}") >= 0
-    && html.indexOf("按估算高度取最优前缀切分") >= 0 && html.indexOf("原 v1.56 的「宠物→宠物页」引导卡已删除") >= 0,
-    'v1.61d：委托/背包两栏等高（弹性末卡 + 背包估算切分；背包宠物小界面删除）');
+hck(html.indexOf(".qcol{display:flex;flex-direction:column}") >= 0 && html.indexOf(".qcol>.card:last-child{flex:1}") < 0
+    && html.indexOf("按真实卡片高度测最优切分点") >= 0 && (html.match(/min-height:220px/g) || []).length >= 2
+    && html.indexOf("原 v1.56 的「宠物→宠物页」引导卡已删除") >= 0,
+    'v1.61e：两栏「尽可能」等长（不强制拉伸 + 背包真实高度切分 + 加长刷新/进行中；背包宠物小界面删除）');
 hck(html.indexOf("const PLAT_UNLOCK_MONEY = 1000000") >= 0
     && html.indexOf("function platShopUnlocked(){ return (S.money || 0) >= PLAT_UNLOCK_MONEY; }") >= 0
     && html.indexOf("内容隐藏——需持有") >= 0 && html.indexOf("v1.61d：未解锁时界面保留、内容隐藏") >= 0,

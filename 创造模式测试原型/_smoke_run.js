@@ -1961,7 +1961,7 @@ const _h38r = [
   ["v1.60 重掷券解锁档位 C → B（g:4）", html.indexOf('重掷券", con:240, lim:["日",1], g:4') >= 0],
   ["v1.60 探索解锁 = Lv2 + 12 次 Lv2 委托", html.indexOf("function lv2DoneCount") >= 0 && html.indexOf("const EXPLORE_LV2_NEED = 12") >= 0 && html.indexOf("次 Lv2 委托后解锁") >= 0 && (html.match(/次 Lv2 委托后解锁/g) || []).length >= 2],
   ["v1.60 LEVEL_INFO（Lv2 探索预告 / Lv3 腐化 / Lv4 虚空裂痕）", html.indexOf("自由探索开放——完成 12 次 Lv2 委托后解锁") >= 0 && html.indexOf('"🗺️ 探索高阶区域开放：腐化森林"') >= 0 && html.indexOf('"🗺️ 探索高阶区域开放：虚空裂痕"') >= 0],
-  ["v1.61d 委托/背包两栏等高（弹性末卡 + 背包估算切分）", html.indexOf(".qcol{display:flex;flex-direction:column}") >= 0 && html.indexOf(".qcol>.card:last-child{flex:1}") >= 0 && html.indexOf("按估算高度取最优前缀切分") >= 0 && html.indexOf('id="tab-bag" class="tabpage twocol"') < 0 && html.indexOf('id="tab-bag" class="tabpage"') >= 0],
+  ["v1.61e 两栏「尽可能」等长（不强制拉伸 + 背包真实高度切分 + 加长刷新/进行中）", html.indexOf(".qcol{display:flex;flex-direction:column}") >= 0 && html.indexOf(".qcol>.card:last-child{flex:1}") < 0 && html.indexOf("按真实卡片高度测最优切分点") >= 0 && (html.match(/min-height:220px/g) || []).length >= 2 && html.indexOf('id="tab-bag" class="tabpage twocol"') < 0 && html.indexOf('id="tab-bag" class="tabpage"') >= 0],
   ["v1.61d 背包删除宠物小界面（v1.56 引导卡移除）", html.indexOf("原 v1.56 的「宠物→宠物页」引导卡已删除") >= 0],
   ["v1.61d 铂金商店解锁 = 持有 ≥1 铂金币（界面保留·内容隐藏）", html.indexOf("const PLAT_UNLOCK_MONEY = 1000000") >= 0 && html.indexOf("function platShopUnlocked(){ return (S.money || 0) >= PLAT_UNLOCK_MONEY; }") >= 0 && html.indexOf("内容隐藏——需持有") >= 0 && html.indexOf("v1.61d：未解锁时界面保留、内容隐藏") >= 0],
   ["v1.61d 清醒符咒/安眠护符移入铂金商店（规则道具）", html.indexOf('{n:"清醒符咒 ×1", platC:1') >= 0 && html.indexOf('{n:"安眠护符 ×1", platC:1') >= 0],
