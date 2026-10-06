@@ -571,6 +571,8 @@ hck(html.indexOf("const PET_FIND = {") >= 0 && html.indexOf("tierW") >= 0
     && html.indexOf('petFindRoll("quest", q[8]') >= 0 && html.indexOf('petFindRoll("explore", r.d') >= 0
     && html.indexOf('petFindRoll("legend", _lgPool') >= 0 && html.indexOf("failTypes:1, failQty:2") >= 0,
     'v1.61i：携宠拾取（池 = 内容产出 · 3 种/4 个上限 · 失败 1 种/2 个）');
+hck(html.indexOf("failMul:0.5") >= 0 && html.indexOf("if(fail) pct *= PET_FIND.failMul;") >= 0,
+    'v1.61j：失败时触发率减半（failMul 0.5 —— 委托失败 6%→3% / 传奇失败 12%→6%）');
 
 let evalFail = 0;
 try { eval(code + test); } catch(e){ console.log('FAIL 加载异常: ' + e.message); evalFail = 1; }

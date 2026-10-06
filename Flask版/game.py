@@ -977,6 +977,7 @@ PET_FIND = {
     "chance": {"quest": 0.06, "explore": 0.08, "legend": 0.12},   # 各场景触发基础概率（心情 ≥70 +2% / <30 −2%，下限 2%）
     "moodUp": 0.02, "moodDown": 0.02, "minChance": 0.02,
     "tierW": {"普通": 100, "精良": 30, "稀有": 9, "史诗": 2.5, "传说": 0.6},   # 池内加权：品阶越高越难被翻出（传说 ≈0.5%）
+    "failMul": 0.5,                                               # v1.61j：失败时触发率减半（含心情修正后减半）
     "maxTypes": 3, "maxQty": 4,                                   # 上限：3 种 / 合计 4 个
     "failTypes": 1, "failQty": 2,                                 # 失败时：1 种 / 合计 2 个
 }
@@ -1008,6 +1009,8 @@ def pet_find_roll(s, ctx, pool, fail):
     mood = m.get("mood", 50) if m else 50
     pct = PET_FIND["chance"].get(ctx, 0) + (PET_FIND["moodUp"] if mood >= PET_MOOD_HAPPY else 0) \
         - (PET_FIND["moodDown"] if mood < PET_MOOD_LOW else 0)
+    if fail:
+        pct *= PET_FIND["failMul"]                    # v1.61j：失败时触发率减半
     pct = max(PET_FIND["minChance"], pct)
     if random.random() >= pct:
         return None

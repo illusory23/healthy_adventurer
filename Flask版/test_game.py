@@ -2262,13 +2262,37 @@ try:
 finally:
     game.random.random = _orig_random
 check(sum(g["n"] for g in _pf5) == 4, "拾取：合计封顶 4 个（每种 ×2 时第三件被裁——" + str(_pf5) + "）")
-_seq = [0.05, 0.0, 0.99]
+_seq = [0.025, 0.0, 0.99]
 game.random.random = lambda: _seq.pop(0) if _seq else 0.5
 try:
     _pf6 = game.pet_find_roll(_s61h, "quest", ["蘑菇", "河鱼", "泉水"], True)
 finally:
     game.random.random = _orig_random
 check(len(_pf6) == 1 and _pf6[0]["n"] <= 2, "拾取：失败上限 1 种 / ≤2 个（" + str(_pf6) + "）")
+
+# ④b v1.61j：失败时触发率减半（委托 6%→3% / 传奇 12%→6%；心情修正后整体减半）
+_seq = [0.05]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.99
+try:
+    _pf7 = game.pet_find_roll(_s61h, "quest", ["蘑菇"], True)
+finally:
+    game.random.random = _orig_random
+check(_pf7 is None, "拾取：失败减半——委托 6%→3%，0.05 失败时不触发（成功时同值会触发）")
+_seq = [0.08]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.99
+try:
+    _pf8 = game.pet_find_roll(_s61h, "legend", ["星辉花"], True)
+finally:
+    game.random.random = _orig_random
+check(_pf8 is None, "拾取：失败减半——传奇 12%→6%，0.08 不触发")
+_seq = [0.055, 0.0, 0.99]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.5
+try:
+    _pf9 = game.pet_find_roll(_s61h, "legend", ["星辉花"], True)
+finally:
+    game.random.random = _orig_random
+check(_pf9 is not None, "拾取：失败减半——传奇 0.055 仍命中 6% 阈值（" + str(_pf9) + "）")
+check(game.PET_FIND.get("failMul") == 0.5, "拾取：PET_FIND.failMul = 0.5（失败减半系数）")
 
 # ⑤ 结算钩子：委托 / 探索 / 传奇（替换 pet_find_roll 验证入账与结果数组）
 _orig_find = game.pet_find_roll

@@ -7273,6 +7273,7 @@
     "史诗": 2.5,
     "传说": 0.6
    },
+   "failMul": 0.5,
    "maxTypes": 3,
    "maxQty": 4,
    "failTypes": 1,
