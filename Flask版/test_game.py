@@ -2210,7 +2210,7 @@ _s61h["wolf"] = {"stage": 4, "growth": 0, "mutate": 0, "fedDate": "", "fedCount"
 _seq = [0.055, 0.0, 0.0, 0.0]
 game.random.random = lambda: _seq.pop(0) if _seq else 0.0
 try:
-    _pf0 = game.pet_find_roll(_s61h, "quest", ["蘑菇", "河鱼"], False)
+    _pf0 = game.pet_find_roll(_s61h, "quest", [["蘑菇", 1.5], ["河鱼", 1]], False)
 finally:
     game.random.random = _orig_random
 check(isinstance(_pf0, list) and all(g["name"] in ("蘑菇", "河鱼") for g in _pf0),
@@ -2229,7 +2229,7 @@ try:
     _pf2 = game.pet_find_roll(_s61h, "quest", ["蘑菇"], False)
 finally:
     game.random.random = _orig_random
-check(_pf2 is not None, "拾取：心情 80 → 概率 8%（0.075 命中，心情加成生效）")
+check(_pf2 is not None, "拾取：心情 80 → 概率 8%（0.075 命中，心情加成生效；纯名称池兼容）")
 _s61h["wolf"]["mood"] = 20
 _seq = [0.05]
 game.random.random = lambda: _seq.pop(0) if _seq else 0.99
@@ -2239,33 +2239,47 @@ finally:
     game.random.random = _orig_random
 check(_pf2b is None, "拾取：心情 20 → 概率 4%（0.05 不触发，心情减成生效）")
 
-# ④ 池 = 内容产出（传说可捡但权重极低）+ 数量上限（3 种 / ≤4；失败 1 种 / ≤2）
+# ④ 池权重 = 内容自身产出结构（v1.61k）+ 数量上限（3 种 / ≤4；失败 1 种 / ≤2）
 _s61h["wolf"]["mood"] = 50
 _seq = [0.05, 0.0, 0.9999]
 game.random.random = lambda: _seq.pop(0) if _seq else 0.5
 try:
-    _pf3 = game.pet_find_roll(_s61h, "quest", ["蘑菇", "龙心"], False)
+    _pf3 = game.pet_find_roll(_s61h, "quest", [["蘑菇", 1.5], ["龙心", 1]], False)
 finally:
     game.random.random = _orig_random
-check(_pf3 and _pf3[0]["name"] == "龙心", "拾取：传说品阶可捡到（池含龙心 · 权重尾部 0.6/100.6 命中）")
+check(_pf3 and _pf3[0]["name"] == "龙心", "拾取：权重随内容产出——龙心（必得 ×1）/ 蘑菇（期望 ×1.5）权重尾命中传说")
+_seq = [0.05, 0.0, 0.2, 0.0]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.5
+try:
+    _pf3a = game.pet_find_roll(_s61h, "quest", [["蘑菇", 1], ["河鱼", 3]], False)
+finally:
+    game.random.random = _orig_random
+check(_pf3a and _pf3a[0]["name"] == "蘑菇", "拾取：概率 ∝ 内容产出权重——河鱼 3 : 蘑菇 1（0.2<25% 份额仍为蘑菇）")
+_seq = [0.05, 0.0, 0.26, 0.0]
+game.random.random = lambda: _seq.pop(0) if _seq else 0.5
+try:
+    _pf3b = game.pet_find_roll(_s61h, "quest", [["蘑菇", 1], ["河鱼", 3]], False)
+finally:
+    game.random.random = _orig_random
+check(_pf3b and _pf3b[0]["name"] == "河鱼", "拾取：概率 ∝ 内容产出权重——0.26 落入河鱼 75% 份额（" + str(_pf3b) + "）")
 _seq = [0.05, 0.99, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 game.random.random = lambda: _seq.pop(0) if _seq else 0.0
 try:
-    _pf4 = game.pet_find_roll(_s61h, "quest", ["蘑菇", "河鱼", "泉水", "蜂蜜"], False)
+    _pf4 = game.pet_find_roll(_s61h, "quest", [["蘑菇", 1], ["河鱼", 1], ["泉水", 1], ["蜂蜜", 1]], False)
 finally:
     game.random.random = _orig_random
 check(len(_pf4) == 3 and sum(g["n"] for g in _pf4) <= 4, "拾取：上限 3 种 / 合计 ≤4（" + str(_pf4) + "）")
 _seq = [0.05, 0.99, 0.0, 0.99, 0.0, 0.99, 0.0, 0.99]
 game.random.random = lambda: _seq.pop(0) if _seq else 0.99
 try:
-    _pf5 = game.pet_find_roll(_s61h, "quest", ["蘑菇", "河鱼", "泉水"], False)
+    _pf5 = game.pet_find_roll(_s61h, "quest", [["蘑菇", 1], ["河鱼", 1], ["泉水", 1]], False)
 finally:
     game.random.random = _orig_random
 check(sum(g["n"] for g in _pf5) == 4, "拾取：合计封顶 4 个（每种 ×2 时第三件被裁——" + str(_pf5) + "）")
 _seq = [0.025, 0.0, 0.99]
 game.random.random = lambda: _seq.pop(0) if _seq else 0.5
 try:
-    _pf6 = game.pet_find_roll(_s61h, "quest", ["蘑菇", "河鱼", "泉水"], True)
+    _pf6 = game.pet_find_roll(_s61h, "quest", [["蘑菇", 1], ["河鱼", 1], ["泉水", 1]], True)
 finally:
     game.random.random = _orig_random
 check(len(_pf6) == 1 and _pf6[0]["n"] <= 2, "拾取：失败上限 1 种 / ≤2 个（" + str(_pf6) + "）")
@@ -2302,36 +2316,47 @@ _q61 = list(game.C[game.CFG["levels"][0]][0])
 _a61 = {"name": _q61[0], "q": _q61, "rate": 0.9, "acceptTs": game.now_ms(), "finishTs": game.now_ms() + 1000, "pending": True}
 _s61h2["active"] = [_a61]
 _m61 = _s61h2["mats"].get("蘑菇", 0)
-game.pet_find_roll = lambda s, ctx, pool, fail: [{"name": "蘑菇", "n": 2}] if ctx == "quest" else None
+_pool61q = {}
+game.pet_find_roll = lambda s, ctx, pool, fail: (_pool61q.update({"q": pool}) or [{"name": "蘑菇", "n": 2}]) if ctx == "quest" else None
 try:
     _res61 = game.settle(_s61h2, _a61, [])
 finally:
     game.pet_find_roll = _orig_find
 check(_s61h2["mats"].get("蘑菇", 0) >= _m61 + 2 and any("🐾" in g for g in _res61["got"]),
       "结算集成：委托携宠拾取入账（材料 +2 且 results.got 含 🐾）")
+check(_pool61q.get("q") == [[k, sum(game.mat_qty_range(_q61[8][k])) / 2.0] for k in _q61[8]],
+      "钩子：委托拾取权重 = 掉表期望数量（" + str(_pool61q.get("q")) + "）")
 
 _s61h3 = new_state()
 _s61h3["carry_pet"] = "小狼"
 _s61h3["explore_active"] = {"idx": 0, "n": "晨光森林", "c": 3, "h": 2,
                             "startTs": game.now_ms() - 1000, "finishTs": game.now_ms() - 1}
-game.pet_find_roll = lambda s, ctx, pool, fail: [{"name": "蘑菇", "n": 1}] if ctx == "explore" else None
+_pool61e = {}
+game.pet_find_roll = lambda s, ctx, pool, fail: (_pool61e.update({"e": pool}) or [{"name": "蘑菇", "n": 1}]) if ctx == "explore" else None
 try:
     game.explore_finish_check(_s61h3, [])
 finally:
     game.pet_find_roll = _orig_find
 check(_s61h3.get("explore_result") and "🐾" in _s61h3["explore_result"]["msg"],
       "结算集成：探索携宠拾取出现在探索结果（🐾 文案）")
+check(_pool61e.get("e") == [[p[0], p[1]] for p in game.REGIONS[0]["d"]],
+      "钩子：探索拾取权重 = 区域掉率%（" + str(_pool61e.get("e")) + "）")
 
 _s61h4 = new_state()
 _s61h4["carry_pet"] = "小狼"
 _lg61 = next(L for L in game.LEGEND)
 _a61L = {"name": _lg61[0], "q": [], "rate": 0.5, "legend": _lg61, "lname": "测试传奇"}
-game.pet_find_roll = lambda s, ctx, pool, fail: [{"name": "蘑菇", "n": 1}] if ctx == "legend" else None
+_pool61l = {}
+game.pet_find_roll = lambda s, ctx, pool, fail: (_pool61l.update({"l": pool}) or [{"name": "蘑菇", "n": 1}]) if ctx == "legend" else None
 try:
     _res61L = game.settle(_s61h4, _a61L, [])
 finally:
     game.pet_find_roll = _orig_find
 check(any("🐾" in g for g in _res61L["got"]), "结算集成：传奇携宠拾取进入 results.got（成败均判定）")
+_lgn61 = set(p.split("×")[0] for p in (_lg61[6] or "").split("、") if p)
+check(bool(_pool61l.get("l")) and all(isinstance(e, tuple) and isinstance(e[1], int) and e[1] > 0 for e in _pool61l["l"])
+      and set(e[0] for e in _pool61l["l"]) == _lgn61,
+      "钩子：传奇拾取权重 = 必得数量（" + str(_pool61l.get("l")) + "）")
 
 print()
 print("=" * 40)

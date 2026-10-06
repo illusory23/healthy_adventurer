@@ -972,11 +972,12 @@ PET_GIFTS = {
 }
 # v1.61i：携带宠物拾取（艾露猫式）——结算时极低概率额外带回材料（无论成败）
 # 材料池 = 该内容自身的产出池（委托掉表 / 区域掉表 / 传奇必得材料）——"内容产什么，它就可能捡到什么"；
-# 池内按品阶加权（传说也可捡到，但概率极低）；一次最多 3 种、合计最多 4 个；失败时最多 1 种、合计最多 2 个
+# v1.61k：拾取权重 = 内容自身的产出结构（委托 = 掉表期望数量 / 探索 = 区域掉率% / 传奇 = 必得数量）——
+# 不再另设全品阶权重（内容掉表本身就是平衡，两套权重会互相打架）；
+# 一次最多 3 种、合计最多 4 个；失败时最多 1 种、合计最多 2 个
 PET_FIND = {
     "chance": {"quest": 0.06, "explore": 0.08, "legend": 0.12},   # 各场景触发基础概率（心情 ≥70 +2% / <30 −2%，下限 2%）
     "moodUp": 0.02, "moodDown": 0.02, "minChance": 0.02,
-    "tierW": {"普通": 100, "精良": 30, "稀有": 9, "史诗": 2.5, "传说": 0.6},   # 池内加权：品阶越高越难被翻出（传说 ≈0.5%）
     "failMul": 0.5,                                               # v1.61j：失败时触发率减半（含心情修正后减半）
     "maxTypes": 3, "maxQty": 4,                                   # 上限：3 种 / 合计 4 个
     "failTypes": 1, "failQty": 2,                                 # 失败时：1 种 / 合计 2 个
@@ -1000,7 +1001,9 @@ def pet_gift_roll(s, n):
 
 
 def pet_find_roll(s, ctx, pool, fail):
-    """v1.61i：携带宠物拾取判定（ctx：quest / explore / legend；pool = 该内容产出材料名；fail = 失败场景）
+    """v1.61i：携带宠物拾取判定（ctx：quest / explore / legend；fail = 失败场景）
+    pool = 该内容产出材料 [名, 权重] 对数组；v1.61k：权重 = 内容自身产出结构
+    （委托 = 掉表期望数量 / 探索 = 区域掉率% / 传奇 = 必得数量；同名合并、非材料与权重 ≤0 剔除）
     返回 [{"name","n"}, ...]（1~3 种、合计 ≤4；失败 ≤1 种、≤2）或 None"""
     p = s.get("carry_pet") or ""
     if not p or p not in PET_GIFTS:
@@ -1014,10 +1017,18 @@ def pet_find_roll(s, ctx, pool, fail):
     pct = max(PET_FIND["minChance"], pct)
     if random.random() >= pct:
         return None
-    cand = []
-    for k in (pool or []):
-        if k in M and k not in cand:
-            cand.append(k)
+    cand = []                                         # [[名, 权重]]——同名合并、非材料与权重 ≤0 剔除
+    for ent in (pool or []):
+        nm = ent[0] if isinstance(ent, (list, tuple)) else ent
+        w = (ent[1] if isinstance(ent, (list, tuple)) else 1) or 0
+        if nm not in M or w <= 0:
+            continue
+        for c in cand:
+            if c[0] == nm:
+                c[1] += w
+                break
+        else:
+            cand.append([nm, w])
     if not cand:
         return None
     max_t = PET_FIND["failTypes"] if fail else PET_FIND["maxTypes"]
@@ -1028,23 +1039,24 @@ def pet_find_roll(s, ctx, pool, fail):
     for _ in range(n_types):
         if not cand:
             break
-        tot = sum(PET_FIND["tierW"].get(M[k][1], 1) for k in cand)
+        tot = sum(c[1] for c in cand)
         r = random.random() * tot
         chosen = cand[0]
-        for k in cand:
-            r -= PET_FIND["tierW"].get(M[k][1], 1)
+        for c in cand:
+            r -= c[1]
             if r < 0:
-                chosen = k
+                chosen = c
                 break
-        tier = M[chosen][1]
+        chosen_name = chosen[0]
+        tier = M[chosen_name][1]
         qty = (1 + int(random.random() * 2)) if tier in ("普通", "精良") else 1
         if total + qty > max_q:
             qty = max_q - total
         if qty <= 0:
             break
-        picks.append({"name": chosen, "n": qty})
+        picks.append({"name": chosen_name, "n": qty})
         total += qty
-        cand.remove(chosen)
+        cand = [c for c in cand if c[0] != chosen_name]
     return picks or None
 
 # v1.56：抚摸回复（每宠 3 条，按性格）
@@ -2050,8 +2062,8 @@ def settle(s, a, msgs):
                 s["legend_done"].append(L[0])   # v1.50：去重——防重复完成同一传奇刷「大师」成就 / 重复入档
             check_achievements(s, msgs)
         got2 = [L[7]] if ok2 else []
-        _lg_pool = [m2.group(1) for m2 in (re.match(r"^(.+?)×(\d+)$", pair) for pair in (L[6] or "").split("、")) if m2]
-        _pf = pet_find_roll(s, "legend", _lg_pool, not ok2)   # v1.61i：池 = 传奇必得材料；败则限 1 种/2 个
+        _lg_pool = [(m2.group(1), int(m2.group(2))) for m2 in (re.match(r"^(.+?)×(\d+)$", pair) for pair in (L[6] or "").split("、")) if m2]   # v1.61k：权重 = 必得数量
+        _pf = pet_find_roll(s, "legend", _lg_pool, not ok2)   # v1.61i：池 = 传奇必得材料；败则限 1 种/2 个；v1.61k 权重随内容
         if _pf:
             for _g in _pf:
                 s["mats"][_g["name"]] = s["mats"].get(_g["name"], 0) + _g["n"]
@@ -2139,7 +2151,7 @@ def settle(s, a, msgs):
     s["con"] += con
 
     # v1.61i：携带宠物拾取（委托场景；材料池 = 本委托掉表；成败均判定——败则限 1 种/2 个）
-    _pf = pet_find_roll(s, "quest", list(q[8].keys()) if q[8] else [], not ok)
+    _pf = pet_find_roll(s, "quest", [[k, sum(mat_qty_range(q[8][k])) / 2.0] for k in q[8]] if q[8] else [], not ok)   # v1.61k：权重 = 掉表期望数量
     if _pf:
         for _g in _pf:
             s["mats"][_g["name"]] = s["mats"].get(_g["name"], 0) + _g["n"]
@@ -3590,7 +3602,7 @@ def explore_finish_check(s, msgs):
             s["mats"][name] = s["mats"].get(name, 0) + n
             gains.append(name + " ×" + str(n))
     # v1.61i：携带宠物拾取（探索场景；材料池 = 本区域掉表）
-    _pf = pet_find_roll(s, "explore", [pair2[0] for pair2 in r["d"]], False)
+    _pf = pet_find_roll(s, "explore", [[pair2[0], pair2[1]] for pair2 in r["d"]], False)   # v1.61k：权重 = 区域掉率%
     if _pf:
         for _g in _pf:
             s["mats"][_g["name"]] = s["mats"].get(_g["name"], 0) + _g["n"]

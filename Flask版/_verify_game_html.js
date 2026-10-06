@@ -567,12 +567,16 @@ hck(html.indexOf("神秘小礼物") >= 0 && html.indexOf("连续 7 天会收到�
 hck(html.indexOf("const PET_GIFTS = {") >= 0 && html.indexOf("function petGiftRoll(") >= 0
     && html.indexOf('"魔狼鬃毛"') >= 0 && html.indexOf('"星辉绸"') >= 0 && html.indexOf("PET_WALK_GIFT") < 0,
     'v1.61h：宠物礼物池（每宠 4~6 种 · 权重 100 · 偏好决定类型）');
-hck(html.indexOf("const PET_FIND = {") >= 0 && html.indexOf("tierW") >= 0
+hck(html.indexOf("const PET_FIND = {") >= 0
     && html.indexOf('petFindRoll("quest", q[8]') >= 0 && html.indexOf('petFindRoll("explore", r.d') >= 0
     && html.indexOf('petFindRoll("legend", _lgPool') >= 0 && html.indexOf("failTypes:1, failQty:2") >= 0,
     'v1.61i：携宠拾取（池 = 内容产出 · 3 种/4 个上限 · 失败 1 种/2 个）');
 hck(html.indexOf("failMul:0.5") >= 0 && html.indexOf("if(fail) pct *= PET_FIND.failMul;") >= 0,
     'v1.61j：失败时触发率减半（failMul 0.5 —— 委托失败 6%→3% / 传奇失败 12%→6%）');
+hck(html.indexOf("tierW") < 0 && html.indexOf("v1.61k：拾取权重 = 内容自身的产出结构") >= 0
+    && html.indexOf("v1.61k：权重 = 掉表期望数量") >= 0 && html.indexOf("v1.61k：权重 = 区域掉率%") >= 0
+    && html.indexOf("v1.61k：权重 = 必得数量") >= 0,
+    'v1.61k：拾取权重 = 内容自身产出结构（委托期望数量 / 区域掉率% / 传奇必得数量 —— tierW 移除）');
 
 let evalFail = 0;
 try { eval(code + test); } catch(e){ console.log('FAIL 加载异常: ' + e.message); evalFail = 1; }

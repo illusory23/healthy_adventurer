@@ -745,34 +745,40 @@ console.log("\\n===== 12. 背包筛选与详情补全 =====");
   S.carryPet = "小狼";
   const _seq61 = [0.05, 0.0, 0.0, 0.0];
   Math.random = function(){ return _seq61.length ? _seq61.shift() : 0.5; };
-  const _pf61A = petFindRoll("quest", ["兽肉", "河鱼"], false);
+  const _pf61A = petFindRoll("quest", [["兽肉", 3], ["河鱼", 1]], false);
   Math.random = _rndG61;
   check(_pf61A && _pf61A.length === 1 && _pf61A[0].name === "兽肉" && _pf61A[0].n === 1,
-    "拾取：命中 → 限本内容材料池（实得 " + JSON.stringify(_pf61A) + "）");
+    "拾取：命中 → 限本内容材料池（权重对数组 · 实得 " + JSON.stringify(_pf61A) + "）");
   const _seq61b = [0.05, 0.0, 0.9999];
   Math.random = function(){ return _seq61b.length ? _seq61b.shift() : 0.5; };
-  const _pf61B = petFindRoll("quest", ["蘑菇", "龙心"], false);
+  const _pf61B = petFindRoll("quest", [["蘑菇", 1.5], ["龙心", 1]], false);
   Math.random = _rndG61;
-  check(_pf61B && _pf61B[0].name === "龙心", "拾取：传说品阶可捡到（池含龙心 · 权重尾命中，实得 " + (_pf61B ? _pf61B[0].name : "null") + "）");
+  check(_pf61B && _pf61B[0].name === "龙心", "拾取：权重随内容产出——龙心 ×1 / 蘑菇 期望 1.5 · 权重尾命中（实得 " + (_pf61B ? _pf61B[0].name : "null") + "）");
+  const _seq61g = [0.05, 0.0, 0.26, 0.0];
+  Math.random = function(){ return _seq61g.length ? _seq61g.shift() : 0.5; };
+  const _pf61G = petFindRoll("quest", [["蘑菇", 1], ["河鱼", 3]], false);
+  Math.random = _rndG61;
+  check(_pf61G && _pf61G[0].name === "河鱼", "拾取：概率 ∝ 内容产出权重——0.26 落入河鱼 75% 份额（实得 " + JSON.stringify(_pf61G) + "）");
+  check(!("tierW" in PET_FIND), "拾取：全品阶权重 tierW 已移除（v1.61k —— 不再与内容掉表打架）");
   const _seq61c = [0.025, 0.0, 0.99];
   Math.random = function(){ return _seq61c.length ? _seq61c.shift() : 0.5; };
-  const _pf61C = petFindRoll("quest", ["蘑菇", "河鱼", "泉水"], true);
+  const _pf61C = petFindRoll("quest", [["蘑菇", 1], ["河鱼", 1], ["泉水", 1]], true);
   Math.random = _rndG61;
   check(_pf61C && _pf61C.length === 1 && _pf61C[0].n <= 2, "拾取：失败上限 1 种 / ≤2 个（实得 " + JSON.stringify(_pf61C) + "）");
   const _seq61e = [0.05];
   Math.random = function(){ return _seq61e.length ? _seq61e.shift() : 0.99; };
-  const _pf61E = petFindRoll("quest", ["蘑菇"], true);
+  const _pf61E = petFindRoll("quest", [["蘑菇", 1]], true);
   Math.random = _rndG61;
   check(_pf61E === null, "拾取：失败减半——委托 6%→3%，0.05 失败时不触发（v1.61j）");
   const _seq61f = [0.08];
   Math.random = function(){ return _seq61f.length ? _seq61f.shift() : 0.99; };
-  const _pf61F = petFindRoll("legend", ["星辉花"], true);
+  const _pf61F = petFindRoll("legend", [["星辉花", 1]], true);
   Math.random = _rndG61;
   check(_pf61F === null, "拾取：失败减半——传奇 12%→6%，0.08 不触发（v1.61j）");
   check(PET_FIND.failMul === 0.5, "拾取：PET_FIND.failMul = 0.5（失败减半系数 · v1.61j）");
   const _seq61d = [0.05, 0.99, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
   Math.random = function(){ return _seq61d.length ? _seq61d.shift() : 0.5; };
-  const _pf61D = petFindRoll("quest", ["蘑菇", "河鱼", "泉水", "蜂蜜"], false);
+  const _pf61D = petFindRoll("quest", [["蘑菇", 1], ["河鱼", 1], ["泉水", 1], ["蜂蜜", 1]], false);
   Math.random = _rndG61;
   check(_pf61D && _pf61D.length === 3 && _pf61D.reduce(function(a, g){ return a + g.n; }, 0) <= 4,
     "拾取：上限 3 种 / 合计 ≤4（实得 " + JSON.stringify(_pf61D) + "）");
@@ -2037,8 +2043,9 @@ const _h38r = [
   ["v1.61f 宠物详情显示具体心情值（数值 / 100 + 进度条 + 卡片提示）", html.indexOf("心情值 <b") >= 0 && html.indexOf("</b> / 100") >= 0 && html.indexOf("（${mood}/100）") >= 0],
   ["v1.61g 宠物礼物改暗示文案（不剧透 7 天规则）", html.indexOf("神秘小礼物") >= 0 && html.indexOf("连续 7 天会收到心意礼物") < 0 && html.indexOf("连续 7 天好心情会收到心意礼物") < 0],
   ["v1.61h 宠物礼物池（每宠 4~6 种 · 权重 100 · 偏好决定类型）", html.indexOf("const PET_GIFTS = {") >= 0 && html.indexOf('"魔狼鬃毛"') >= 0 && html.indexOf('"星辉绸"') >= 0 && html.indexOf("function petGiftRoll(") >= 0 && html.indexOf("PET_WALK_GIFT") < 0],
-  ["v1.61i 携宠拾取（池 = 内容产出 · 3 种/4 个上限 · 失败 1 种/2 个 · 传说可捡概率极低）", html.indexOf("const PET_FIND = {") >= 0 && html.indexOf("tierW") >= 0 && html.indexOf('petFindRoll("quest", q[8]') >= 0 && html.indexOf('petFindRoll("explore", r.d') >= 0 && html.indexOf('petFindRoll("legend", _lgPool') >= 0 && html.indexOf("failTypes:1, failQty:2") >= 0],
-  ["v1.61j 失败时触发率减半（failMul:0.5——委托失败 6%→3% / 传奇失败 12%→6%，含心情修正后减半）", html.indexOf("failMul:0.5") >= 0 && html.indexOf("if(fail) pct *= PET_FIND.failMul;") >= 0]
+  ["v1.61i 携宠拾取（池 = 内容产出 · 3 种/4 个上限 · 失败 1 种/2 个 · 传说可捡概率极低）", html.indexOf("const PET_FIND = {") >= 0 && html.indexOf('petFindRoll("quest", q[8]') >= 0 && html.indexOf('petFindRoll("explore", r.d') >= 0 && html.indexOf('petFindRoll("legend", _lgPool') >= 0 && html.indexOf("failTypes:1, failQty:2") >= 0],
+  ["v1.61j 失败时触发率减半（failMul:0.5——委托失败 6%→3% / 传奇失败 12%→6%，含心情修正后减半）", html.indexOf("failMul:0.5") >= 0 && html.indexOf("if(fail) pct *= PET_FIND.failMul;") >= 0],
+  ["v1.61k 拾取权重 = 内容自身产出结构（委托期望数量 / 区域掉率% / 传奇必得数量 —— tierW 全品阶权重移除）", html.indexOf("tierW") < 0 && html.indexOf("v1.61k：拾取权重 = 内容自身的产出结构") >= 0 && html.indexOf("v1.61k：权重 = 掉表期望数量") >= 0 && html.indexOf("v1.61k：权重 = 区域掉率%") >= 0 && html.indexOf("v1.61k：权重 = 必得数量") >= 0]
 ];
 let _h38rBad = 0;
 _h38r.forEach(function(x){ console.log("  " + (x[1] ? "✅" : "❌") + " " + x[0]); if(!x[1]) _h38rBad++; });
