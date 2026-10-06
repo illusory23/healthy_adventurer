@@ -260,6 +260,8 @@ hck(html.indexOf('主材料 普通 3 / 精良 4 / 稀有 5 / 史诗 6 / 传说 7
 hck(html.indexOf('≥90 分 +10 / ≥60 分 +5 / 不足 60 −5') >= 0 && html.indexOf('优秀 +10 / 良好 +5') < 0
     && html.indexOf('sc >= 90 ? 10 : (sc >= 60 ? 5 : -5)') >= 0,
     'v1.61q：心情日结算文案按真实分档（≥90 +10 / ≥60 +5 / <60 −5——原「优秀/良好」措辞与阈值不符）');
+hck(html.indexOf('散步</b>同时只能派 1 只') >= 0 && html.indexOf('每天可派 1 只<b>散步</b>') < 0,
+    'v1.61r：散步说明对齐实现（同时只能 1 只、无每日上限——原「每天可派 1 只」不符）');
 hck((html.match(/<span class="tb-i">/g) || []).length === 8, 'v1.57：8 个页签全部带图标（tb-i）');
 hck(html.indexOf('b.scrollIntoView({inline:"center"') >= 0, 'v1.57：当前页签自动滚入视野');
 hck(html.indexOf('main.addEventListener("touchstart"') >= 0 && html.indexOf('Math.abs(dx) < 70') >= 0
