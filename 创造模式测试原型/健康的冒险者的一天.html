@@ -1510,7 +1510,6 @@ function newRumor(d){   // v1.48b：每日随机 2 条传闻（idx / idx2 取模
   const a2 = (a1 + 1 + Math.floor(Math.random()*(RUMORS.length-1))) % RUMORS.length;
   return {date:d, idx:a1, idx2:a2};
 }
-function dayHash(s){ let h = 0; for(let i = 0; i < s.length; i++){ h = (h * 31 + s.charCodeAt(i)) >>> 0; } return h; }
 function fmtMoney(c){
   if(c >= 1000000) return (c/1000000).toFixed(2).replace(/\.?0+$/,"")+"铂金";
   if(c >= 10000)   return (c/10000).toFixed(2).replace(/\.?0+$/,"")+"金";
@@ -1551,7 +1550,6 @@ function rand(n){ return Math.floor(Math.random()*n)+1; }
 
 /* 当前等级显示名 */
 function lvName(){ return CFG.levels[S.lvIdx]; }
-function lvNum(){ return S.lvIdx+1; }
 
 /* 公会等级索引（0=F ... 6=S） */
 function guildIdx(){

@@ -425,15 +425,6 @@ def guild_idx(s):
     return g
 
 
-def guild_name(s):
-    return CFG["guildName"][guild_idx(s)]
-
-
-def exp_floor(s):
-    i = s["lv_idx"]
-    return 0 if i == 0 else CFG["expNeed"][i - 1]
-
-
 def _push_capped(s, key, item, cap=50):
     """v1.39（B6）：队列字段（results / levelups / pending_rare）封顶，
        防"长期不消费 + 后台持续产出"时无限膨胀；只保留最近 cap 条。"""
@@ -478,20 +469,6 @@ def calc_health(s):
     if sick_today(s):                      # v1.61：疗养圣所·病假 → 本日评分锁定 59
         h["score"] = SICK_LOCK_SCORE
     return h["score"]
-
-
-def grade(sc):
-    for g in CFG["gradeTable"] if "gradeTable" in CFG else []:
-        pass
-    if sc >= 90:
-        return "完美"
-    if sc >= 75:
-        return "优秀"
-    if sc >= 60:
-        return "良好"
-    if sc >= 40:
-        return "普通"
-    return "虚弱"
 
 
 def prev_health_score(s):
@@ -1226,10 +1203,6 @@ def pet_bond_days(s, n):
         return 0
 
 
-def pet_mood_label(mood):
-    return "😊" if mood >= PET_MOOD_HAPPY else ("😴" if mood < PET_MOOD_LOW else "😐")
-
-
 def pet_mood_daily(s, msgs, sc, slept):
     """v1.56：宠物心情日结算——由主人昨日的现实健康驱动（只反映，不惩罚数值）"""
     names = list(s.get("pets") or [])
@@ -1780,13 +1753,6 @@ def pool_expired(s):
     if not p or not p.get("bornTs"):
         return False
     return now_ms() >= p["bornTs"] + pool_window_ms(s)
-
-
-def pool_left_ms(s):
-    p = s.get("pool")
-    if not p or not p.get("bornTs"):
-        return 0
-    return max(0, p["bornTs"] + pool_window_ms(s) - now_ms())
 
 
 # ══════════════ 传奇 ══════════════
