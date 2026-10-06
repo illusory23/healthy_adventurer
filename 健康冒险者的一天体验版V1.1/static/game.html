@@ -46,8 +46,7 @@ body[data-tod="evening"]{--amb1:rgba(140,110,255,.18); --amb2:rgba(200,130,255,.
 }
 #hud{
   background:transparent;
-  border-bottom:1px solid rgba(232,181,74,.14); padding:8px 12px calc(8px + env(safe-area-inset-top,0));
-  padding-top:calc(8px + env(safe-area-inset-top,0));
+  border-bottom:1px solid rgba(232,181,74,.14); padding:calc(8px + env(safe-area-inset-top,0)) 12px 8px;   /* v1.61n：底部原误用 inset-top（刘海机型多垫 ≈47~59px → HUD 与页签栏间出现大空隙），改为下 8px */
 }
 .hud-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .hud-lv{font-weight:700;color:var(--gold2);font-size:16px}
