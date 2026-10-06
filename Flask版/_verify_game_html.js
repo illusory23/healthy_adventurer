@@ -559,9 +559,11 @@ hck(html.indexOf('id="hGuildBar"') >= 0 && html.indexOf('id="hGuildTxt"') >= 0 &
     'v1.61d：HUD 公会经验条（声望独立显示移除）');
 hck((html.match(/!M\[name\] \|\| !S\.mats\[name\]/g) || []).length >= 2,
     'v1.61d：规则道具不可出售（sellMat 非材料守卫 ×2——原型层 + 桥接层）');
-hck(html.indexOf("心情值 <b") >= 0 && html.indexOf("</b> / 100") >= 0
-    && html.indexOf("连续 7 天会收到心意礼物") >= 0 && html.indexOf("（${mood}/100）") >= 0,
+hck(html.indexOf("心情值 <b") >= 0 && html.indexOf("</b> / 100") >= 0 && html.indexOf("（${mood}/100）") >= 0,
     'v1.61f：宠物详情显示具体心情值（数值 / 100 + 进度条；心情图标提示含数值）');
+hck(html.indexOf("神秘小礼物") >= 0 && html.indexOf("连续 7 天会收到心意礼物") < 0
+    && html.indexOf("连续 7 天好心情会收到心意礼物") < 0,
+    'v1.61g：宠物礼物改暗示文案（不剧透 7 天规则）');
 
 let evalFail = 0;
 try { eval(code + test); } catch(e){ console.log('FAIL 加载异常: ' + e.message); evalFail = 1; }

@@ -5689,7 +5689,7 @@ function petMetaHtml(n){                 // 详情公共段：心情 / 羁绊 / 
     + petMoodLabel(mood) + ' <b style="color:' + moodCol + '">' + petMoodTxt(mood) + '</b>'
     + '　心情值 <b style="color:' + moodCol + '">' + mood + '</b> / 100'
     + '<div class="bar" style="height:6px;margin:5px 0 2px"><i style="width:' + mood + '%;background:' + moodCol + '"></i></div>'
-    + '<span class="muted" style="font-size:11px">由你的现实作息驱动——早睡、运动、按时吃饭，它都会开心（每日按昨日健康分结算：优秀 +10 / 良好 +5 / 其余 −5，早睡再 +5；抚摸 +5、散步 +3；≥' + PET_MOOD_HAPPY + ' 连续 7 天会收到心意礼物）</span><br>'
+    + '<span class="muted" style="font-size:11px">由你的现实作息驱动——早睡、运动、按时吃饭，它都会开心（每日按昨日健康分结算：优秀 +10 / 良好 +5 / 其余 −5，早睡再 +5；抚摸 +5、散步 +3。连着好些天都是开开心心的日子——也许，它会偷偷给你准备一份神秘小礼物……）</span><br>'
     + '💞 羁绊 <b>' + bond + '</b> 天';
   m.bondDone.forEach(function(mile){
     h += '　📖 <a href="javascript:;" onclick="showPetStory(\'' + n + '\',' + mile + ')" style="color:var(--gold2)">' + mile + ' 天</a>';
@@ -5865,7 +5865,7 @@ function renderPet(){
   h += `</div>`;
   h += `<div class="card"><h3>💡 小提示</h3><div class="muted" style="font-size:12px;line-height:1.9">`;
   h += `· <b>携带生效</b>：只有随身携带的伙伴提供加成（材料 / 成功率 / 报酬等）——每张卡片点「📌 携带」选一位同行者；点「🏠 看家」则加成暂停。<br>`;
-  h += `· 宠物<b>心情</b>由你的现实作息驱动（早睡 / 运动 / 按时吃饭）——心情好时它会有小彩蛋，连续 7 天好心情会收到心意礼物；心情低时它只会心疼你，<b>不会</b>扣任何加成。<br>`;
+  h += `· 宠物<b>心情</b>由你的现实作息驱动（早睡 / 运动 / 按时吃饭）——心情好时它会有小彩蛋；也许还会收到它偷偷攒下的神秘小礼物；心情低时它只会心疼你，<b>不会</b>扣任何加成。<br>`;
   h += `· 每只宠物每天可<b>抚摸</b> 1 次（+心情）；每天可派 1 只<b>散步</b>（约半小时后回来，可能带回小材料）。<br>`;
   h += `· <b>羁绊</b>按陪伴天数自然累积——7 / 30 / 100 / 365 天解锁专属故事。`;
   h += `</div></div>`;

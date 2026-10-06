@@ -1974,7 +1974,8 @@ const _h38r = [
   ["v1.61d 薰香/护符只展示下一阶 + 额外饰品类说明", html.indexOf("it.incense === _ic + 1") >= 0 && html.indexOf("🕯️ 安眠薰香（") >= 0 && html.indexOf("与安眠薰香同属「额外饰品」类永久加成") >= 0 && html.indexOf("if(it.incense) return;") >= 0],
   ["v1.61d HUD 公会经验条（声望独立显示移除）", html.indexOf('id="hGuildBar"') >= 0 && html.indexOf('id="hGuildTxt"') >= 0 && html.indexOf('class="bar bar-guild"') >= 0 && html.indexOf('id="hRep"') < 0 && html.indexOf("⭐声望") < 0],
   ["v1.61d 规则道具不可出售（sellMat 非材料守卫 ×2）", (html.match(/!M\[name\] \|\| !S\.mats\[name\]/g) || []).length >= 2],
-  ["v1.61f 宠物详情显示具体心情值（数值 / 100 + 进度条 + 卡片提示）", html.indexOf("心情值 <b") >= 0 && html.indexOf("</b> / 100") >= 0 && html.indexOf("连续 7 天会收到心意礼物") >= 0 && html.indexOf("（${mood}/100）") >= 0]
+  ["v1.61f 宠物详情显示具体心情值（数值 / 100 + 进度条 + 卡片提示）", html.indexOf("心情值 <b") >= 0 && html.indexOf("</b> / 100") >= 0 && html.indexOf("（${mood}/100）") >= 0],
+  ["v1.61g 宠物礼物改暗示文案（不剧透 7 天规则）", html.indexOf("神秘小礼物") >= 0 && html.indexOf("连续 7 天会收到心意礼物") < 0 && html.indexOf("连续 7 天好心情会收到心意礼物") < 0]
 ];
 let _h38rBad = 0;
 _h38r.forEach(function(x){ console.log("  " + (x[1] ? "✅" : "❌") + " " + x[0]); if(!x[1]) _h38rBad++; });
