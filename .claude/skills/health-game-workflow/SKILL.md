@@ -30,7 +30,8 @@ description: 《健康的冒险者的一天》（D:\游戏\健康的冒险者的
 ## 四、实操要点（执行经验，供理解上文的"怎么做"）
 
 - **体验版同步明细**：体验版目录（`健康冒险者的一天体验版V1.1\`）需同步 4 个文件——`game.html`（根目录 + `static\` 两份内容相同）、`game.py`（Flask 版为 LF，写入体验版时转 CRLF）、`app.py`（直接复制）。
-- **换行约定**：`game.html` CRLF；`game.py` LF；`test_game.py` CRLF；体验版 `game.py` CRLF。
+- **换行约定**：`game.html` **LF**（Flask 版与体验版均为 LF，v1.60 实核）；`game.py` LF（写入体验版时转 CRLF）；`test_game.py` CRLF；`.bat` 纯 ASCII + CRLF。
+- **一键推送 GitHub**：根目录 `一键推送.bat`——`git add -A` → 提交（可带参数或交互输入说明）→ `pull --rebase` → `git push`。远端走 **SSH-over-443**（`ssh://git@ssh.github.com:443/...`，`core.sshCommand` 已配绝对路径），**勿改回 HTTPS**（本机 HTTPS 通道不通）。
 - **cp 方向限制**：`cp` 只允许 `game.html → 体验版` 方向；原型 → game.html 的同步必须走 `_sync_proto.py`（或逐段 Edit），禁止直接用 cp 覆盖，防止桥接层丢失。
 - **改完必跑全套测试**：`python run_all_tests.py`（根目录，6 套：smoke / 创造模式 / 核心逻辑 / API / 桥接复验 / 公式对拍）。
 - **改了 game.py / app.py / game.html 后提醒用户重启服务器**。
