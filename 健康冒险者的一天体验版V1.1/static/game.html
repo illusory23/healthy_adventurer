@@ -168,6 +168,7 @@ main{padding:14px;max-width:980px;margin:0 auto}
 @keyframes floatUp{0%{opacity:0;transform:translate(-50%,14px) scale(.8)}18%{opacity:1;transform:translate(-50%,0) scale(1.06)}100%{opacity:0;transform:translate(-50%,-48px) scale(1)}}
 @keyframes numPop{0%{transform:scale(1)}45%{transform:scale(1.16)}100%{transform:scale(1)}}
 .total.pop{animation:numPop .32s ease}   /* v1.35 打卡反馈 */
+.hud-res b.pop{animation:numPop .32s ease}   /* v1.69：买卖成功 → HUD 钱币数字弹跳 */
 .celebrate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:600;animation:celeFade 2.3s ease forwards}
 .celebrate-inner{text-align:center;animation:celeZoom .75s cubic-bezier(.2,.8,.3,1.2)}
 .celebrate-ico{font-size:64px;filter:drop-shadow(0 0 30px rgba(232,181,74,.9))}
@@ -306,28 +307,28 @@ main{padding:14px;max-width:980px;margin:0 auto}
 // 委托：[名称, 标签, 时间窗, 耗时(分), 难度, 报酬(铜), 经验, 精力, 材料]
 const C = {
 Lv1:[
-["采集草药","采集","全天",60,"简单",8,1,8,{"止血草":[3,5]}],
-["采集蘑菇","采集","全天",60,"简单",6,1,8,{"蘑菇":[3,5]}],
-["拾取柴薪","采集","全天",60,"简单",5,1,8,{"松木":[2,4]}],
-["修补渔网","短时","08:00-23:30",60,"简单",10,2,10,{"河鱼":[1,3]}],
-["驱赶田鼠","狩猎","08:00-23:30",120,"简单",8,2,12,{}],
-["猎取山鸡","狩猎","08:00-23:30",120,"普通",100,2,15,{"山鸡羽":[1,3]}],
-["猎取雪兔","狩猎","08:00-23:30",180,"普通",200,3,18,{"野兔皮":[1,2],"兽肉":[1,3]}],
-["砍伐木材","采集","08:00-23:30",240,"普通",300,4,20,{"松木":[3,6]}],
-["挖掘石材","采集","08:00-23:30",240,"普通",400,4,20,{"青石":[3,6],"石英":[1,2]}],
-["收集山泉","采集","06:00-23:30",240,"普通",500,5,20,{"泉水":[1,3]}],
-["猎杀野鹿","狩猎","08:00-23:30",360,"困难",800,8,30,{"鹿皮":[1,2],"鹿骨":[1,2],"兽肉":[2,4]}],
-["溪畔垂钓","采集","06:00-23:30",90,"简单",10,1,8,{"河鱼":[2,4]}],
-["掏取岩蜂巢","采集","08:00-23:30",120,"普通",100,3,14,{"蜂蜜":[1,3]}],
-["驱赶乌鸦群","狩猎","06:00-09:00",90,"简单",12,2,10,{"山鸡羽":[1,3]}],
-["猎捕肥田鼠","狩猎","全天",120,"普通",80,3,12,{}],
-["夜巡麦田","探索","21:00-23:30",180,"困难",400,7,24,{}],
+["采集草药","采集","全天",60,"简单",100,1,8,{"止血草":[3,5]}],
+["采集蘑菇","采集","全天",60,"简单",100,1,8,{"蘑菇":[3,5]}],
+["拾取柴薪","采集","全天",60,"简单",80,1,8,{"松木":[2,4]}],
+["修补渔网","短时","08:00-23:30",60,"简单",80,2,10,{"河鱼":[1,3]}],
+["驱赶田鼠","狩猎","08:00-23:30",120,"简单",140,2,12,{}],
+["猎取山鸡","狩猎","08:00-23:30",120,"普通",110,2,15,{"山鸡羽":[1,3]}],
+["猎取雪兔","狩猎","08:00-23:30",180,"普通",120,3,18,{"野兔皮":[1,2],"兽肉":[1,3]}],
+["砍伐木材","采集","08:00-23:30",240,"普通",100,4,20,{"松木":[3,6]}],
+["挖掘石材","采集","08:00-23:30",240,"普通",100,4,20,{"青石":[3,6],"石英":[1,2]}],
+["收集山泉","采集","06:00-23:30",240,"普通",160,5,20,{"泉水":[1,3]}],
+["猎杀野鹿","狩猎","08:00-23:30",360,"困难",150,8,30,{"兽肉":[2,4],"鹿皮":[1,2,0.15],"鹿骨":[1,2,0.15]}],
+["溪畔垂钓","采集","06:00-23:30",90,"简单",100,1,8,{"河鱼":[2,4]}],
+["掏取岩蜂巢","采集","08:00-23:30",120,"普通",120,3,14,{"蜂蜜":[1,3]}],
+["驱赶乌鸦群","狩猎","06:00-09:00",90,"简单",90,2,10,{"山鸡羽":[1,3]}],
+["猎捕肥田鼠","狩猎","全天",120,"普通",150,3,12,{}],
+["夜巡麦田","探索","21:00-23:30",180,"困难",200,7,24,{}],
 ],
 Lv2:[
-["月光草采集","采集","21:00-23:30",30,"简单",1000,3,10,{"月光草":[1,3]}],
-["采集晨露","采集","06:00-09:00",30,"简单",800,3,10,{"晨露花":[1,3]}],
+["月光草采集","采集","21:00-23:30",30,"简单",2500,3,10,{"止血草":[1,2],"月光草":[1,1,0.55]}],
+["采集晨露","采集","06:00-09:00",30,"简单",1400,3,10,{"晨露花":[1,2]}],
 ["药草园除虫","采集","08:00-23:30",60,"简单",1200,4,12,{"止血草":[2,5],"香草":[1,2]}],
-["采集松脂","采集","08:00-23:30",60,"简单",1400,4,12,{"松脂":[2,4],"香草":[1,2]}],
+["采集松脂","采集","08:00-23:30",60,"简单",2000,4,12,{"松脂":[1,3],"香草":[1,1]}],
 ["森林巡逻","探索","08:00-23:30",60,"简单",1800,5,12,{"松脂":[1,2]}],
 ["旅店帮厨","短时","08:00-23:30",60,"简单",1600,5,12,{"蘑菇":[2,5]}],
 ["寻找走失羊群","探索","08:00-23:30",60,"简单",1800,5,12,{}],
@@ -340,7 +341,7 @@ Lv2:[
 ["驱赶偷粮地精","狩猎","08:00-23:30",60,"困难",2200,6,25,{"蘑菇":[1,3]}],
 ["护送商队","护送","08:00-23:30",120,"普通",3000,8,26,{}],
 ["港口卸货","短时","08:00-23:30",120,"普通",2200,6,24,{"河鱼":[1,3]}],
-["狼群驱赶","狩猎","08:00-23:30",90,"困难",2800,8,35,{"狼牙":[1,2],"兽肉":[1,3]}],
+["狼群驱赶","狩猎","08:00-23:30",90,"困难",3000,8,35,{"兽肉":[1,3],"狼牙":[1,1]}],
 ["追踪走失商队","护送","08:00-23:30",120,"困难",3200,9,36,{}],
 ["矿洞勘探","探索","08:00-23:30",120,"困难",3500,10,38,{"铜矿石":[2,4]}],
 ["清理废弃矿道","探索","08:00-23:30",120,"困难",3200,9,38,{"铁矿石":[1,3]}],
@@ -360,29 +361,29 @@ Lv3:[
 ["净化腐化森林","探索","08:00-23:30",180,"普通",25000,35,30,{"净化石":[1,3]}],
 ["探索沉船","探索","08:00-23:30",240,"普通",26000,34,40,{"远古石板":[1,1],"粗麻布":[1,3]}],
 ["追捕盗匪","狩猎","08:00-23:30",120,"困难",22000,28,33,{}],
-["猎杀巨型蜘蛛","狩猎","08:00-23:30",120,"困难",24000,26,35,{"风蚕丝":[2,4],"兽肉":[1,3]}],
-["巨龙巢穴侦察","精英","08:00-23:30",240,"困难",30000,40,44,{"龙骨":[1,1],"龙鳞":[1,2]}],
+["猎杀巨型蜘蛛","狩猎","08:00-23:30",120,"困难",24000,26,35,{"风蚕丝":[3,5],"兽肉":[1,4]}],
+["巨龙巢穴侦察","精英","08:00-23:30",240,"困难",30000,40,44,{"兽肉":[2,4],"龙骨":[1,1],"龙鳞":[1,2]}],
 ["古墓封印","探索","08:00-23:30",180,"困难",35000,45,44,{"星尘":[2,4],"远古石板":[1,2],"古董钱币":[1,2]}],
 ["护送商队穿越迷雾","护送","08:00-23:30",180,"困难",28000,32,45,{}],
-["秘银矿脉开采","采集","08:00-23:30",180,"普通",20000,30,35,{"秘银矿":[1,3],"铁矿石":[2,4]}],
-["沼泽蛇怪狩猎","狩猎","12:00-23:30",240,"困难",32000,42,45,{"蛇怪之眼":[1,1],"蘑菇":[2,4]}],
+["秘银矿脉开采","采集","08:00-23:30",180,"普通",20000,30,35,{"秘银矿":[1,4],"铁矿石":[3,5]}],
+["沼泽蛇怪狩猎","狩猎","12:00-23:30",240,"困难",32000,42,45,{"蛇怪之眼":[1,1],"蘑菇":[3,5]}],
 ["石门符文拓印","探索","08:00-23:30",240,"困难",30000,40,42,{"符文石":[1,2],"远古石板":[1,1]}],
-["暮色狼群清剿","狩猎","17:00-23:30",180,"普通",22000,32,38,{"狼牙":[1,2],"兽肉":[2,4]}],
-["晨露药圃修剪","采集","06:00-09:00",120,"简单",13000,24,16,{"晨露花":[2,4],"香草":[2,4]}],
+["暮色狼群清剿","狩猎","17:00-23:30",180,"普通",22000,32,38,{"狼牙":[1,3],"兽肉":[3,5]}],
+["晨露药圃修剪","采集","06:00-09:00",120,"简单",13000,24,16,{"晨露花":[3,5],"香草":[3,5]}],
 ["风车磨坊加固","短时","08:00-23:30",120,"简单",12500,23,16,{"松木":[3,6],"松脂":[1,2]}],
 ["古代渡槽疏通","探索","08:00-23:30",180,"普通",21000,31,33,{"青石":[4,8],"石英":[1,3]}],
-["枭熊巢穴讨伐","狩猎","21:00-23:30",240,"困难",34000,44,44,{"枭羽":[2,3],"野猪獠牙":[1,2]}],
+["枭熊巢穴讨伐","狩猎","21:00-23:30",240,"困难",34000,44,44,{"枭羽":[3,4],"野猪獠牙":[1,3]}],
 ["星陨坑探查","探索","21:00-23:30",180,"普通",23000,33,34,{"星尘":[1,2],"石英":[1,2]}],
 ["游侠哨站补给护送","护送","08:00-23:30",180,"普通",24000,34,36,{}],
 ["鸦巢悬崖索降","探索","11:00-14:00",150,"困难",28000,38,40,{"枭羽":[1,3],"粗麻布":[1,3]}],
 ["半兽人营地侦察","精英","08:00-23:30",180,"困难",33000,43,43,{"粗麻布":[2,4],"野猪獠牙":[1,2]}],
-["狩获沼泽巨蟒","狩猎","12:00-23:30",240,"困难",31000,41,44,{"鹿皮":[2,4],"兽肉":[2,4]}],
+["狩获沼泽巨蟒","狩猎","12:00-23:30",240,"困难",31000,41,44,{"鹿皮":[3,5],"兽肉":[3,5]}],
 ["月下狼嚎追踪","探索","21:00-23:30",180,"普通",22500,32,35,{"狼牙":[1,2],"月光草":[1,2]}],
 // v1.41 I4：追踪类（多日委托，q[3]=4320 分钟=3 天；完成跨天 → 次日打卡结算）
-["深林鹿王追踪","追踪","06:00-09:00",4320,"普通",48000,62,42,{"鹿皮":[2,4],"兽肉":[3,6]}],
-["采集沼泽泥炭","采集","08:00-23:30",180,"普通",19000,29,30,{"蘑菇":[2,5],"止血草":[2,4]}],
+["深林鹿王追踪","追踪","06:00-09:00",4320,"普通",48000,62,42,{"鹿皮":[3,5],"兽肉":[4,8]}],
+["采集沼泽泥炭","采集","08:00-23:30",180,"普通",19000,29,30,{"蘑菇":[3,7],"止血草":[3,5]}],
 ["矿工失踪搜救","探索","08:00-23:30",240,"困难",29000,39,42,{"秘银矿":[1,2],"铜矿石":[3,6]}],
-["破晓巡林","狩猎","06:00-09:00",120,"简单",14000,25,18,{"野兔皮":[2,4],"山鸡羽":[2,4]}],
+["破晓巡林","狩猎","06:00-09:00",120,"简单",14000,25,18,{"野兔皮":[3,5],"山鸡羽":[3,5]}],
 ["失踪商队搜寻","探索","08:00-23:30",240,"困难",29500,39,43,{"古董钱币":[1,1],"粗麻布":[2,4]}],
 // v1.41 I1：委托链·迷雾灯塔（1/3，无前置）
 ["迷雾灯塔·引航","探索","08:00-23:30",180,"普通",21000,31,30,{"松脂":[2,4],"粗麻布":[1,3]}],
@@ -399,7 +400,7 @@ Lv4:[
 ["讨伐石魔像","精英","08:00-23:30",240,"困难",75000,78,70,{"陨铁":[1,2],"青石":[5,8],"石英":[2,4]}],
 ["黑市追缉","狩猎","08:00-23:30",300,"困难",65000,72,78,{}],
 ["猎杀双头狮鹫","狩猎","08:00-23:30",360,"困难",85000,80,82,{"风蚕丝":[2,5],"兽肉":[2,4]}],
-["古龙遗骸采集","采集","08:00-23:30",480,"困难",70000,75,92,{"龙鳞":[2,4],"龙角":[1,3],"巨龙竖瞳":[1,2],"龙瞳结晶":[1,2]}],
+["古龙遗骸采集","采集","08:00-23:30",480,"困难",100000,75,92,{"龙鳞":[2,4],"龙角":[1,3],"巨龙竖瞳":[1,2],"龙瞳结晶":[1,2]}],
 ["深渊裂隙调查","探索","08:00-23:30",720,"困难",70000,70,108,{"陨铁":[1,4]}],
 ["潜入敌国要塞","探索","08:00-23:30",600,"噩梦",110000,105,110,{"星辉绸":[1,2]}],
 ["天空塔试炼","精英","08:00-23:30",480,"噩梦",120000,110,135,{"星尘结晶":[1,3]}],
@@ -620,17 +621,17 @@ function monthEventAdd(type, n){           // 进度累加 + 达成发奖
 
 // 材料：[品类, 品阶, 卖出(铜)]
 const M = {
-"止血草":["草药","普通",300],"蘑菇":["食材","普通",300],"山鸡羽":["兽材","普通",300],
-"河鱼":["食材","普通",400],"松木":["木材","普通",400],"青石":["石材","普通",400],
-"野兔皮":["兽材","普通",500],"蜂蜜":["食材","普通",600],"粗麻布":["织物","普通",600],
-"铜矿石":["矿石","普通",600],"石英":["宝石","普通",800],"泉水":["食材","普通",500],
-"松脂":["木材","精良",1600],"晨露花":["草药","精良",1800],"鹿皮":["兽材","精良",2000],
-"野猪獠牙":["兽材","精良",2000],"铁矿石":["矿石","精良",2200],"鹿骨":["兽材","精良",2400],
-"提神石":["矿石","精良",2500],"风蚕丝":["织物","精良",2800],"静心香":["特殊","精良",3000],
-"紫水晶":["宝石","精良",4000],
-"净化石":["矿石","稀有",8000],"月光草":["草药","稀有",9000],"哥布林图腾":["特殊","稀有",9000],
-"星尘":["矿石","稀有",10000],"远古石板":["特殊","稀有",10000],"月影纱":["织物","稀有",11000],
-"狼牙":["兽材","稀有",12000],"星辉石":["宝石","稀有",15000],
+"止血草":["草药","普通",30],"蘑菇":["食材","普通",30],"山鸡羽":["兽材","普通",30],
+"河鱼":["食材","普通",40],"松木":["木材","普通",40],"青石":["石材","普通",40],
+"野兔皮":["兽材","普通",50],"蜂蜜":["食材","普通",60],"粗麻布":["织物","普通",60],
+"铜矿石":["矿石","普通",60],"石英":["宝石","普通",80],"泉水":["食材","普通",50],
+"松脂":["木材","精良",320],"晨露花":["草药","精良",360],"鹿皮":["兽材","精良",400],
+"野猪獠牙":["兽材","精良",400],"铁矿石":["矿石","精良",440],"鹿骨":["兽材","精良",480],
+"提神石":["矿石","精良",500],"风蚕丝":["织物","精良",560],"静心香":["特殊","精良",600],
+"紫水晶":["宝石","精良",800],
+"净化石":["矿石","稀有",2700],"月光草":["草药","稀有",3000],"哥布林图腾":["特殊","稀有",3000],
+"星尘":["矿石","稀有",3300],"远古石板":["特殊","稀有",3300],"月影纱":["织物","稀有",3700],
+"狼牙":["兽材","稀有",4000],"星辉石":["宝石","稀有",5000],
 "暗影草":["草药","史诗",40000],"巨人骨":["兽材","史诗",40000],"星尘结晶":["特殊","史诗",50000],
 "陨铁":["矿石","史诗",60000],"星辉绸":["织物","史诗",70000],"龙鳞":["兽材","史诗",80000],
 "时间沙":["特殊","传说",300000],"圣兽之蜕":["兽材","传说",350000],"世界树汁液":["草药","传说",400000],
@@ -674,46 +675,46 @@ const M = {
 "泰坦石核":["矿石","史诗",66000],   // 泰坦墓场
 "深海遗珠":["宝石","史诗",70000],   // 沉船海沟（兼作两料理主/辅材）
 // ── 食材 ──
-"兽肉":["食材","普通",500],
-"香草":["食材","精良",2600],
-"山珍":["食材","稀有",9500],
+"兽肉":["食材","普通",50],
+"香草":["食材","精良",520],
+"山珍":["食材","稀有",3200],
 "沼心莲实":["食材","史诗",58000],   // v1.58 毒沼腹地
 "冰晶果":["食材","史诗",60000],     // v1.58 圣兽雪原
 // ── 收藏品（主要用途：换金） ──
-"古董钱币":["特殊","稀有",12000],
+"古董钱币":["特殊","稀有",4000],
 "王者遗冠":["特殊","史诗",90000],
-"枭羽":["兽材","精良",2200],
-"秘银矿":["矿石","精良",2600],
-"符文石":["特殊","稀有",11000],
-"蛇怪之眼":["兽材","稀有",12000],
+"枭羽":["兽材","精良",440],
+"秘银矿":["矿石","精良",520],
+"符文石":["特殊","稀有",3700],
+"蛇怪之眼":["兽材","稀有",4000],
 "虚空结晶":["宝石","史诗",60000],
 "星界尘":["特殊","传说",400000],
 /* ── v1.32 新增 39 种 ── */
-"白桦木":["木材","普通",400],
-"花岗岩":["石材","普通",500],
-"薄荷叶":["草药","普通",300],
-"浆果":["食材","普通",350],
-"南瓜":["食材","普通",450],
-"棉线":["织物","普通",500],
-"铅矿石":["矿石","普通",550],
-"云杉木":["木材","精良",1800],
-"大理石":["石材","精良",2000],
-"金盏花":["草药","精良",1900],
-"紫藤花":["草药","精良",2200],
-"雪盐":["食材","精良",1700],
-"天鹅绒":["织物","精良",2400],
-"白银矿":["矿石","精良",2300],
-"黄玉":["宝石","精良",2800],
-"黑檀木":["木材","稀有",9000],
-"铁木":["木材","稀有",11000],
-"黑曜石":["石材","稀有",9500],
-"龙息草":["草药","稀有",10000],
-"蜂王浆":["食材","稀有",9800],
-"蛛丝":["织物","稀有",10500],
-"黑铁矿":["矿石","稀有",9200],
-"血玛瑙":["宝石","稀有",12000],
-"狮鹫羽":["兽材","稀有",11500],
-"星界罗盘":["特殊","稀有",14000],
+"白桦木":["木材","普通",40],
+"花岗岩":["石材","普通",50],
+"薄荷叶":["草药","普通",30],
+"浆果":["食材","普通",35],
+"南瓜":["食材","普通",45],
+"棉线":["织物","普通",50],
+"铅矿石":["矿石","普通",55],
+"云杉木":["木材","精良",360],
+"大理石":["石材","精良",400],
+"金盏花":["草药","精良",380],
+"紫藤花":["草药","精良",440],
+"雪盐":["食材","精良",340],
+"天鹅绒":["织物","精良",480],
+"白银矿":["矿石","精良",460],
+"黄玉":["宝石","精良",560],
+"黑檀木":["木材","稀有",3000],
+"铁木":["木材","稀有",3700],
+"黑曜石":["石材","稀有",3200],
+"龙息草":["草药","稀有",3300],
+"蜂王浆":["食材","稀有",3300],
+"蛛丝":["织物","稀有",3500],
+"黑铁矿":["矿石","稀有",3100],
+"血玛瑙":["宝石","稀有",4000],
+"狮鹫羽":["兽材","稀有",3800],
+"星界罗盘":["特殊","稀有",4700],
 "凤凰木":["木材","史诗",45000],
 "符文岩":["石材","史诗",50000],
 "凤凰草":["草药","史诗",55000],
@@ -878,8 +879,8 @@ const QUEST_STORY = {
   "星图师的需求":"星图师校准星盘需要一点星尘。你若手里有现货，他愿意出双倍工钱。",
   "龙血商人的订单":"龙血黑市紧俏。商人明说了：带现货来，报酬翻倍；没货，就按普通价走。",
   /* ── 传奇事件 / 世界级事件 ── */
-  "屠龙传说":"古龙盘踞在雪峰之巅，整个北境都在它的阴影下。传说屠龙者将获得龙的认可，或者成为它的晚餐——这一次，轮到你上山了。",
-  "星界远征":"星图上出现了一条通往界外的航线。世界之外有什么？没人知道——但船已经备好了。",
+  "屠龙传说":"你已弑龙——但那头只是幼兽。真正的古龙盘踞在雪峰之巅，整个北境的天空都在它的翼影之下。传说屠龙者可获龙的认可……或者成为它的晚餐。这一次，轮到你上山了。",
+  "星界摇篮":"星辉汇聚之处，星兽的卵在摇篮里沉睡了万年。穿过界外之海、寻到摇篮的守护者——带回的会是一声初鸣，和一位同行的伙伴。",
   "公会大师试炼":"公会的最高认可只授予最强的冒险者。试炼的考官是历代大师的幻影，他们从不留情。",
   "世界树种子":"世界树的种子埋在腐土里千百年。找到它、唤醒它，让那棵传说之树重新撑起天空。",
   "魔神封印":"古老的魔神在封印下翻了个身。补强封印需要深渊的钥匙——拿回它，趁一切还来得及。",
@@ -952,8 +953,8 @@ const QUEST_STORY = {
 /* v1.51 A3：4 事件补「需拥有对应传说装备」专属条件（星界护铠 / 世界树之枝 / 龙瞳宝珠 / 金龙鳞铠） */
 const LEGEND = [
   // v1.41：L[6] = 成功后「必得材料」奖励（非参与门槛——接取从不检查、失败不发）；L[2] = 耗时天数（v1.41 压缩为 3~14 天）
-  ["屠龙传说","精英",5,"噩梦","2铂金币",800,"龙心×2","称号「屠龙者」",{q:"巨龙巢穴侦察"}],   // v1.59：1铂金/500 → 2铂金/800（早期传奇报酬上调）
-  ["星界远征","探索+精英",7,"噩梦","3铂金币",1050,"星核×2、陨铁×5","宠物「星界幼龙」",{"gear":"星界护铠"}],   // v1.59：2铂金/800 → 3铂金/1050
+  ["屠龙传说","精英",5,"噩梦","3铂金币",1000,"龙心×3、龙瞳结晶×2","称号「屠龙者」",{q:"弑龙者"}],   // v1.67：2铂金/800 → 3铂金/1000；前置改「弑龙者」（衔接猎龙委托链尾，原与 Lv5 猎龙任务内容重合）
+  ["星界摇篮","探索+精英",7,"噩梦","3铂金币",1050,"星核×2、陨铁×5","宠物「星界幼龙」",{"gear":"星界护铠"}],   // v1.67：由「星界远征」更名改题（原与组队副本「星界回廊·远征」重复）；数值保持 3铂金/1050
   ["公会大师试炼","精英",12,"困难","2铂金币",1000,"","公会大师徽章",{q40:true}],   // v1.59：50金/600 → 2铂金/1000（12 天档不再垫底）
   ["世界树种子","采集+精英",4,"困难","1铂金币",450,"世界树汁液×3、世界树心×1、世界树皮×1","世界树护符",{"gear":"世界树之枝"}],
   ["魔神封印","精英",5,"噩梦","3铂金币",1000,"星核×3、暗影草×5","称号「魔神封印者」",{q:"深渊领主封印"}],
@@ -1138,31 +1139,33 @@ const CFG = {
   /* 酒馆料理（v1.41f4：原公会厨房）· 料理配方
      效果类型：
        en     立即恢复精力（不受「单次委托只吃一个料理」限制）
-       enPct  按精力上限的百分比恢复（v1.42：巨龙盛宴 50%）
+       enPct  按精力上限的百分比恢复（v1.67a：巨龙盛宴 50%——维持原档）
        sp     立即获得探索点（v1.41f5：每日最多 2 次、当日累计上限 +5；
               v1.41f6 按品阶分布：普通无 / 精良 +1 / 稀有 +2 / 史诗 +3 / 传说 +4·+5）
        bonus  报酬加成 ┐
        rate   成功率加成 ┘ 只对「接取时最后吃的那道菜」生效
      v1.41f5：原 cap（当日精力上限）类料理已全部改为恢复类 */
   /* v1.50：主材（main·决定料理品级）+ 辅材（sub·陪衬调味）结构；全表数值重平衡；巨龙盛宴置底 */
+  /* v1.67 N5：恢复精力数值重排——普通/精良大幅下调（「每点精力成本」随品阶递升，堵住低价素材刷精力套利）；
+     稀有档小幅收窄；史诗/传说维持原高恢复（v1.67a：用户指定不削弱）；带特效的料理保持溢价定位 */
   recipes:[
-    {n:"菌菇汤", main:{"蘑菇":4}, sub:{"泉水":2}, en:10, cap:0, bonus:0, rate:0, desc:"立即恢复 10 精力"},
-    {n:"浆果松饼", main:{"浆果":4}, sub:{"蜂蜜":1}, en:8, cap:0, bonus:0, rate:0, desc:"立即恢复 8 精力"},
-    {n:"南瓜浓汤", main:{"南瓜":3}, sub:{"泉水":2}, en:12, cap:0, bonus:0, rate:0, desc:"立即恢复 12 精力"},
+    {n:"菌菇汤", main:{"蘑菇":4}, sub:{"泉水":2}, en:4, cap:0, bonus:0, rate:0, desc:"立即恢复 4 精力"},
+    {n:"浆果松饼", main:{"浆果":4}, sub:{"蜂蜜":1}, en:3, cap:0, bonus:0, rate:0, desc:"立即恢复 3 精力"},
+    {n:"南瓜浓汤", main:{"南瓜":3}, sub:{"泉水":2}, en:5, cap:0, bonus:0, rate:0, desc:"立即恢复 5 精力"},
     {n:"蜜渍烤鱼", main:{"河鱼":3}, sub:{"蜂蜜":1}, en:0, cap:0, bonus:0.03, rate:0, desc:"委托报酬 +3%"},
     {n:"香草烤肉", main:{"兽肉":3}, sub:{"香草":1}, en:0, cap:0, bonus:0, rate:0.02, desc:"委托成功率 +2%"},
-    {n:"蜜酿果酒", main:{"蜂蜜":3}, sub:{"蘑菇":2}, en:12, cap:0, bonus:0, rate:0, desc:"立即恢复 12 精力"},
-    {n:"风干肉条", main:{"兽肉":5}, sub:{"香草":2}, en:24, cap:0, bonus:0, rate:0, desc:"立即恢复 24 精力"},
-    {n:"鹿骨高汤", main:{"鹿骨":3}, sub:{"泉水":3}, en:22, cap:0, bonus:0, rate:0, desc:"立即恢复 22 精力"},
-    {n:"紫藤花饼", main:{"紫藤花":3}, sub:{"蜂蜜":2}, en:18, cap:0, bonus:0, rate:0, desc:"立即恢复 18 精力"},
+    {n:"蜜酿果酒", main:{"蜂蜜":3}, sub:{"蘑菇":2}, en:4, cap:0, bonus:0, rate:0, desc:"立即恢复 4 精力"},
+    {n:"风干肉条", main:{"兽肉":5}, sub:{"香草":2}, en:11, cap:0, bonus:0, rate:0, desc:"立即恢复 11 精力"},
+    {n:"鹿骨高汤", main:{"鹿骨":3}, sub:{"泉水":3}, en:13, cap:0, bonus:0, rate:0, desc:"立即恢复 13 精力"},
+    {n:"紫藤花饼", main:{"紫藤花":3}, sub:{"蜂蜜":2}, en:12, cap:0, bonus:0, rate:0, desc:"立即恢复 12 精力"},
     {n:"雪盐烤鱼", main:{"雪盐":2}, sub:{"河鱼":3}, en:0, cap:0, bonus:0.04, rate:0, desc:"委托报酬 +4%"},
-    {n:"蜜炙鹿排", main:{"鹿骨":3}, sub:{"兽肉":2,"蜂蜜":2}, en:15, cap:0, bonus:0.05, rate:0, desc:"精力 +15、报酬 +5%"},
+    {n:"蜜炙鹿排", main:{"鹿骨":3}, sub:{"兽肉":2,"蜂蜜":2}, en:12, cap:0, bonus:0.05, rate:0, desc:"精力 +12、报酬 +5%"},
     {n:"金盏花茶", main:{"金盏花":3}, sub:{"泉水":2}, en:0, cap:0, bonus:0, rate:0, sp:1, desc:"立即获得 1 探索点（每日最多 2 次）"},
     {n:"龙息草烤肉", main:{"龙息草":2}, sub:{"兽肉":3,"雪盐":1}, en:0, cap:0, bonus:0, rate:0.04, desc:"委托成功率 +4%"},
     {n:"月光花茶", main:{"月光草":3}, sub:{"晨露花":2,"泉水":2}, en:0, cap:0, bonus:0, rate:0, sp:2, desc:"立即获得 2 探索点（每日最多 2 次）"},
-    {n:"蜂王浆酿", main:{"蜂王浆":2}, sub:{"蜂蜜":2,"泉水":1}, en:30, cap:0, bonus:0, rate:0, desc:"立即恢复 30 精力"},
-    {n:"蛇怪眼汤", main:{"蛇怪之眼":2}, sub:{"蘑菇":3,"泉水":2,"雪盐":1}, en:36, cap:0, bonus:0, rate:0, desc:"立即恢复 36 精力"},
-    {n:"山珍炖品", main:{"山珍":3}, sub:{"泉水":3}, en:48, cap:0, bonus:0, rate:0, desc:"立即恢复 48 精力"},
+    {n:"蜂王浆酿", main:{"蜂王浆":2}, sub:{"蜂蜜":2,"泉水":1}, en:28, cap:0, bonus:0, rate:0, desc:"立即恢复 28 精力"},
+    {n:"蛇怪眼汤", main:{"蛇怪之眼":2}, sub:{"蘑菇":3,"泉水":2,"雪盐":1}, en:34, cap:0, bonus:0, rate:0, desc:"立即恢复 34 精力"},
+    {n:"山珍炖品", main:{"山珍":3}, sub:{"泉水":3}, en:40, cap:0, bonus:0, rate:0, desc:"立即恢复 40 精力"},
     {n:"龙血羹", main:{"龙血":2}, sub:{"山珍":2,"泉水":2}, en:40, cap:0, bonus:0.12, rate:0.04, desc:"精力 +40、报酬 +12%、成功率 +4%"},
     {n:"龙涎果拼盘", main:{"龙涎果":2}, sub:{"山珍":2}, en:50, cap:0, bonus:0.1, rate:0, sp:3, desc:"精力 +50、报酬 +10%、探索点 +3（每日最多 2 次）"},
     {n:"星尘蜜露", main:{"星尘蜜":2}, sub:{"月光草":2,"蜂王浆":1}, en:80, cap:0, bonus:0, rate:0.06, sp:5, desc:"精力 +80、成功率 +6%、探索点 +5（每日最多 2 次）"},
@@ -1199,7 +1202,9 @@ const CFG = {
     ["23:30 前入睡",20],["7:40 前起床",15],["午休 30 分钟",5],
     ["喝水 1.5L",10],["运动 20 分钟及以上",10],["完整吃三餐",15],["睡前不刷手机 30 分钟",5]
   ],
-  multiTasks:[["久坐每 1 小时起身",2,4],["阅读 30 分钟及以上",6,2]]
+  multiTasks:[["久坐每 1 小时起身",2,4],["阅读 30 分钟及以上",6,2]],
+  /* v1.67 N3：交易所「买入」每日上限（按等级索引；随等级提升 0/10/15/20/25。交易所 = 保底渠道，市场 = 玩家流通） */
+  exchangeBuyDaily:[0,10,15,20,25]
 };
 /* v1.41c：每日一次任务展示顺序——起床置顶、入睡置底（数据索引不变，仅渲染排序） */
 const TASK_ORDER = [1,2,3,4,5,6,0];
@@ -1282,7 +1287,8 @@ function newState(){
     petWalk:null, petNick:{}, walkCount:0, petNightDate:"",   // v1.56：散步中宠物 / 昵称 / 散步累计 / 深夜提醒记账
     // ── v1.38m：商店限购计数（tick 跨天/跨周幂等重置） ──
     shopDaily:{date:t, cnt:{}},               // 每日限购：{date, cnt:{商品名: 已购数}}
-    shopWeekly:{week:weekKey(), cnt:{}}       // 每周限购：{week, cnt:{商品名: 已购数}}
+    shopWeekly:{week:weekKey(), cnt:{}},      // 每周限购：{week, cnt:{商品名: 已购数}}
+    exbuy:{date:"", n:0}                    // v1.67 N3：交易所当日买入数（每日上限随等级；跨天懒重置）
   };
 }
 
@@ -1370,6 +1376,7 @@ function migrate(o){
   const d0 = {date:todayStr(), done:0, gold:0, exp:0, rep:0, con:0, vit:0, quests:[], mats:{}, events:[]};
   for(const k in d0) if(o.daily[k] === undefined) o.daily[k] = d0[k];
   if(!o.mealCap || typeof o.mealCap !== "object") o.mealCap = {date:"", cap:0};
+  if(!o.exbuy || typeof o.exbuy !== "object") o.exbuy = {date:"", n:0};   // v1.67 N3：交易所买入计数
   if(!o.mealSp || typeof o.mealSp !== "object") o.mealSp = {date:"", cnt:0, got:0};   // v1.41f5
   if(!o.health || typeof o.health !== "object") o.health = {date:todayStr(), done:[0,0,0,0,0,0,0], multi:[0,0], score:0, meals:[0,0,0], vitOnce:[0,0,0,0,0,0,0,0,0,0]};
   if(!Array.isArray(o.health.meals) || o.health.meals.length !== 3)
@@ -1397,6 +1404,7 @@ function migrate(o){
   if(!o.petData || typeof o.petData !== "object") o.petData = {};   // v1.35：宠物成长数据
   if(!Array.isArray(o.trophies)) o.trophies = [];
   if(!Array.isArray(o.legendDone)) o.legendDone = [];
+  if(o.legendDone.indexOf("星界远征") >= 0) o.legendDone = o.legendDone.map(function(x){ return x === "星界远征" ? "星界摇篮" : x; });   // v1.67：传奇事件更名迁移
   if(!o.doneQuests || typeof o.doneQuests !== "object") o.doneQuests = {};
   if(!("monthEvent" in o)) o.monthEvent = null;   // v1.41 I3：月度世界事件（旧档补 null，tick 生成）
   // v1.19 字段
@@ -1676,9 +1684,11 @@ function matDropRate(name){
   return CFG.matDrop[tier] !== undefined ? CFG.matDrop[tier] : 1;
 }
 function matGuaranteed(idx){ return idx === 0; }
-function rollMat(idx, key){
+function rollMat(idx, key, prob){
   // 概率 = 基础品阶概率 + 宠物加成（独立加成，不参与常规公式；上限 100%）；v1.41f：万圣夜·掉率翻倍
-  return matGuaranteed(idx) || Math.random() < Math.min(1, (matDropRate(key) + wolfMatBonus() + petBonus().mat) * (todayFestEff().matDropMul || 1));
+  // v1.63：掉表项可单独标注概率（如 鹿皮×1~2(15%)）——标注时以标注值为准
+  const base = (prob === undefined || prob === null) ? matDropRate(key) : prob;
+  return matGuaranteed(idx) || Math.random() < Math.min(1, (base + wolfMatBonus() + petBonus().mat) * (todayFestEff().matDropMul || 1));
 }
 
 /* ── 宠物·小狼成长链（v1.22，出自探索事件「受伤小狼」）──
@@ -1742,7 +1752,7 @@ const PET_LINES = {
   ], mut:{name:"彩蛋大王", note:"经验+12%、成功率+1%", exp:0.12, rate:0.01}, need:220},
   /* ── v1.55：4 只传奇伙伴升级为完整养成线（可携带 / 喂食 / 进化 / 变异）──
      一阶加成 = 原固定加成（老档无损）；终阶略高于常规线，属传奇事件（终局内容）定位。 */
-  "星界幼龙": {icon:"🐲", from:"传奇事件「星界远征」", rank:"传说",
+  "星界幼龙": {icon:"🐲", from:"传奇事件「星界摇篮」", rank:"传说",
     favs:{"星尘蜜":18,"星辉花":17,"星核":17,"星陨岩":16,"星尘":8},
     muts:{"世界树汁液":15,"龙心":12,"龙血":5,"暗影草":4},
     stages:[
@@ -2457,7 +2467,7 @@ function rollQty(min, max){
   return min;
 }
 /* 兼容：数字视为固定数量，数组为 [min,max] */
-function matQtyRange(v){ return Array.isArray(v) ? v : [v, v]; }
+function matQtyRange(v){ return Array.isArray(v) ? [v[0], v[1]] : [v, v]; }   // v1.63：容忍第 3 位「单独概率」标注
 /* v1.48f：掉落数量统一文案——区间「×最低-最高」，等值显示「×N」 */
 function qtyRangeTxt(v){ const r = matQtyRange(v); return r[0] === r[1] ? "×" + r[0] : "×" + r[0] + "-" + r[1]; }
 
@@ -3352,7 +3362,7 @@ async function _settleInner(a, now){
   let gold = 0, exp = 0;
   if(ok){
     gold = q[5];
-    if(crit) gold = Math.round(gold*1.2);
+    if(crit) gold *= 2;                            // v1.69：大成功 → 报酬双倍（原 +20%）
     const _m = a.meal;                             // 只有接取时生效的那道菜起作用
     let payMul = 1 + gearBonus() + gearAccBonus() + ((_eff.pay[q[1]])||0) + petBonus().pay;  // 饰品 + 分类报酬 + 宠物
     if(_eff.pay["晨间"] && isMorningQuest(q)) payMul += _eff.pay["晨间"];   // 晨曦之冠：晨间委托报酬加成
@@ -3367,6 +3377,7 @@ async function _settleInner(a, now){
     payMul += skillPay(q);                          // 技能树·社交（护送类）
     gold = Math.round(gold * payMul);
     exp = Math.round(q[6] * (1 + _eff.exp + petBonus().exp + (_fef.exp || 0)));   // v1.41f：劳动节·经验 +50%
+    if(crit) exp *= 2;                             // v1.69：大成功 → 经验双倍
   } else {
     // 失败（含大失败）：得 30% 报酬 + 30% 经验（各至少 1），无掉落（材料只在成功时结算）——v1.48d
     gold = Math.max(1, Math.round(q[5]*0.3));
@@ -3385,11 +3396,12 @@ async function _settleInner(a, now){
   const got = [], gotObj = {};
   if(ok && q[8]){
     Object.keys(q[8]).forEach(function(k, idx){
-      if(rollMat(idx, k)){                     // 种类判定：主材料必得，其余按品阶概率
+      if(rollMat(idx, k, q[8][k][2])){         // 种类判定：主材料必得，其余按品阶概率或掉表项单独概率（v1.63）
         const rg = matQtyRange(q[8][k]);
         let n2 = rollQty(rg[0], rg[1]);        // 数量判定：数量越多概率越低
         if(_eff.mat > 0 && idx > 0) n2 = Math.max(1, Math.round(n2 * (1 + _eff.mat)));   // 材料获取加成（仅副材料）
         if(_fef.matQtyPct) n2 = Math.max(1, Math.round(n2 * (1 + _fef.matQtyPct)));   // v1.41f：七夕·乞巧（数量 +50%）
+        if(crit) n2 *= 2;                      // v1.69：大成功 → 材料数量双倍
         S.mats[k] = (S.mats[k]||0) + n2;
         got.push(k+"×"+n2); gotObj[k] = n2;
       }
@@ -3397,8 +3409,8 @@ async function _settleInner(a, now){
   }
   // 声望 / 贡献（v1.51 A4：均按委托等级，不再按玩家等级）
   let rep = ok ? questRep(q, questQLv(q)) : 0;
-  if(ok && crit) rep += 5;                   // 大成功额外声望（见 03/04 文档）
-  const con = ok ? Math.round(questCon(q) * (1 + _eff.con)) : 0;
+  let con = ok ? Math.round(questCon(q) * (1 + _eff.con)) : 0;
+  if(ok && crit){ rep *= 2; con *= 2; }      // v1.69：大成功 → 声望 / 贡献双倍（原「声望 +5」）
   S.rep += rep; S.con += con;
 
   // v1.61i：携带宠物拾取（委托场景；材料池 = 本委托掉表；成败均判定——败则限 1 种/2 个）
@@ -3414,7 +3426,7 @@ async function _settleInner(a, now){
   // 字段级兜底（防御残缺的 daily 对象）
   if(!S.daily.quests) S.daily.quests = [];
   if(!S.daily.mats) S.daily.mats = {};
-  S.daily.done++;
+  if(ok) S.daily.done++;   // v1.67 C8：对齐服务端——仅成功计入「完成委托」（原按接取清算）
   S.daily.gold += gold;
   S.daily.exp  += exp;
   S.daily.rep  += rep;
@@ -3433,8 +3445,8 @@ async function _settleInner(a, now){
   }
   for(const mk in gotObj) S.daily.mats[mk] = (S.daily.mats[mk]||0) + gotObj[mk];
 
-  // 稀有事件「下一次委托」加成：本次结算即消费（无论成败）
-  S.rareNextRate = 0; S.rareNextPay = 0;
+  // v1.69：下一次委托加成（幸运币 / 专注药剂 / 谈判卷轴 / 稀有事件）——成功才消费；失败保留到下一次
+  if(ok){ S.rareNextRate = 0; S.rareNextPay = 0; }
 
   let title, cls;
   if(!ok && fumble){ title = "大失败"; cls = "bad"; }
@@ -3443,10 +3455,11 @@ async function _settleInner(a, now){
   else { title = "失败"; cls = "bad"; }
 
   const _petNote = petQuestGain(q, ok, (a.qlv || S.lvIdx+1) - 1);   // v1.38f：携带宠物陪同委托 → 成长
-  resultQueue.push({
+  const _res = {                                                   // v1.69：留引用——稀有事件「意外的馈赠」可补发 +50%
     name:q[0], type:q[1], roll:roll, need:Math.round(rate*100),
     title:title, gold:gold, exp:exp, got:got, cls:cls, pet:_petNote
-  });
+  };
+  resultQueue.push(_res);
   addLog("⚔ "+q[0]+" 掷出 "+roll+" → "+title+
     (gold?"（+"+fmtMoney(gold)+"）":"")+" +"+exp+"经验"+
     (got.length?" 材料:"+got.map(m=>matIcon(m.split("×")[0])+m).join(" "):"")+
@@ -3454,7 +3467,7 @@ async function _settleInner(a, now){
 
   checkLevelUp();
   // 稀有事件判定（每次委托结算，成败都判）
-  const rareEv = tryRareEvent(q[1], q[0]);   // v1.53：去掉多余第 3 参（函数仅接收 tag/name，对齐服务端签名）
+  const rareEv = tryRareEvent(q[1], q[0], _res);   // v1.69：传结算结果——「意外的馈赠」据此补发 +50%（对齐服务端）
   if(rareEv) showRareEvent(rareEv);
 }
 
@@ -3740,12 +3753,19 @@ function canTrade(){ return S.lvIdx >= 1; }
 function sellMat(name){
   if(!canTrade()) return showAlert("交易所尚未开放");
   if(!M[name] || !S.mats[name]) return;             // v1.61d：非材料（规则道具等）不可出售
-  const sell = M[name][2];
-  confirmSpend("交易所", "确定卖出「"+name+"」×1，换得 <b>"+fmtMoney(sell)+"</b> 吗？", function(){
-    S.money += sell;
-    addLog("💱 卖出 "+name+" ×1 → +"+fmtMoney(sell),"");
-    if(S.mats[name] > 1) S.mats[name]--; else delete S.mats[name];
-    save(); render();
+  const sell = M[name][2], hold = S.mats[name];
+  qtyDialog({                                       // v1.69：数量选择（原写死 ×1）
+    id: "sell_" + name, title: "卖出 · " + name, okText: "确认卖出", max: hold,
+    subHtml: "单价 <b>"+fmtMoney(sell)+"</b>　持有 "+hold+" 个（本次最多卖 "+hold+" 个）",
+    fmt: function(n){ return "+" + fmtMoney(sell * n); },
+    onOk: function(n){
+      S.money += sell * n;
+      addLog("💱 卖出 "+name+" ×"+n+" → +"+fmtMoney(sell*n),"");
+      if(S.mats[name] > n) S.mats[name] -= n; else delete S.mats[name];
+      save(); render();
+      coinFx(sell * n);                             // v1.69：卖出反馈
+      toast("💱 卖出 "+name+" ×"+n+" → +"+fmtMoney(sell*n));
+    }
   });
 }
 
@@ -3764,10 +3784,10 @@ function sellAll(){
 /* 商店 */
 const SHOP = [
   /* v1.61d：清醒符咒 / 安眠护符移至铂金商店（用户指定）——铜币商店不再出售 */
-  {n:"普通材料包", c:6000, lim:["日",3], d:"随机普通材料 ×5"},
-  {n:"精良材料包", c:40000, lim:["日",2], d:"随机精良材料 ×3"},
+  {n:"普通材料包", c:500, lim:["日",3], d:"随机普通材料 ×5"},
+  {n:"精良材料包", c:2800, lim:["日",2], d:"随机精良材料 ×3"},
   {n:"专注药剂", c:60000, lim:["日",2], d:"规则道具：下一次委托成功率 +3%", item:"专注药剂"},
-  {n:"谈判卷轴", c:12000, lim:["日",2], d:"规则道具：下一次委托报酬 +15%", item:"谈判卷轴"},
+  {n:"谈判卷轴", c:60000, lim:["日",2], d:"规则道具：下一次委托报酬 +15%（失败不消耗）", item:"谈判卷轴"},
   {n:"旅行干粮", c:30000, lim:["日",3], d:"规则道具：立即恢复 30 精力", item:"旅行干粮"},
   {n:"神秘地图", c:150000, lim:["日",3], d:"规则道具：立即获得 2 探索点", item:"神秘地图"},
   /* v1.46：任务准备物（接取时按委托等级消耗 1~3 个；不限购——消耗品）；v1.53：价格 ×2（高投入高回报） */
@@ -4064,15 +4084,28 @@ function buyMat(name){
   if(guildIdx() < 1) return showAlert("买入需公会 <b>E 级</b>（当前 "+guildName()+" 级）。", "交易所");
   const m = M[name]; if(!m) return;
   if(!BUY_TIERS[m[1]]) return showAlert("「"+m[1]+"」材料不在交易所买入范围。<br><br>史诗材料走贡献商店 / 传说材料走铂金商店。", "交易所");
+  const _caps = CFG.exchangeBuyDaily || [0,10,15,20,25];
+  const _cap = _caps[Math.min(4, Math.max(0, S.lvIdx|0))];
+  if(!S.exbuy || S.exbuy.date !== todayStr()) S.exbuy = {date: todayStr(), n: 0};
+  if(S.exbuy.n >= _cap) return showAlert("今日交易所买入已达上限（"+_cap+" 个/日，随等级提升）——需要更多材料可去「🛒 市场」看看玩家的挂单。", "交易所");
   const price = m[2] * 3;
-  if(S.money < price) return showAlert("铜币不足（需要 "+fmtMoney(price)+"，当前 "+fmtMoney(S.money)+"）");
-  confirmSpend("交易所", "确定花费 <b>"+fmtMoney(price)+"</b> 买入「"+name+" ×1」吗？", function(){
-  S.money -= price;
-  S.mats[name] = (S.mats[name]||0) + 1;
-  if(!S.seenMats) S.seenMats = [];
-  if(S.seenMats.indexOf(name) < 0) S.seenMats.push(name);
-  addLog("💱 买入 "+name+" ×1 → -"+fmtMoney(price),"");
-  save(); render();
+  const mx = Math.min(_cap - S.exbuy.n, Math.floor(S.money / price));   // v1.69：数量上限 = 日限剩余 ∩ 买得起的
+  if(mx < 1) return showAlert("铜币不足（需要 "+fmtMoney(price)+"，当前 "+fmtMoney(S.money)+"）");
+  qtyDialog({                                       // v1.69：数量选择（原写死 ×1）
+    id: "buymat_" + name, title: "买入 · " + name, okText: "确认买入", max: mx,
+    subHtml: "单价 <b>"+fmtMoney(price)+"</b>　今日已买 "+S.exbuy.n+"/"+_cap+"（本次最多买 "+mx+" 个）",
+    fmt: function(n){ return "-" + fmtMoney(price * n); },
+    onOk: function(n){
+      S.money -= price * n;
+      S.mats[name] = (S.mats[name]||0) + n;
+      if(!S.seenMats) S.seenMats = [];
+      if(S.seenMats.indexOf(name) < 0) S.seenMats.push(name);
+      S.exbuy.n += n;
+      addLog("💱 买入 "+name+" ×"+n+" → -"+fmtMoney(price*n),"");
+      save(); render();
+      coinFx(-price * n);                           // v1.69：买入反馈
+      toast("💱 买入 "+name+" ×"+n+"（今日已买 "+S.exbuy.n+"/"+_cap+"）");
+    }
   });
 }
 /* v1.38k：商店行——拖动条选数量，上限 = 当前货币可支付上限
@@ -4105,23 +4138,48 @@ function openShopBuy(cur, i){
   const limTxt = it.lim
     ? "　📅 " + (it.lim[0] === "周" ? "本周" : "今日") + "限购 " + shopLimUsed(it, cur) + "/" + it.lim[1] + "（本次最多再买 " + mx + " 个）"
     : "　本次最多可买 " + mx + " 个";
-  const body = `<div class="dlg-msg" style="font-size:13px">单价 <b>${unitTxt}</b>${limTxt}</div>
-    <input type="range" class="shopR" id="sbR_${id}" min="1" max="${mx}" value="1" style="width:100%" data-u="${unit}" data-cur="${cur}" data-mx="${mx}" oninput="sbUpd('${id}')">
+  qtyDialog({
+    id: id, title: "购买 · " + it.n, okText: "确认购买", max: mx,
+    subHtml: "单价 <b>" + unitTxt + "</b>" + limTxt,
+    fmt: function(n){ return cur === "c" ? fmtMoney(unit * n) : (unit * n) + (cur === "vit" ? " 点" : " 贡献"); },
+    onOk: function(v){ if(cur === "c") buy(i, v); else if(cur === "vit") buyVit(i, v); else buyCon(i, v); }
+  });
+}
+/* v1.69：通用「选数量」弹窗（商店购买 / 交易所买入 / 卖出共用）
+   ——宽拖动条粗调 + −/+ 精调 + 「最大」一键（沿用 v1.38o 交互）
+   o = {id, title, subHtml, max, okText, fmt(n)→合计文案, onOk(n)} */
+const _qtyFmt = {};
+function qtyDialog(o){
+  const mx = Math.max(1, Math.floor(o.max));
+  const id = o.id;
+  _qtyFmt[id] = o.fmt || function(n){ return "×" + n; };
+  const body = `<div class="dlg-msg" style="font-size:13px">${o.subHtml}</div>
+    <input type="range" class="shopR" id="sbR_${id}" min="1" max="${mx}" value="1" style="width:100%" data-mx="${mx}" oninput="sbUpd('${id}')">
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0">
       <button class="btn sm" onclick="sbStep('${id}',-1)">−</button>
       <b id="sbN_${id}" style="min-width:56px;text-align:center;font-size:15px">×1</b>
       <button class="btn sm" onclick="sbStep('${id}',1)">+</button>
       <button class="btn sm" onclick="sbMax('${id}')">最大</button>
     </div>
-    <div class="muted" style="text-align:center">合计：<b style="color:var(--gold2)" id="sbP_${id}">${unitTxt}</b></div>`;
-  dlg("购买 · " + it.n, body, [
+    <div class="muted" style="text-align:center">合计：<b style="color:var(--gold2)" id="sbP_${id}">${_qtyFmt[id](1)}</b></div>`;
+  dlg(o.title, body, [
     {text:"取消", fn:null},
-    {text:"确认购买", cls:"pri", fn:function(){
+    {text:o.okText || "确定", cls:"pri", fn:function(){
       const inp = document.getElementById("sbR_" + id);
       const v = inp ? Math.max(1, Math.floor(+inp.value || 1)) : 1;
-      if(cur === "c") buy(i, v); else if(cur === "vit") buyVit(i, v); else buyCon(i, v);
+      o.onOk(v);
     }}
   ]);
+  sbUpd(id);                                  // 弹窗渲染后同步「合计」初值
+}
+/* v1.69：买卖「反应」——金额飘字 + 钱币数字弹跳 + 轻音效（成功时调用；失败仍走 showAlert） */
+function coinFx(delta){
+  try{
+    if(delta) floatText((delta > 0 ? "+" : "−") + fmtMoney(Math.abs(delta)), delta > 0 ? "var(--gold2)" : "var(--red)");
+    const el = document.getElementById("hMoney");
+    if(el){ el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
+    _beep([[delta >= 0 ? 1047 : 660, 0, .12]]);
+  }catch(e){}
 }
 function sbUpd(id){
   const inp = document.getElementById("sbR_" + id);
@@ -4131,9 +4189,9 @@ function sbUpd(id){
   if(v < 1) v = 1;
   if(v > mx) v = mx;
   inp.value = v;
-  const u = +inp.dataset.u, cur = inp.dataset.cur;
   document.getElementById("sbN_" + id).textContent = "×" + v;
-  document.getElementById("sbP_" + id).textContent = cur === "c" ? fmtMoney(u * v) : (u * v) + (cur === "vit" ? " 点" : " 贡献");
+  const f = _qtyFmt[id];
+  document.getElementById("sbP_" + id).textContent = f ? f(v) : ("×" + v);
 }
 function sbStep(id, d){
   const inp = document.getElementById("sbR_" + id);
@@ -4555,7 +4613,7 @@ function showQuestDetail(i){
     '<div style="margin-top:12px"><div class="muted" style="font-size:12px;margin-bottom:4px">成功时掉落</div>'+matRows+'</div>'+
     '<div class="muted" style="font-size:11px;margin-top:12px;line-height:1.7">'+
       '· 失败仅获得 30% 报酬、30% 经验（各至少 1），不给材料<br>'+
-      '· 掷出 1–5 为大成功（报酬 +20%）<br>'+
+      '· 掷出 1–5 为大成功（全部奖励 ×2：报酬/经验/声望/贡献/材料）<br>'+
       '· 完成后自动结算，跨天则次日打卡时结算（最迟 12:00 自动）'+
     '</div>';
 
@@ -4715,7 +4773,7 @@ function legendCondText(L){
   if(c.sleep30) return "条件：最近 30 天 ≥27 天 23:30 前入睡（含断连保护）";
   if(c.legend) return "条件：完成传奇事件「"+c.legend+"」✅";
   if(c.gear) return "条件：需拥有传说装备「"+c.gear+"」"+((S.gear||[]).indexOf(c.gear)>=0?" ✅":"（尚未拥有）");   // v1.51 A3
-  if(c.allLegend) return "条件：完成其余全部传奇事件（"+S.legendDone.filter(function(n){ return n !== L[0]; }).length+"/11）";
+  if(c.allLegend) return "条件：完成其余全部传奇事件（"+S.legendDone.filter(function(n){ return n !== L[0]; }).length+"/"+(LEGEND.length-1)+"）";   // v1.67：分母随事件表长度（原硬编码 /11 已过期）
   return "";
 }
 /* 周标识（周一为一周开始，返回该周周一日期串） */
@@ -4748,8 +4806,12 @@ function legendRate(sides){
   const H = prevHealthScore();   // v1.34：按昨日日结算评分
   const D = (sides === "噩梦") ? -0.20 : (sides === "困难" ? -0.10 : 0);
   let E = Math.min(0.10, gearRate() + (S.skills["专注"]||0)*0.01 + (S.skills["生存"]||0)*0.01);
-  let r = 0.05 + D + H*0.005 + E + charmRate() + gearEffects().legend;
-  r += todayFestEff().legend || 0;   // v1.41f：中秋·月华（传奇事件成功率 +10%）
+  const _feL = todayFestEff();
+  const _lastSleep = S.history.length ? S.history[S.history.length-1].sleep : true;
+  let N = 0;   // v1.67 C2：熬夜惩罚——对齐服务端 legend_rate（原前端漏项，熬夜后显示的成功率偏高）
+  if(!_lastSleep && !_feL.noSleepPenalty) N = Math.min(0, -0.15 + gearEffects().nightCut);
+  let r = 0.05 + D + H*0.005 + E + charmRate() + gearEffects().legend + N;
+  r += _feL.legend || 0;   // v1.41f：中秋·月华（传奇事件成功率 +10%）
   return Math.max(0.05, Math.min(0.65, r + wolfRateBonus() + petBonus().rate));   // 宠物加成：独立叠加
 }
 /* 传奇报酬面额 → 铜币 */
@@ -4757,7 +4819,7 @@ const LEGEND_GOLD = {"1铂金币":1000000,"1.5铂金币":1500000,"2铂金币":20
   "4铂金币":4000000,"4.5铂金币":4500000,"5铂金币":5000000,"6铂金币":6000000,"7铂金币":7000000,"8铂金币":8000000,
   "9铂金币":9000000,"10铂金币":10000000,"50金币":500000};   // v1.59：补 "9铂金币"（万龙之宴 8→9，此前缺键会静默回落 1 铂金）
 /* 传奇声望奖励（最低 400）：400 起步 + 每铂金币报酬 +100 + 噩梦难度 +200
-   例：屠龙传说 2铂金噩梦 800（v1.59）/ 公会大师试炼 2铂金困难 600（v1.59）/ 创世碎片 10铂金噩梦 1600 */
+   例：屠龙传说 3铂金噩梦 1000（v1.67）/ 公会大师试炼 2铂金困难 600（v1.59）/ 创世碎片 10铂金噩梦 1600 */
 function legendRep(L){
   const copper = LEGEND_GOLD[L[4]] || 1000000;
   return 400 + Math.round(copper/1000000*100) + (L[3] === "噩梦" ? 200 : 0);
@@ -4866,7 +4928,7 @@ function rareChance(){
   return Math.min(0.25, p);
 }
 /* 掷一次判定；触发则结算并返回事件名 */
-function tryRareEvent(questTag, questName){
+function tryRareEvent(questTag, questName, res){
   if(Math.random() >= rareChance()) return null;
   // 按权重抽取
   const total = RARE.reduce(function(a,r){ return a + r[1]; }, 0);
@@ -4882,7 +4944,15 @@ function tryRareEvent(questTag, questName){
   else if(type === "sp"){ S.explore += val; msg = "+" + val + " 探索点"; }
   else if(type === "vit"){ S.vit += val; msg = "+" + val + " 活力点"; }
   else if(type === "pay"){
-    if(questName){ msg = "「" + questName + "」报酬 +50%（稍后结算时体现）"; }
+    if(questName){
+      // v1.69：补发「本次报酬 +50%」——稀有事件在结算之后才判定，原「稍后结算时体现」永远落空（空头支票）
+      const _add = res ? Math.round(res.gold * 0.5) : 0;
+      if(_add > 0){
+        res.gold += _add; S.money += _add;
+        if(S.daily) S.daily.gold += _add;
+        msg = "「" + questName + "」报酬 +50%（+" + fmtMoney(_add) + "）";
+      } else { msg = "「" + questName + "」报酬 +50%"; }
+    }
     else { S.money += 5000; msg = "探索触发 → 改为获得 50 银币"; }
   }
   else if(type === "pay25"){ msg = "下一次委托报酬 +25%"; S.rareNextPay = (S.rareNextPay||0) + val; }
@@ -5271,6 +5341,7 @@ const ACHV_DESC = {
   "滴水穿石": "累计早起达标 ≥200 天。",
   "书中自有": "累计阅读 ≥500 次。",
   "传奇之旅": "完成 ≥6 个传奇事件。",
+  "大师": "完成 ≥4 个不同传奇事件——传奇之上的公会认可。",   // v1.67：补条目——成就总表此前该行条件显示「—」
   "囤积家": "同时持有 ≥50 种材料。",
   /* v1.56：宠物向隐藏成就 */
   "蜕变之始": "任一只宠物（含小狼）完成变异。",
@@ -5754,7 +5825,6 @@ function showQuestDetailByName(nm){
   body += '</div>';
   dlg("委托详情", body, [{text: "关闭", fn: null}]);
 }
-function gotoPetTab(){ const b = document.querySelector('#tabs button[data-t="pet"]'); if(b) b.click(); }
 function petMetaHtml(n){                 // 详情公共段：心情 / 羁绊 / 节日问候
   const m = petMetaOf(n); if(!m) return "";
   const bond = petBondDays(n);
@@ -5788,7 +5858,7 @@ function showNickInput(n){
   const cur = (S.petNick || {})[n] || "";
   window._nickBuf = cur;
   dlg("✏️ 给「" + petEsc(petShowName(n)) + "」起名",
-    '<div class="dlg-msg"><input id="nickIn" maxlength="12" value="' + petEsc(cur) + '" placeholder="昵称（≤6 字；留空恢复本名）"'
+    '<div class="dlg-msg"><input id="nickIn" maxlength="6" value="' + petEsc(cur) + '" placeholder="昵称（≤6 字；留空恢复本名）"'
     + ' style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:#12121a;color:#e8e8f0;font-size:14px"'
     + ' oninput="window._nickBuf=this.value"></div>',
     [{text:"确定", cls:"pri", fn:function(){ setPetNick(n, window._nickBuf || ""); }}, {text:"取消", fn:null}]);
@@ -6028,6 +6098,7 @@ function craft(name){
   const g = gearDef(name); if(!g) return;
   if(g[5] === "—") return showAlert("「"+name+"」不能打造，只能通过成就或事件获得。", "打造");
   if(!S.blueprints[name]) return showAlert("没有「"+name+"图纸」。<br><br>到公会「图纸商店」购买图纸后才能打造。", "打造");
+  if((S.gear||[]).indexOf(name) >= 0) return showAlert("你已拥有「"+name+"」——每件装备只此一件，无需重复打造。", "打造");   // v1.67 C4
 
   const mm = craftMainMat(name);
   const cost = craftCost(g[1]) * 10000;
@@ -6584,6 +6655,8 @@ function useItem(name){
     return showAlert("怀表的指针缓缓倒转——<br><br>本批委托的接取窗口<b>重置为 "+fmtDur(poolWindowMs()/60000)+"</b>。", "时之怀表");
   }
   if(name === "幸运币"){
+    if((S.rareNextRate||0) >= 0.05 - 1e-9)     // v1.69：已有 ≥ 本次加成 → 拒绝且不消耗（原被 Math.max 静默吞掉）
+      return showAlert("已有更强的成功率加成（+"+Math.round((S.rareNextRate||0)*100)+"%）尚未用掉——<br><br><b>幸运币未使用、也未消耗</b>。", "幸运币");
     S.rareNextRate = Math.max(S.rareNextRate||0, 0.05);
     S.items[name]--;
     if(!S.items[name]) delete S.items[name];
@@ -6592,6 +6665,8 @@ function useItem(name){
     return showAlert("幸运币在掌心化作一线金光——<br><br>下一次委托<b>成功率 +5%</b>。", "幸运币");
   }
   if(name === "专注药剂"){   // v1.32
+    if((S.rareNextRate||0) >= 0.03 - 1e-9)     // v1.69：同上
+      return showAlert("已有更强的成功率加成（+"+Math.round((S.rareNextRate||0)*100)+"%）尚未用掉——<br><br><b>专注药剂未使用、也未消耗</b>。", "专注药剂");
     S.rareNextRate = Math.max(S.rareNextRate||0, 0.03);
     S.items[name]--;
     if(!S.items[name]) delete S.items[name];
@@ -6600,12 +6675,14 @@ function useItem(name){
     return showAlert("药剂入喉，世界清晰了几分——<br><br>下一次委托<b>成功率 +3%</b>。", "专注药剂");
   }
   if(name === "谈判卷轴"){   // v1.32
+    if((S.rareNextPay||0) >= 0.15 - 1e-9)      // v1.69：同上
+      return showAlert("已有更强的报酬加成（+"+Math.round((S.rareNextPay||0)*100)+"%）尚未用掉——<br><br><b>谈判卷轴未使用、也未消耗</b>。", "谈判卷轴");
     S.rareNextPay = Math.max(S.rareNextPay||0, 0.15);
     S.items[name]--;
     if(!S.items[name]) delete S.items[name];
-    addLog("📜 使用谈判卷轴 → 下一次委托报酬 +15%","gold");
+    addLog("📜 使用谈判卷轴 → 下一次委托报酬 +15%（失败不消耗）","gold");
     save(); render();
-    return showAlert("卷轴上写满商会的暗语——<br><br>下一次委托<b>报酬 +15%</b>。", "谈判卷轴");
+    return showAlert("卷轴上写满商会的暗语——<br><br>下一次委托<b>报酬 +15%</b>（失败不消耗）。", "谈判卷轴");
   }
   if(name === "旅行干粮"){   // v1.32；v1.38m：回复 25 → 30
     const before = S.energy;
@@ -7646,8 +7723,10 @@ function renderBag(){
     _mk.forEach(k=>{
       const m = M[k];
       const _buyable = trade && guildIdx() >= 1 && BUY_TIERS[m[1]];   // v1.41 H3：交易所买入（E 级起）
+      const _exN = (S.exbuy && S.exbuy.date === todayStr()) ? (S.exbuy.n || 0) : 0;               // v1.69：今日已买
+      const _exCap = (CFG.exchangeBuyDaily || [0,10,15,20,25])[Math.min(4, Math.max(0, S.lvIdx|0))];
       h += `<div class="li"><div onclick="showMatDetail('${k}')" style="cursor:pointer">${matIcon(k)}${k}<span class="tier t-${m[1]}">${m[1]}</span>
-        <div class="muted">${matCats(k).join(" · ")} · 卖 ${fmtMoney(m[2])}${_buyable ? " / 买 "+fmtMoney(m[2]*3) : ""}</div></div>
+        <div class="muted">${matCats(k).join(" · ")} · 卖 ${fmtMoney(m[2])}${_buyable ? " / 买 "+fmtMoney(m[2]*3) : ""}${_buyable && _exN ? "（今日已买 "+_exN+"/"+_exCap+"）" : ""}</div></div>
         <div class="cnt"><span>×${S.mats[k]}</span>
         ${_buyable?`<button class="btn sm" onclick="buyMat('${k}')">买入</button>`:""}
         ${trade?`<button class="btn sm" onclick="sellMat('${k}')">卖出</button>`:""}</div></div>`;
@@ -7736,6 +7815,7 @@ function renderBag(){
     _partFiltered.forEach(function(g){
       const n = g[0];
       const mm = craftMainMat(n);
+      const _own = (S.gear||[]).indexOf(n) >= 0;   // v1.67 C4：已拥有 → 不提供重复打造
       const sub = subTiers(g[1]).join(" 或 ");
       const subCnt = subMatCount(g[1], g[2]);
       const cost = craftCost(g[1]) * 10000;
@@ -7753,8 +7833,8 @@ function renderBag(){
         <div class="row" onclick="showGearDetail('${n}')" style="cursor:pointer"><b>${gearIcon(n)}${n}</b><span><span class="tier t-${g[1]}">${g[1]}</span> <span class="muted" style="font-size:10px">${gearMainTxt(g)}</span></span></div>
         <div class="muted" style="font-size:11px">${matIcon(mm.mat)}${mm.mat}×${mm.cnt}　+　${sub} ×${subCnt}　+　${fmtMoney(cost)}</div>
         <div class="row">
-          <span class="muted" style="font-size:11px;color:${ok?"var(--green)":"var(--red)"}">${ok?"✅ 材料齐备":missing.join("　")}</span>
-          <button class="btn sm ${ok?"pri":""}" onclick="craft('${n}')">打造</button>
+          <span class="muted" style="font-size:11px;color:${_own?"var(--dim)":(ok?"var(--green)":"var(--red)")}">${_own?"✅ 已拥有":(ok?"✅ 材料齐备":missing.join("　"))}</span>
+          ${_own?'<span class="muted" style="font-size:11px">每件装备只此一件 · 无需重复打造</span>':`<button class="btn sm ${ok?"pri":""}" onclick="craft('${n}')">打造</button>`}
         </div>
       </div>`;
     });
@@ -7871,7 +7951,7 @@ function renderShop(){
         怎么涨声望：<br>
         · 完成委托 → <b>委托等级 × 5</b> 声望<br>
         · 健康的一天 → 完美 +8 / 优秀 +5 / 良好 +2<br>
-        · 大成功额外 +5
+        · 大成功 → 声望 ×2（v1.69）
       </div>
     </div>`;
     return;
@@ -8044,7 +8124,7 @@ function renderLog(){
   // ── 存档管理 ──
   const kb = (JSON.stringify(S).length/1024).toFixed(1);
   h += `<div class="card"><h3>存档</h3>
-    <div class="li"><span>冒险者</span><b>${S.name || "—"}</b></div>
+    <div class="li"><span>冒险者</span><b>${petEsc(S.name || "") || "—"}</b></div>
     <div class="li"><span>创建于</span><b>${S.created}</b></div>
     <div class="li"><span>已记录天数</span><b>${S.historyTotal || S.history.length} 天</b></div>
     <div class="li"><span>存档大小</span><b>${kb} KB</b></div>
@@ -8134,7 +8214,7 @@ function renderLog(){
   h += `<div class="card"><h3>📜 冒险日志</h3>`;
   if(!S.log.length) h += `<div class="muted">还没有记录</div>`;
   S.log.slice(0,120).forEach(l=>{
-    h += `<div class="log ${l.c}"><span class="t">${l.t}</span>${l.m}</div>`;
+    h += `<div class="log ${l.c}"><span class="t">${l.t}</span>${petEsc(l.m)}</div>`;   // v1.67 A10：日志文本转义（昵称/宠物名属用户输入）
   });
   h += `</div>`;
 
@@ -8624,8 +8704,18 @@ function forceFinish(i){ /* 完成判定由服务端 catch_up 处理；保留函
 function sellMat(name){
   if(!canTrade()) return showAlert("交易所尚未开放");
   if(!M[name] || !S.mats[name]) return;             // v1.61d：非材料（规则道具等）不可出售
-  confirmSpend("交易所", "确定卖出「"+name+"」×1，换得 <b>"+fmtMoney(M[name][2])+"</b> 吗？", function(){
-    apiCall("sell", {name:name});
+  const sell = M[name][2], hold = S.mats[name];
+  qtyDialog({                                       // v1.69：数量选择（原写死 ×1）；后端 sell 早已支持 cnt
+    id: "sell_" + name, title: "卖出 · " + name, okText: "确认卖出", max: hold,
+    subHtml: "单价 <b>"+fmtMoney(sell)+"</b>　持有 "+hold+" 个（本次最多卖 "+hold+" 个）",
+    fmt: function(n){ return "+" + fmtMoney(sell * n); },
+    onOk: function(n){
+      apiCall("sell", {name:name, cnt:n}).then(function(j){
+        if(j.error) return;
+        coinFx(sell * n);                           // v1.69：卖出反馈（金额飘字 + 钱币弹跳 + 音效）
+        toast("💱 卖出 "+name+" ×"+n+" → +"+fmtMoney(sell*n));
+      });
+    }
   });
 }
 function sellAll(){
@@ -8634,7 +8724,11 @@ function sellAll(){
   if(!cnt) return showAlert("背包里没有材料");
   let total = 0; for(const k in S.mats) total += M[k][2] * S.mats[k];
   confirmSpend("交易所", "确定一键卖出<b>全部材料</b>（共 "+cnt+" 个），换得约 <b>"+fmtMoney(total)+"</b> 吗？<br><span style='color:var(--red)'>此操作不可撤销。</span>", function(){
-    apiCall("sell_all");
+    apiCall("sell_all").then(function(j){
+      if(j.error) return;
+      coinFx(total);                                // v1.69：卖出反馈
+      toast("💱 一键卖出 "+cnt+" 个材料 → +"+fmtMoney(total));
+    });
   });
 }
 function buy(i, n){
@@ -8642,7 +8736,7 @@ function buy(i, n){
   const it = SHOP[i];
   if(S.money < it.c * n) return showAlert("铜币不足（需要 "+fmtMoney(it.c*n)+"，当前 "+fmtMoney(S.money)+"）");
   confirmSpend("商店购买", "确定花费 <b>"+fmtMoney(it.c*n)+"</b> 购买「"+it.n+"」"+(n>1?" ×"+n:"")+" 吗？", function(){
-    apiCall("buy", {idx:i, n:n});
+    apiCall("buy", {idx:i, n:n}).then(function(j){ if(!j.error) coinFx(-it.c * n); });   // v1.69：买入反馈
   });
 }
 function buyVit(i, n){
@@ -8688,14 +8782,25 @@ function buyCon(i, n){
   });
   });
 }
-function buyMat(name){                                  // v1.41 H3：交易所买入（服务端 buy_mat）
+function buyMat(name){                                  // v1.41 H3：交易所买入（服务端 buy_mat）；v1.67 N3：每日上限随等级（服务端权威，此处仅显示）
   if(!canTrade()) return showAlert("交易所尚未开放");
   if(guildIdx() < 1) return showAlert("买入需公会 <b>E 级</b>（当前 "+guildName()+" 级）。", "交易所");
   const m = M[name]; if(!m) return;
   if(!BUY_TIERS[m[1]]) return showAlert("「"+m[1]+"」材料不在交易所买入范围。<br><br>史诗材料走贡献商店 / 传说材料走铂金商店。", "交易所");
-  if(S.money < m[2]*3) return showAlert("铜币不足（需要 "+fmtMoney(m[2]*3)+"，当前 "+fmtMoney(S.money)+"）");
-  confirmSpend("交易所", "确定花费 <b>"+fmtMoney(m[2]*3)+"</b> 买入「"+name+" ×1」吗？", function(){
-    apiCall("buy_mat", {name:name});
+  const _caps = CFG.exchangeBuyDaily || [0,10,15,20,25];
+  const _cap = _caps[Math.min(4, Math.max(0, S.lvIdx|0))];
+  const _exN = (S.exbuy && S.exbuy.date === todayStr()) ? S.exbuy.n : 0;
+  const price = m[2] * 3;
+  const mx = Math.min(_cap - _exN, Math.floor(S.money / price));   // v1.69：数量上限 = 日限剩余 ∩ 买得起的
+  if(mx < 1) return showAlert(S.money < price ? "铜币不足（需要 "+fmtMoney(price)+"，当前 "+fmtMoney(S.money)+"）"
+    : "今日交易所买入已达上限（"+_cap+" 个/日，随等级提升）。", "交易所");
+  qtyDialog({                                           // v1.69：数量选择（原写死 ×1）
+    id: "buymat_" + name, title: "买入 · " + name, okText: "确认买入", max: mx,
+    subHtml: "单价 <b>"+fmtMoney(price)+"</b>　今日已买 "+_exN+"/"+_cap+"（本次最多买 "+mx+" 个）",
+    fmt: function(n){ return "-" + fmtMoney(price * n); },
+    onOk: function(n){
+      apiCall("buy_mat", {name:name, cnt:n}).then(function(j){ if(!j.error) coinFx(-price * n); });   // v1.69：买入反馈
+    }
   });
 }
 function buyPlat(i){                                    // v1.50：铂金商店·统一购买（服务端 buy_plat）；v1.61d：门槛 = 持有 ≥1 铂金币
@@ -9005,7 +9110,7 @@ function petPat(n){
     const _m = (j.msgs || []).filter(function(x){ return String(x).indexOf("🤗 ") === 0; }).pop() || "";
     const _i = _m.indexOf("\n");
     if(_i < 0) return;
-    dlg(_m.slice(0, _i), '<div class="dlg-msg" style="line-height:1.9">' + _m.slice(_i + 1) + '</div>'
+    dlg(petEsc(_m.slice(0, _i)), '<div class="dlg-msg" style="line-height:1.9">' + petEsc(_m.slice(_i + 1)) + '</div>'
       + '<div class="muted" style="font-size:11px;margin-top:6px">心情 +5（今日互动已完成）</div>', [{text:"好", cls:"pri", fn:null}]);
   });
 }
@@ -9092,7 +9197,7 @@ function importSave(){
   showAlert("存档保存在电脑的 SQLite 数据库：<b>Flask版/data/adventurer.db</b><br><br>"
     + "· 备份 / 恢复：复制或替换该文件即可<br>"
     + "· 电脑与手机访问的是同一份存档<br>"
-    + "· 「导出快照」下载的 JSON 仅用于查阅", "数据说明");
+    + "· 「导出快照」可随时用「导入存档」还原（也可导入原型创造版）；正式备份请复制 data/adventurer.db", "数据说明");
 }
 function resetAll(){
   showConfirm("确定清空所有进度重新开始？<br>此操作不可撤销。<br><br>建议先备份电脑上的 data/adventurer.db 文件。", function(){

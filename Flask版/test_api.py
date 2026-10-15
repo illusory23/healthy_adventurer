@@ -24,8 +24,8 @@ def check(cond, msg):
         print("  ❌ " + msg)
 
 
-# 使用独立的临时库
-db.DB_PATH = Path(__file__).parent / "data" / "test_api.db"
+# 使用独立的临时库（v1.62：移入 data/test_run/ 子树——每日备份同样隔离，不污染正式 data/backups/）
+db.DB_PATH = Path(__file__).parent / "data" / "test_run" / "test_api.db"
 if db.DB_PATH.exists():
     db.DB_PATH.unlink()
 
@@ -211,7 +211,8 @@ check("口令不正确".encode("utf-8") in r.data, "错误口令被拒")
 r = c2.post("/gate", data={"k": appmod.ACCESS_KEY}, base_url="http://game.natfrp.com")
 check(r.status_code == 302 and "gp_key" in r.headers.get("Set-Cookie", ""), "正确口令 → 重定向 + Cookie")
 r = c2.get("/api/state", base_url="http://game.natfrp.com")
-check(r.status_code == 200 and r.get_json().get("state") is not None, "带 Cookie 隧道访问放行")
+check(r.status_code == 401 and (r.get_json() or {}).get("register") is True,
+      "带 Cookie 隧道访问 → 新设备进入注册闸门（v1.62：口令门之后还有邀请码注册）")
 
 print("=== 10b. v1.39 A1：Host 头伪造加固 ===")
 c6 = appmod.app.test_client()                       # 干净设备（无口令 Cookie）
@@ -268,6 +269,11 @@ j12b = get_state()
 check(j12b["state"]["name"] == "导入存档" and j12b["state"]["money"] == 777777, "导入后持久化")
 j12c = post({"action": "import_save", "data": "bad"})
 check(not j12c["ok"], "非对象导入被拒")
+j12d = post({"action": "import_save", "data": {"name": "快速二次导入"}})
+check(not j12d["ok"] and "频繁" in j12d["error"], "导入冷却：10 分钟内二次导入被拒（v1.67 B2）")
+_st_cd = db.load_user_state(UID)[0]
+_st_cd["last_import"] = 0                        # 测试用：清除导入冷却（后续导入测试继续）
+db.save_user_state(UID, _st_cd)
 
 print("=== 13. v1.38f 携带宠物（set_carry_pet） ===")
 j13 = post({"action": "set_carry_pet", "name": "月光狐"})
@@ -413,6 +419,49 @@ s = _load()
 s["sick_days"] = []                            # 收尾：清空病假
 s["health"]["done"] = [0] * 7
 _save(s)
+
+print("=== 21. v1.69 本机改档接口 /admin/dev ===")
+
+
+def dev(op, args=None, uid=None, **kw):
+    return c.post("/admin/dev", json={"uid": UID if uid is None else uid, "op": op, "args": args or {}}, **kw)
+
+
+j = dev("set", {"key": "money", "value": "123456"}).get_json()
+check(j["ok"], "改档：设置钱成功：" + str(j.get("error")))
+check(_load()["money"] == 123456, "改档：钱已落库")
+bak = Path(db.DB_PATH).parent / "backups" / str(j.get("backup", ""))
+check(bak.name.startswith("manual-user%d-" % UID) and bak.exists(), "改档：写入备份 " + bak.name)
+check(json.loads(bak.read_text(encoding="utf-8"))["money"] != 123456, "改档：备份是「改动前」的档（不是改完的）")
+
+s = _load()
+s["energy"] = 200
+s["lv_idx"] = 1
+_save(s)
+check(dev("pool_refresh").get_json()["ok"], "改档：立即刷新委托栏")
+post({"action": "accept", "idx": 0})
+j = dev("finish", {"which": "all", "roll": "1", "silent": "1"}).get_json()
+check(j["ok"] and "大成功" in j["msg"], "改档：指定骰值 1 → 大成功：" + str(j.get("msg")))
+s = _load()
+check(not (s.get("active") or []), "改档：委托已结算（进行中清空）")
+check(not (s.get("results") or []), "改档：静默完成 → 不弹结算动画（结果队列空）")
+check(s["rep"] > 0 and s["rep"] % 2 == 0, "改档：大成功声望 ×2（rep=%d）" % s["rep"])
+
+j = dev("mat", {"name": "不存在的材料", "n": "1"}).get_json()
+check(not j["ok"] and "没有这种材料" in j["error"], "改档：非法材料名 → 明确报错")
+money_before = _load()["money"]
+j = dev("raw_replace", {"json": '{"x":1}'}).get_json()
+check(not j["ok"] and "不像一份完整存档" in j["error"], "改档：RAW 整档替换拒绝残缺 JSON（防手滑抹档）")
+check(_load()["money"] == money_before, "改档：操作失败 → 档分毫未动（钱 %d）" % money_before)
+check(not dev("no_such_op").get_json()["ok"], "改档：未知操作 → 报错")
+check(not dev("set", {"key": "money", "value": "1"}, uid=99999).get_json()["ok"], "改档：账号不存在 → 报错")
+
+c8 = appmod.app.test_client()                  # 先过口令门拿 Cookie（否则先撞 401 口令门，测不到这层）
+c8.post("/gate", data={"k": appmod.ACCESS_KEY})
+r = c8.post("/admin/dev", json={"uid": UID, "op": "set", "args": {"key": "money", "value": "1"}},
+            base_url="http://localhost", environ_base={"REMOTE_ADDR": "203.0.113.5"})
+check(r.status_code == 403, "改档：远程来源伪造本机 Host → 403（仅本机可及，实际 %s）" % r.status_code)
+check(_load()["money"] == money_before, "改档：被拒的请求没有写档")
 
 print()
 print("=" * 40)

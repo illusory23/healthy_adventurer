@@ -4,23 +4,59 @@
 运行：python app.py
   - 电脑浏览器：http://localhost:5899
   - 手机（同一 WiFi）：http://电脑IP:5899
+
+v1.62（社交 P0）：邀请码注册 / 角色名唯一 / 好友码 / 封禁 / global_sweep / 服主工具
+  - 本机（服务器电脑）免注册直通；远程/局域网新设备 → /register（邀请码 + 昵称）
+  - 服主工具：http://localhost:5899/admin（仅本机；生成邀请码 / 账号管理 / 备份状态）
+v1.64（社交 P1）：好友 + 邮件系统（赠送底座）
+  - 好友码 / 角色名精确添加、申请上限、好友位、拉黑、隐私（健康分公开 / 赠送权限 / 申请权限）
+  - 赠送：低阶每日合计 ≤5 个（单笔同限）、史诗+传说每周送出 ≤2 且收到 ≤2；托管入邮件，
+    接收 / 拒收（原路退回）/ 7 天超时自动退回（global_sweep）；接收方需已解锁对应品阶
+  - 服主工具新增广播邮件
+v1.65（社交 P2）：组队副本
+  - 每日 08:00 惰性刷 1 个（可放弃）→ 组建（扣发起人精力）→ 邀请 → ≥3 人开启
+  - 每人 3 次行动（成功 +1 格、掷 1~5 大成功 +2 格）；达标立即结算 / 到期按失败结算
+  - 门槛 = 等级 + 昨日健康分（60/70/75/80）；每周参与 ≤3；未开启作废全额退还精力
+  - 结算奖励 / 退还精力均为「待处理标记」，由本人下次打开时在其锁内入账（不跨账号写档）
+v1.66（社交 P3）：材料市场
+  - 解锁 = Lv3 且公会 C；页签位于「公会」右侧；可交易普通 / 精良 / 稀有 / 史诗（传说不可）
+  - 挂单即托管（≤3 单 / 每日 ≤3 次 / 3 天到期自动下架退回）；免手续费；
+    单价 ∈ [商店价×0.9, 商店价×3]（商店价 = 基准价×3）；买入每日 ≤5 每周 ≤20；史诗需 Lv4
+  - 货款入卖家邮件（proceeds）；到期退回 = 退回邮件；global_sweep 接入
+v1.68：一键启动（单窗口）——启动横幅重排（去版本流水账，补停服 / 注册 / 备份 / 时间戳）；
+  经 run.bat 启动时（GAME_AUTO_OPEN=1）端口就绪后自动打开浏览器；直接在命令行 python app.py 不自动开
+v1.69：改档接口 /admin/dev（仅本机）——供「存档工具.py」交互模式在线调用（在跑的服务里改，改完即时生效）；
+  写档前自动备份整档到 data/backups/manual-*.json；操作逻辑与离线工具共用 devops.py（杜绝双份漂移）
 """
+import copy
+import html
+import json
 import logging
+import os
 import secrets
 import socket
 import threading
 import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from urllib.parse import quote as _urlquote
 
 from flask import Flask, jsonify, request, redirect, g
 from werkzeug.exceptions import HTTPException
 
 import db
+import devops
 import game
+import market
+import party
+import social
+import sweep
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024        # v1.39（B7）：请求体上限 4MB（防超大 JSON 拖垮）
+
+# v1.68：版本号——只在启动横幅显示，便于「重启后确认新代码已生效」；与 README 版本表同步
+VERSION = "v1.69"
 
 # ══════════════ 访问口令门（远程访问保护 · v1.26）══════════════
 # 手机经樱花内网穿透等公网方式访问时，须先输入访问口令（本机 localhost 免输）。
@@ -67,6 +103,56 @@ GATE_HTML = """<!doctype html>
 </body></html>"""
 
 
+# ══════════════ 注册页（v1.62：邀请码 + 昵称）══════════════
+REGISTER_HTML = """<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>新冒险者登记 · 健康的冒险者的一天</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       background:#12121a;color:#e8e8f0;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .box{background:#1b1b26;border:1px solid #2c2c3a;border-radius:14px;padding:30px 26px;width:300px;text-align:center}
+  h1{font-size:16px;color:#d9b160;margin:0 0 8px}
+  p{font-size:12px;color:#8a8aa0;margin:0 0 16px;line-height:1.7}
+  input{width:100%;box-sizing:border-box;padding:11px;border-radius:9px;border:1px solid #2c2c3a;
+        background:#12121a;color:#e8e8f0;font-size:15px;text-align:center;letter-spacing:1px;margin-top:10px}
+  button{width:100%;margin-top:16px;padding:11px;border-radius:9px;border:none;background:#d9b160;
+         color:#17171f;font-weight:700;font-size:14px;cursor:pointer}
+  .err{color:#d97f7f;font-size:12.5px;margin-top:12px;line-height:1.6}
+  .hint{font-size:11px;color:#6a6a80;margin-top:10px;line-height:1.6}
+</style></head>
+<body>
+<form class="box" method="post" action="/register">
+  <h1>🌙 新冒险者登记</h1>
+  <p>欢迎来到这座小站。<br>请取一个冒险者之名，开启你的旅程。</p>
+  <input name="nick" placeholder="冒险者之名（2~12 字）" maxlength="12" value="<!--NICK-->" autofocus autocomplete="off">
+  <!--INV-->
+  <button type="submit">开始冒险</button>
+  <div class="hint"><!--HINT--></div>
+  <!--ERR-->
+</form>
+</body></html>"""
+
+
+BANNED_HTML = """<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>访问受限 · 健康的冒险者的一天</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       background:#12121a;color:#e8e8f0;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .box{background:#1b1b26;border:1px solid #2c2c3a;border-radius:14px;padding:30px 26px;width:300px;text-align:center}
+  h1{font-size:16px;color:#d97f7f;margin:0 0 10px}
+  p{font-size:13px;color:#a0a0b5;line-height:1.8;margin:0}
+</style></head>
+<body>
+<div class="box">
+  <h1>🚫 访问受限</h1>
+  <p>该账号已被服主封禁。<br>如有疑问，请直接联系服主。</p>
+</div>
+</body></html>"""
+
+
 def _is_local_host():
     """本机直连豁免（v1.39 A1 加固，防 Host 头伪造绕过口令）——三项须同时成立：
        ① TCP 来源是回环地址；② Host 头是本机名；③ 不带 X-Forwarded-For（隧道/反代会带）。
@@ -94,7 +180,8 @@ def _grant(resp):
 # 旧版单存档由本机（localhost）首次访问自动认领。
 
 def _current_user():
-    """解析当前设备账号：令牌 → 已有账号；否则本机认领旧档 / 静默新建"""
+    """解析当前设备账号：令牌 → 已有账号；本机（服务器电脑）认领旧档 / 静默新建；
+       远程新设备（v1.62）→ 返回 None 并置 need_register（走邀请码注册）"""
     u = db.get_user_by_token(request.cookies.get("gp_uid"))
     if u:
         db.touch_login(u["id"])
@@ -105,9 +192,11 @@ def _current_user():
             db.claim_user(u["id"])
             g.new_token = u["token"]
             return u
-    u = db.create_user()
-    g.new_token = u["token"]
-    return u
+        u = db.create_user()                    # v1.62：本机免注册直通（服主自己的设备）
+        g.new_token = u["token"]
+        return u
+    g.need_register = True                      # v1.62：远程/局域网新设备 → 先注册
+    return None
 
 
 @app.after_request
@@ -175,12 +264,29 @@ def _access_gate():
             return jsonify({"ok": False, "gate": True,
                             "error": "访问验证已失效——请刷新页面并输入访问口令"}), 401
         return GATE_HTML
-    # 口令门已通过：每日自动备份 + 日志治理 + 解析设备账号（静态资源无需）
+    # 口令门已通过：每日自动备份 + 日志治理 + 全局维护通道 + 解析设备账号（静态资源无需）
     if request.path.startswith("/static/"):
         return None
     _maybe_backup()
     _maybe_prune()
+    sweep.run()                                # v1.62：全局维护通道（内部节流 60s + 异常隔离）
+    if request.path.startswith("/admin") and not _is_local_host():
+        return "<h3>🖥️ 服主工具仅本机（服务器电脑）可用</h3>", 403
+    if request.path.startswith("/admin") or request.path.startswith("/api/accounts"):
+        return None                            # 服主工具/账号管理：仅本机判权在各自处理器内；不参与注册闸门
+    if request.path == "/register":            # 注册页：自行解析令牌，跳过账号解析
+        return None
     g.user = _current_user()
+    if g.user is None:                         # v1.62：远程新设备 → 先注册
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "register": True,
+                            "error": "请先完成注册：输入邀请码与冒险者之名"}), 401
+        return redirect("/register")
+    if g.user.get("banned"):                   # v1.62：封禁账号拒入
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "banned": True,
+                            "error": "该账号已被服主封禁——如有疑问请联系服主"}), 403
+        return BANNED_HTML, 403
 
 
 @app.post("/gate")
@@ -189,6 +295,69 @@ def gate_submit():
     if k == ACCESS_KEY:
         return _grant(redirect("/"))
     return GATE_HTML.replace("<!--ERR-->", '<div class="err">口令不正确，请重试</div>')
+
+
+# ══════════════ 注册（v1.62：邀请码 + 昵称）══════════════
+
+def _validate_nick(nick, exclude_id=0):
+    """v1.62：昵称校验（2~12 字、库内唯一，不区分大小写）。None = 通过"""
+    nick = (nick or "").strip()
+    if not nick:
+        return "请输入冒险者之名。"
+    if len(nick) < 2:
+        return "冒险者之名至少 2 个字。"
+    if len(nick) > 12:
+        return "冒险者之名最多 12 个字。"
+    if any(ch in nick for ch in "\n\r\t"):
+        return "名字里不能包含换行或制表符。"
+    if db.name_taken(nick, exclude_id):
+        return "「" + nick + "」已经有人用了，换一个吧。"
+    return None
+
+
+def _register_html(nick="", err=None):
+    local = _is_local_host()
+    inv_field = "" if local else (
+        '<input name="invite" placeholder="邀请码（8 位）" maxlength="12" autocomplete="off">')
+    inv_hint = ("本机注册：无需邀请码" if local
+                else "邀请码由服主发放（8 位）。注意：接入码 ≠ 邀请码——接入码是找回存档的钥匙，请勿外传。")
+    err_html = ('<div class="err">' + html.escape(err) + "</div>") if err else ""
+    return (REGISTER_HTML
+            .replace("<!--NICK-->", html.escape(nick, quote=True))
+            .replace("<!--INV-->", inv_field)
+            .replace("<!--HINT-->", inv_hint)
+            .replace("<!--ERR-->", err_html))
+
+
+@app.get("/register")
+def register_form():
+    if db.get_user_by_token(request.cookies.get("gp_uid")):
+        return redirect("/")                    # 已注册设备不重复建号
+    return _register_html()
+
+
+@app.post("/register")
+def register_submit():
+    if db.get_user_by_token(request.cookies.get("gp_uid")):
+        return redirect("/")
+    nick = (request.form.get("nick") or "").strip()
+    code = _norm_code(request.form.get("invite"))
+    local = _is_local_host()
+    err = _validate_nick(nick)
+    if err is None and not local:
+        err = db.invite_error(code)
+    if err is None and not local and not db.consume_invite(code):
+        err = "邀请码不可用（已被用完 / 吊销或过期），请向服主索取新的邀请码。"
+    if err is not None:
+        return _register_html(nick=nick, err=err)
+    u = db.create_user(nick)
+    s = game.new_state()
+    s["name"] = nick
+    db.save_user_state(u["id"], s)
+    db.claim_user(u["id"])
+    app.logger.info("新账号注册：%s（id=%s，%s）", nick, u["id"], "本机" if local else "邀请码 " + code)
+    g.new_token = u["token"]
+    return redirect("/")
 
 
 def local_ip():
@@ -202,8 +371,21 @@ def local_ip():
         return "127.0.0.1"
 
 
-def _dispatch(s, d, msgs):
-    """动作分发：返回错误文案（None = 成功）"""
+# v1.64：社交动作集合——响应将附带 social 概览（前端社交页数据）
+SOCIAL_ACTS = {"social", "friend_add", "friend_op", "friend_del", "friend_block",
+               "gift_send", "mail_op", "privacy_set"}
+
+# v1.65：组队副本动作集合——响应将附带 party 概览（前端组队副本卡数据）
+PARTY_ACTS = {"party", "party_create", "party_invite", "party_accept", "party_decline",
+              "party_start", "party_act", "party_quit", "party_abandon", "party_offer_abandon",
+              "party_claim"}
+
+# v1.66：材料市场动作集合——响应将附带 market 概览（前端市场页数据）
+MARKET_ACTS = {"market", "market_list", "market_cancel", "market_buy"}
+
+
+def _dispatch(s, d, msgs, uid=0):
+    """动作分发：返回错误文案（None = 成功）；uid = 当前账号（v1.62：昵称唯一性校验用）"""
     act = d.get("action", "")
 
     def i(key, default=0):
@@ -213,6 +395,9 @@ def _dispatch(s, d, msgs):
             return default
 
     if act == "name":
+        err = _validate_nick(d.get("name") or "", exclude_id=uid)   # v1.62：2~12 字 + 唯一
+        if err:
+            return err
         return game.take_name(s, d.get("name", ""))
     if act == "checkin":
         return game.toggle_task(s, i("idx"), msgs)
@@ -235,7 +420,7 @@ def _dispatch(s, d, msgs):
     if act == "buy_plat":                              # v1.50：铂金商店·统一购买（全部铂金币结算）
         return game.buy_plat(s, msgs, i("idx", 0), d.get("mat"))
     if act == "buy_mat":                               # v1.41 H3：交易所买入
-        return game.buy_mat(s, d.get("name", ""), msgs)
+        return game.buy_mat(s, d.get("name", ""), msgs, d.get("cnt"))   # v1.69：支持批量（cnt）
     if act == "buy_master_gear":                       # v1.41 I6：大师商店·专属装备
         return game.buy_master_gear(s, msgs, i("idx"))
     if act == "buy_master_mat":                        # v1.41 I6：大师商店·指定传说材料
@@ -315,24 +500,99 @@ def _dispatch(s, d, msgs):
     if act == "set_carry_pet":                         # v1.38f：携带宠物切换
         return game.set_carry_pet(s, d.get("name") or "", msgs)
     if act == "import_save":                           # v1.38d：存档互通（camel → snake）
+        # v1.67：防复制资产 / 毒档——冷却 + 冻结态检查 + 名字与类型校验（原快速往返可复制材料与货款）
+        _now_i = int(time.time() * 1000)
+        if _now_i - int(s.get("last_import") or 0) < 10 * 60 * 1000:
+            return "导入过于频繁——两次导入之间请间隔 10 分钟"
+        if db.market_active_count(uid):
+            return "你还有在售挂单（材料托管中）——先下架 / 等成交后再导入"
+        if db.mail_pending_kinds_to(uid, ("return", "proceeds")):
+            return "你还有未领取的退回件或货款——先领取后再导入"
+        if any(r["status"] == "pending" for r in db.gift_rows_since(uid, 0)):
+            return "你还有等待对方处理的赠送——等对方领取 / 拒收（或超时退回）后再导入"
         s2 = game.import_save_state(d.get("data"))
         if s2 is None:
             return "导入文件格式不正确（需要存档 JSON）"
+        _nk = _validate_nick(s2.get("name") or "", exclude_id=uid)   # v1.67：名字非法 / 与他人重名 → 明确拒绝（原撞唯一索引 500）
+        if _nk:
+            return "导入失败：" + _nk
         s.clear()
         s.update(s2)
+        s["last_import"] = _now_i
         msgs.append("📂 已导入存档：" + (s2.get("name") or "未命名"))
         return None
     if act == "reset":
         s.clear()
         s.update(game.new_state())
         return None
+    # ── v1.64（社交 P1）：好友 + 邮件（仅 Flask 版）──
+    if act in SOCIAL_ACTS:
+        if not s.get("name"):
+            return "请先取一个冒险者之名"
+        if act == "social":
+            return None
+        if act == "friend_add":
+            return social.friend_add(uid, d.get("ident", ""), d.get("msg", ""), msgs)
+        if act == "friend_op":
+            return social.friend_op(uid, i("id"), d.get("op", ""), msgs)
+        if act == "friend_del":
+            return social.friend_del(uid, i("uid"), msgs)
+        if act == "friend_block":
+            return social.friend_block(uid, i("uid"), bool(i("on", 1)), msgs)
+        if act == "gift_send":
+            return social.gift_send(uid, s, i("to"), d.get("mat", ""), i("qty", 0), msgs)
+        if act == "mail_op":
+            return social.mail_op(uid, s, i("id"), d.get("op", ""), msgs)
+        if act == "privacy_set":
+            return social.privacy_set(uid, d, msgs)
+        return "未知操作：" + str(act)
+    # ── v1.65（社交 P2）：组队副本（仅 Flask 版）──
+    if act in PARTY_ACTS:
+        if not s.get("name"):
+            return "请先取一个冒险者之名"
+        if act == "party":
+            return None
+        if act == "party_create":
+            return party.create(uid, s, msgs)
+        if act == "party_invite":
+            return party.invite(uid, i("to"), msgs)
+        if act == "party_accept":
+            return party.accept(uid, s, i("id"), msgs)
+        if act == "party_decline":
+            return party.decline(uid, i("id"), msgs)
+        if act == "party_start":
+            return party.start(uid, msgs)
+        if act == "party_act":
+            return party.act(uid, msgs)
+        if act == "party_quit":
+            return party.quit_party(uid, msgs)
+        if act == "party_abandon":
+            return party.abandon(uid, msgs)
+        if act == "party_offer_abandon":
+            return party.offer_abandon(uid, msgs)
+        if act == "party_claim":
+            return party.claim(uid, s, i("id"), msgs)
+        return "未知操作：" + str(act)
+    # ── v1.66（社交 P3）：材料市场（仅 Flask 版）──
+    if act in MARKET_ACTS:
+        if not s.get("name"):
+            return "请先取一个冒险者之名"
+        if act == "market":
+            return None
+        if act == "market_list":
+            return market.list_mat(uid, s, d.get("mat", ""), i("qty", 0), i("price", 0), msgs)
+        if act == "market_cancel":
+            return market.cancel(uid, s, i("id"), msgs)
+        if act == "market_buy":
+            return market.buy(uid, s, i("id"), i("qty", 0), msgs)
+        return "未知操作：" + str(act)
     return "未知操作：" + str(act)
 
 
 _HISTORY_SEND = 150          # v1.39（C3）：下发 history 条数上限（全量在库；导出走 export_save）
 
 
-def _payload(s, msgs, err=None, user=None):
+def _payload(s, msgs, err=None, user=None, social_data=None, party_data=None, market_data=None):
     # v1.35：图鉴·材料"曾获得"懒合并（当前持有的材料一律计入）
     if "seen_mats" not in s:
         s["seen_mats"] = []
@@ -361,13 +621,36 @@ def _payload(s, msgs, err=None, user=None):
     acc = None
     if user:
         acc = {"code": user.get("code", ""), "created": user.get("created_at", 0)}
-    return jsonify({
+    resp = {
         "ok": err is None,
         "error": err,
         "msgs": msgs,
         "state": view,
         "account": acc,
-    })
+    }
+    if user:
+        # v1.64：页签红点（待处理申请 + 未读/待接收邮件）——随每次响应下发
+        try:
+            resp["social_dot"] = social.dot(user["id"])
+        except Exception:
+            resp["social_dot"] = 0
+        # v1.65：委托页签红点（待处理邀请 + 待领取结算 + 进行中还有行动次数）
+        try:
+            resp["party_dot"] = party.dot(user["id"])
+        except Exception:
+            resp["party_dot"] = 0
+        # v1.66：市场页签红点（有他人挂单在售）
+        try:
+            resp["market_dot"] = market.dot(user["id"])
+        except Exception:
+            resp["market_dot"] = 0
+    if social_data is not None:
+        resp["social"] = social_data
+    if party_data is not None:
+        resp["party"] = party_data
+    if market_data is not None:
+        resp["market"] = market_data
+    return jsonify(resp)
 
 
 @app.route("/")
@@ -385,6 +668,17 @@ def _load(uid, msgs=None):
         msgs.append("⚠️ 存档数据损坏：原档已另存 data/corrupt/（未删除），当前已重置为新档——"
                     "如需恢复请联系开发者用原档修复")
     return s
+
+
+def _backup_state(uid, s):
+    """v1.69：写库前整档备份到 data/backups/manual-user<id>-*.json
+       （与「存档工具.py」离线模式同命名，两边备份可互相回滚、菜单里能一起列出）"""
+    d = Path(db.DB_PATH).parent / "backups"
+    d.mkdir(parents=True, exist_ok=True)
+    fn = d / ("manual-user%d-%s-%03d.json"
+              % (uid, time.strftime("%Y%m%d-%H%M%S"), int(time.time() * 1000) % 1000))
+    fn.write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")
+    return fn
 
 
 # v1.50：per-账号互斥锁——防并发请求（双开/连点）读到同档相互覆盖（丢更新）
@@ -439,7 +733,10 @@ def api_state():
 
 @app.post("/api/action")
 def api_action():
-    d = request.get_json(force=True, silent=True) or {}
+    d = request.get_json(force=True, silent=True)
+    if d is not None and not isinstance(d, dict):      # v1.67：非对象 JSON 体 → 明确报错（原 AttributeError 500）
+        return jsonify({"ok": False, "error": "请求格式不正确（需要 JSON 对象）"})
+    d = d or {}
     act = d.get("action")
     if act == "bind_code":                             # v1.37：接入码换绑
         return _bind_code(d)
@@ -451,11 +748,22 @@ def api_action():
     msgs = []
     with _lock_for(u["id"]):                       # v1.50：并发互斥
         s = _load(u["id"], msgs)
-        msgs += game.catch_up(s)
-        err = _dispatch(s, d, msgs)
+        try:                                       # v1.67：毒档兜底——结算 / 分发异常不再砖掉账号（原每次请求 500 只能手改数据库）
+            msgs += game.catch_up(s)
+        except Exception:
+            app.logger.exception("catch_up 异常（uid=%s）", u["id"])
+            msgs.append("⚠️ 跨天结算出错已跳过——若反复出现请联系服主。")
+        try:
+            err = _dispatch(s, d, msgs, u["id"])
+        except Exception:
+            app.logger.exception("dispatch 异常（uid=%s act=%s）", u["id"], act)
+            err = "操作失败：存档数据异常（已跳过本次操作，请联系服主）"
+        soc = social.overview(u["id"]) if act in SOCIAL_ACTS else None   # v1.64：社交页数据随响应
+        pty = party.overview(u["id"], s, msgs) if act in PARTY_ACTS else None   # v1.65：组队副本数据（含惰性退款）
+        mkt = market.overview(u["id"], s) if act in MARKET_ACTS else None   # v1.66：市场页数据
         db.flush_event_log(s, u["id"])             # v1.50：先 flush（更新水位）再 save（水位落库）
         db.save_user_state(u["id"], s)
-        return _payload(s, msgs, err, u)
+        return _payload(s, msgs, err, u, social_data=soc, party_data=pty, market_data=mkt)
 
 
 @app.get("/api/accounts")
@@ -479,6 +787,248 @@ def api_accounts_delete():
     ok = db.delete_user(uid)
     return jsonify({"ok": ok, "error": None if ok else "账号不存在",
                     "accounts": db.list_users()})
+
+
+# ══════════════ 服主工具（v1.62 · 仅本机 /admin）══════════════
+
+def _fmt_ts(ms):
+    try:
+        return time.strftime("%Y-%m-%d %H:%M", time.localtime(int(ms) / 1000)) if ms else "—"
+    except (TypeError, ValueError, OSError):
+        return "—"
+
+
+def _invite_badge(row):
+    now = time.time() * 1000
+    if row.get("revoked"):
+        return "已吊销"
+    if row.get("expires_at") and now > row["expires_at"]:
+        return "已过期"
+    if row.get("uses_left", 0) <= 0:
+        return "已用完"
+    return "✅ 可用"
+
+
+def _admin_html(msg=""):
+    arows = []
+    for a in db.list_users():
+        name = (html.escape(a["name"]) if a["name"]
+                else "<span style='color:#6a6a80'>（未命名 · 空档）</span>")
+        banned = "<b style='color:#d97f7f'>已封禁</b>" if a.get("banned") else "正常"
+        arows.append(
+            "<tr><td>{id}</td><td>{name}</td><td class='mono'>{code}</td><td class='mono'>{fc}</td>"
+            "<td>{st}</td><td>{c}</td><td>{l}</td><td>"
+            "<form method='post' action='/admin/account/op' style='display:inline'>"
+            "<input type='hidden' name='id' value='{id}'><input type='hidden' name='op' value='friend'>"
+            "<button class='mini'>重置好友码</button></form> "
+            "<form method='post' action='/admin/account/op' style='display:inline'>"
+            "<input type='hidden' name='id' value='{id}'><input type='hidden' name='op' value='{bop}'>"
+            "<button class='mini'>{btxt}</button></form> "
+            "<form method='post' action='/admin/account/op' style='display:inline' "
+            "onsubmit=\"return confirm('删除账号「{nm}」？存档与日志将一并清除，不可恢复');\">"
+            "<input type='hidden' name='id' value='{id}'><input type='hidden' name='op' value='delete'>"
+            "<button class='mini danger'>删除</button></form>"
+            "</td></tr>".format(
+                id=a["id"], name=name, code=html.escape(a["code"]),
+                fc=html.escape(a.get("friend_code") or "—"), st=banned,
+                c=_fmt_ts(a.get("created_at")), l=_fmt_ts(a.get("last_login")),
+                bop=("unban" if a.get("banned") else "ban"),
+                btxt=("解封" if a.get("banned") else "封禁"),
+                nm=html.escape(a["name"] or ("#%d" % a["id"]), quote=True)))
+
+    irows = []
+    for v in db.list_invite_codes():
+        irows.append(
+            "<tr><td class='mono'>{c}</td><td>{l} / {t}</td><td>{e}</td><td>{n}</td><td>{s}</td><td>"
+            "<form method='post' action='/admin/invite/revoke' style='display:inline' "
+            "onsubmit=\"return confirm('吊销邀请码 {c}？');\">"
+            "<input type='hidden' name='code' value='{c}'>"
+            "<button class='mini danger'>吊销</button></form></td></tr>".format(
+                c=html.escape(v["code"]), l=v.get("uses_left", 0), t=v.get("uses_total", 0),
+                e=(_fmt_ts(v.get("expires_at")) if v.get("expires_at") else "不过期"),
+                n=html.escape(v.get("note") or ""), s=_invite_badge(v)))
+
+    brows = ["<li>{} · {:.1f} MB · {}</li>".format(
+        html.escape(b["name"]), b["size"] / 1048576.0, _fmt_ts(b["mtime"]))
+        for b in db.backup_list(5)]
+
+    msg_html = ('<div class="msg">' + html.escape(msg) + "</div>") if msg else ""
+    return (ADMIN_HTML
+            .replace("<!--MSG-->", msg_html)
+            .replace("<!--INVS-->", "".join(irows) or "<tr><td colspan='6'>暂无邀请码</td></tr>")
+            .replace("<!--ACCS-->", "".join(arows) or "<tr><td colspan='8'>暂无账号</td></tr>")
+            .replace("<!--BAKS-->", "".join(brows) or "<li>暂无备份</li>"))
+
+
+ADMIN_HTML = """<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>服主工具 · 健康的冒险者的一天</title>
+<style>
+  body{margin:0;background:#12121a;color:#e8e8f0;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:13px}
+  .wrap{max-width:980px;margin:0 auto;padding:22px 16px 60px}
+  h1{font-size:17px;color:#d9b160;margin:0 0 4px}
+  h2{font-size:14px;color:#c9c9dd;margin:26px 0 8px;border-left:3px solid #d9b160;padding-left:8px}
+  .sub{color:#8a8aa0;font-size:12px;line-height:1.7}
+  .msg{background:#233022;border:1px solid #3c5a38;color:#a8d8a0;border-radius:9px;padding:9px 12px;margin:12px 0;font-size:12.5px}
+  table{width:100%;border-collapse:collapse;background:#1b1b26;border:1px solid #2c2c3a;border-radius:10px;overflow:hidden}
+  th,td{padding:7px 9px;text-align:left;border-bottom:1px solid #26263a;font-size:12.5px;vertical-align:middle}
+  th{background:#20202e;color:#a0a0b5;font-weight:600}
+  tr:last-child td{border-bottom:none}
+  .mono{font-family:Consolas,Menlo,monospace;letter-spacing:1px;color:#e7c97c}
+  input[type=text],input[type=number]{background:#12121a;border:1px solid #2c2c3a;border-radius:7px;color:#e8e8f0;padding:7px 9px;font-size:12.5px}
+  button{background:#d9b160;border:none;border-radius:7px;color:#17171f;font-weight:700;padding:8px 14px;font-size:12.5px;cursor:pointer}
+  button.mini{padding:4px 9px;font-size:11.5px;font-weight:600;background:#2e2e42;color:#c9c9dd}
+  button.mini.danger{background:#3a2328;color:#e08f8f}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#1b1b26;border:1px solid #2c2c3a;border-radius:10px;padding:10px 12px}
+  ul{margin:6px 0;padding-left:18px;color:#a0a0b5;line-height:1.9}
+  a{color:#8fb8e0}
+</style></head>
+<body><div class="wrap">
+  <h1>🖥️ 服主工具</h1>
+  <div class="sub">仅本机（服务器电脑）可访问 · <a href="/">返回游戏</a> ·
+    口令文件：Flask版/access_key.txt · 新朋友加入流程见《朋友加入指南.md》</div>
+  <!--MSG-->
+  <h2>邀请码（发放给新朋友）</h2>
+  <div class="row">
+    <form method="post" action="/admin/invite/new" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      可用次数 <input type="number" name="uses" value="5" min="1" max="99" style="width:64px">
+      有效期 <input type="number" name="hours" value="72" min="0" max="8760" style="width:72px"> 小时（0 = 不过期）
+      备注 <input type="text" name="note" maxlength="40" placeholder="发给谁（可选）" style="width:150px">
+      <button>生成邀请码</button>
+    </form>
+  </div>
+  <table><tr><th>邀请码</th><th>剩余</th><th>有效期至</th><th>备注</th><th>状态</th><th>操作</th></tr><!--INVS--></table>
+  <h2>账号</h2>
+  <table><tr><th>#</th><th>昵称</th><th>接入码（钥匙·勿外传）</th><th>好友码</th><th>状态</th><th>创建</th><th>最近登录</th><th>操作</th></tr><!--ACCS--></table>
+  <h2>广播邮件（v1.64）</h2>
+  <div class="sub">给全部已命名账号发一封系统邮件（30 天后过期）。用于公告、更新说明、活动通知。</div>
+  <div class="row">
+    <form method="post" action="/admin/broadcast" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      标题 <input type="text" name="title" maxlength="40" placeholder="例：本周六晚集体副本" style="width:200px">
+      内容 <input type="text" name="body" maxlength="300" placeholder="正文（可留空）" style="width:360px">
+      <button>发送广播</button>
+    </form>
+  </div>
+  <h2>数据库备份</h2>
+  <div class="sub">每日自动备份（VACUUM INTO 原子快照，滚动保留 14 份）。恢复演练：停服 → 复制备份文件覆盖 data/adventurer.db → 启动核对账号与日志。</div>
+  <ul><!--BAKS--></ul>
+</div></body></html>"""
+
+
+@app.get("/admin")
+def admin_page():
+    if not _is_local_host():
+        return "<h3>🖥️ 服主工具仅本机（服务器电脑）可用</h3>", 403
+    return _admin_html(request.args.get("msg") or "")
+
+
+@app.post("/admin/invite/new")
+def admin_invite_new():
+    if not _is_local_host():
+        return "<h3>🖥️ 服主工具仅本机可用</h3>", 403
+    code = db.create_invite_code(request.form.get("uses", 5),
+                                 request.form.get("hours", 72),
+                                 request.form.get("note", ""))
+    m = ("已生成邀请码：" + code) if code else "生成失败，请重试"
+    return redirect("/admin?msg=" + _urlquote(m))
+
+
+@app.post("/admin/invite/revoke")
+def admin_invite_revoke():
+    if not _is_local_host():
+        return "<h3>🖥️ 服主工具仅本机可用</h3>", 403
+    code = (request.form.get("code") or "").strip().upper()
+    ok = db.revoke_invite_code(code)
+    return redirect("/admin?msg=" + _urlquote(("已吊销邀请码 " + code) if ok else "吊销失败：码不存在"))
+
+
+@app.post("/admin/account/op")
+def admin_account_op():
+    if not _is_local_host():
+        return "<h3>🖥️ 服主工具仅本机可用</h3>", 403
+    try:
+        uid = int(request.form.get("id"))
+    except (TypeError, ValueError):
+        return redirect("/admin?msg=" + _urlquote("参数不正确"))
+    op = request.form.get("op") or ""
+    if op == "ban":
+        m = ("已封禁账号 #%d" % uid) if db.set_banned(uid, True) else "封禁失败：账号不存在"
+    elif op == "unban":
+        m = ("已解封账号 #%d" % uid) if db.set_banned(uid, False) else "解封失败：账号不存在"
+    elif op == "friend":
+        fc = db.reset_friend_code(uid)
+        m = ("好友码已重置为 " + fc) if fc else "重置失败"
+    elif op == "delete":
+        m = ("已删除账号 #%d（不可恢复）" % uid) if db.delete_user(uid) else "删除失败：账号不存在"
+    else:
+        m = "未知操作：" + op
+    return redirect("/admin?msg=" + _urlquote(m))
+
+
+@app.post("/admin/broadcast")
+def admin_broadcast():
+    """v1.64：广播邮件——给全部已命名账号发系统邮件（30 天过期）"""
+    if not _is_local_host():
+        return "<h3>🖥️ 服主工具仅本机可用</h3>", 403
+    title = (request.form.get("title") or "").strip()[:40]
+    body = (request.form.get("body") or "").strip()[:300]
+    if not title:
+        return redirect("/admin?msg=" + _urlquote("广播失败：标题不能为空"))
+    exp = int(time.time() * 1000) + 30 * 86400000
+    n = 0
+    for a in db.list_users():
+        if not a.get("name") or a.get("migrated") or a.get("banned"):
+            continue
+        db.mail_create(a["id"], "system", title="📢 " + title, body=body, expire_at=exp)
+        n += 1
+    return redirect("/admin?msg=" + _urlquote("已向 %d 位冒险者发送广播邮件" % n))
+
+
+@app.post("/admin/dev")
+def admin_dev():
+    """v1.69：本机改档接口——「存档工具.py」交互模式在线调用（服务在跑 → 改完即时生效）。
+       仅本机可及（与 /admin 同门槛 _is_local_host）；写档前自动备份整档到 data/backups/manual-*.json。
+       体：{"uid": 3, "op": "set", "args": {"key": "money", "value": "1000000"}}
+       → {"ok": true, "msg": "…", "msgs": [...], "backup": "manual-user3-….json"}"""
+    if not _is_local_host():
+        return jsonify({"ok": False, "error": "改档接口仅本机（服务器电脑）可用"}), 403
+    d = request.get_json(force=True, silent=True)
+    if not isinstance(d, dict):
+        return jsonify({"ok": False, "error": "请求格式不正确（需要 JSON 对象）"})
+    try:
+        uid = int(d.get("uid"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "uid 不正确（需要账号 id 数字）"})
+    op = str(d.get("op") or "")
+    args = d.get("args") or {}
+    if not isinstance(args, dict):
+        return jsonify({"ok": False, "error": "args 需要是 JSON 对象"})
+    if not db.get_user(uid):
+        return jsonify({"ok": False, "error": "账号不存在：id=%d" % uid})
+    with _lock_for(uid):                           # 与 /api/action 同一把锁：改档不与玩家操作打架
+        msgs = []
+        s = _load(uid, msgs)
+        try:
+            msgs += game.catch_up(s)               # 先补跨天结算，改的是「当前的档」
+        except Exception:
+            app.logger.exception("dev catch_up 异常（uid=%d）", uid)
+            return jsonify({"ok": False, "error": "跨天结算出错，已中止改档（请查看服务端日志）"})
+        bak = _backup_state(uid, s)
+        s2 = copy.deepcopy(s)                      # 操作在副本上跑：失败 = 原档分毫未动
+        try:
+            msg = devops.run_op(s2, op, **args)
+        except devops.OpError as e:
+            db.save_user_state(uid, s)              # 只落 catch_up 的结果
+            return jsonify({"ok": False, "error": str(e), "msgs": msgs, "backup": bak.name})
+        except Exception:
+            app.logger.exception("dev 改档异常（uid=%d op=%s）", uid, op)
+            db.save_user_state(uid, s)
+            return jsonify({"ok": False, "error": "改档出错：存档数据异常（操作未生效）",
+                            "msgs": msgs, "backup": bak.name})
+        db.flush_event_log(s2, uid)
+        db.save_user_state(uid, s2)
+        return jsonify({"ok": True, "error": None, "msg": msg, "msgs": msgs, "backup": bak.name})
 
 
 @app.get("/api/logs")
@@ -517,20 +1067,59 @@ def _setup_logging():
         pass
 
 
+def _print_banner(bak_ok):
+    """v1.68 启动横幅：只留当下要用的信息——地址 / 口令 / 注册 / 备份 / 停服方式
+       （v1.64~v1.66 的版本特性流水账移出：游戏内与 README 均可查）"""
+    bar, thin = "=" * 66, "-" * 66
+    ip = local_ip()
+    lan = ("http://" + ip + ":5899 （需与电脑同一 WiFi）" if ip != "127.0.0.1"
+           else "未检测到局域网 IP——电脑似乎未联网")
+    print(bar)
+    print("  《健康的冒险者的一天》 " + VERSION + " 服务已启动 · " + time.strftime("%Y-%m-%d %H:%M"))
+    print(thin)
+    print("  本机游玩：http://localhost:5899")
+    print("  手机游玩：" + lan)
+    print("  远程口令：" + ACCESS_KEY + " （首次访问输入一次 · 见 access_key.txt）")
+    print("  服主工具：http://localhost:5899/admin （仅服务器本机）")
+    print(thin)
+    print("  新玩家注册：本机免注册；手机 / 远程需「邀请码 + 昵称」")
+    print("  数据备份：" + ("今日已备 · data/backups/ 保留最近 14 份" if bak_ok
+                          else "[失败] 请检查 data/backups 目录是否可写"))
+    print("  运行须知：电脑不休眠 · 本窗口勿关（关窗即停服）")
+    print("  停止/重启：双击「停止服务.bat」/「重启服务.bat」")
+    print(bar)
+
+
+def _auto_open_browser():
+    """v1.68：一键启动（run.bat 设 GAME_AUTO_OPEN=1）时，等端口就绪后自动打开浏览器；
+       命令行直接 python app.py 不设该变量，行为不变（不自动开）"""
+    if os.environ.get("GAME_AUTO_OPEN") != "1":
+        return
+
+    def _worker():
+        deadline = time.time() + 20.0                 # 最多等 20 秒
+        while time.time() < deadline:
+            try:
+                socket.create_connection(("127.0.0.1", 5899), timeout=0.3).close()
+                break
+            except OSError:
+                time.sleep(0.2)
+        else:
+            return
+        try:
+            import webbrowser
+            webbrowser.open("http://localhost:5899")
+        except Exception:
+            pass
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 if __name__ == "__main__":
     _setup_logging()
     bak_ok = _maybe_backup(force=True)                 # v1.39（A3）：启动先备一份当日档
-    ip = local_ip()
-    print("=" * 52)
-    print("  《健康的冒险者的一天》服务已启动")
-    print("  电脑浏览器：http://localhost:5899")
-    print("  手机访问  ：http://" + ip + ":5899  （同一 WiFi）")
-    print("  远程访问口令：" + ACCESS_KEY)
-    print("  （手机首次访问时输入一次；保存在 access_key.txt，改动后重启生效）")
-    print("  账号：每台设备首次访问自动创建独立账号；跨设备用「冒险者信息 → 账号」的接入码找回")
-    print("  今日数据库备份：" + ("已就绪（data/backups/，保留最近 14 份）" if bak_ok
-                              else "❌ 失败——请检查 data/backups 目录是否可写"))
-    print("=" * 52)
+    _print_banner(bak_ok)
+    _auto_open_browser()
     try:
         from waitress import serve                    # v1.39（B3）：生产级 WSGI 引擎（原 Werkzeug 开发服）
         app.logger.info("waitress 启动 0.0.0.0:5899（threads=8）")

@@ -39,9 +39,9 @@ const html = fs.readFileSync(path.join(__dirname, 'static', 'game.html'), 'utf-8
 const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 const test = `
-let FAIL = 0;
+var FAIL = 0;   // v1.69：必须是 var —— let 在 eval 里不会漏给外层，原写法让末尾读到 FAIL 恒为 undefined(0)，断言失败被静默吞成「通过」
 function ck(cond, msg){ console.log((cond ? 'OK  ' : 'FAIL ') + msg); if(!cond) FAIL++; }
-const _fns = ['camelKey','adaptState','toast','apiCall','refreshState','applyServer','tick','isLocalHost','fmtCode','copyCode','openBindCode','openAccountsAdmin','flushResults','showResultModal','showRareModal','closeModal','maybeShowExploreFlow','submitName','acceptQuest','acceptBonus','acceptPriv','acceptGlass','forceFinish','sellMat','sellAll','buy','buyVit','buyCon','toggleTask','toggleMeal','addMulti','abandonQuest','cook','takeLegend','upSkill','buyCharm','equipItem','unequip','buyBlueprint','craft','doExplore','exploreReturn','exploreFinishCheck','useItem','useGale','feedWolf','feedPet','setCarryPet','evolvePet','evolveWolf','exportSave','importSaveFile','importSave','resetAll','showLevelUpDetail','queueLevelUpDetail','petMetaOf','petShowName','petBondDays','petMoodLabel','petMoodTxt','petMoodDaily','petBondTick','petPat','petWalkStart','petWalkSettle','petTheater','petNightTip','petDailyChecks','setPetNick','petFestLine','petMetaHtml','showPetStory','showNickInput','petActionBtns','renderPet','gotoPetTab'];
+const _fns = ['camelKey','adaptState','toast','apiCall','refreshState','applyServer','tick','isLocalHost','fmtCode','copyCode','openBindCode','openAccountsAdmin','flushResults','showResultModal','showRareModal','closeModal','maybeShowExploreFlow','submitName','acceptQuest','acceptBonus','acceptPriv','acceptGlass','forceFinish','sellMat','sellAll','buy','buyVit','buyCon','toggleTask','toggleMeal','addMulti','abandonQuest','cook','takeLegend','upSkill','buyCharm','equipItem','unequip','buyBlueprint','craft','doExplore','exploreReturn','exploreFinishCheck','useItem','useGale','feedWolf','feedPet','setCarryPet','evolvePet','evolveWolf','exportSave','importSaveFile','importSave','resetAll','showLevelUpDetail','queueLevelUpDetail','petMetaOf','petShowName','petBondDays','petMoodLabel','petMoodTxt','petMoodDaily','petBondTick','petPat','petWalkStart','petWalkSettle','petTheater','petNightTip','petDailyChecks','setPetNick','petFestLine','petMetaHtml','showPetStory','showNickInput','petActionBtns','renderPet'];
 const _miss = _fns.filter(function(f){ return eval('typeof ' + f) !== 'function'; });
 ck(_miss.length === 0, '桥接/镜像函数齐全（' + _fns.length + ' 个）' + (_miss.length ? ' 缺失: ' + _miss.join(',') : ''));
 ck(tick.toString().indexOf('refreshState') >= 0, 'tick 为服务端版');
@@ -133,7 +133,7 @@ ck(["金龙鳞","魔力结晶","雷霆龙牙","暗影龙鳞","龙炎结晶"].eve
 ck(C["Lv4"].some(function(q){ return q[0] === "驱赶绿龙"; }) && C["Lv5"].some(function(q){ return q[0] === "狩猎火龙"; }),
    'v1.42：龙种委托入池（驱赶绿龙 / 狩猎火龙）');
 ck(CFG.recipes.some(function(r){ return r.n === "巨龙盛宴" && r.enPct === 0.5 && !r.en && recipeIng(r)["大块龙肉"] >= 3; }),
-   'v1.42：盛宴 enPct=0.5（en 移除、大块龙肉）');
+   'v1.67a：盛宴 enPct=0.5（维持原档；史诗/传说不削弱——en 移除、大块龙肉）');
 ck(Object.keys(QUEST_REQ).length === 31 && QUEST_REQ["魂灯引渡"] === "净化亡灵谷" && QUEST_REQ["地狱钟声"] === "魔鬼的谈判"
    && QUEST_REQ["圣兽驯服"] === "古龙遗骸采集" && QUEST_REQ["弑龙者"] === "圣兽驯服" && QUEST_REQ["深渊领主封印"] === "深渊裂隙调查"
    && QUEST_REQ["亡者回廊·镇魂"] === "亡者回廊·踏勘" && QUEST_REQ["泰坦之心"] === "泰坦遗骸发掘" && QUEST_REQ["雪原巡礼"] === "圣兽驯服",
@@ -158,21 +158,23 @@ ck(typeof questItemNeed === 'function' && typeof QUEST_LV_OF === 'object'
    'v1.53：questItemNeed 分级（Lv3→1 / Lv4→2 / Lv5→3）');
 ck(buy.toString().indexOf('confirmSpend') >= 0 && craft.toString().indexOf('confirmSpend') >= 0
    && buyVit.toString().indexOf('confirmSpend') >= 0 && buyCon.toString().indexOf('confirmSpend') >= 0
-   && buyMat.toString().indexOf('confirmSpend') >= 0 && buyPlat.toString().indexOf('confirmSpend') >= 0
+   && /confirmSpend|qtyDialog/.test(buyMat.toString()) && buyPlat.toString().indexOf('confirmSpend') >= 0
    && buyBlueprint.toString().indexOf('confirmSpend') >= 0 && upSkill.toString().indexOf('confirmSpend') >= 0
    && buyCharm.toString().indexOf('confirmSpend') >= 0 && cook.toString().indexOf('confirmSpend') >= 0
    && craftItem.toString().indexOf('confirmSpend') >= 0 && sellAll.toString().indexOf('confirmSpend') >= 0,
-   'v1.53：桥接层 12 个资源消耗入口全部走 confirmSpend 二次确认');
+   'v1.53：桥接层 12 个资源消耗入口全部走二次确认（v1.69 起交易所买入 = qtyDialog 数量弹窗，内含合计与最大）');
 ck(S.items && typeof S.items === 'object' && (function(){
      var h = renderBag.toString();
      return h.indexOf('炼金台') >= 0 && h.indexOf('craftItem(') >= 0 && h.indexOf('!CRAFT[n]') >= 0;
    })(), 'v1.46：背包炼金台卡 + 规则道具过滤准备物');
+/* v1.65：renderQuest 被桥接层替换为「注入副本卡」包装——静态检查取原原型函数 */
+const _rq0 = (typeof _renderQuestBase !== 'undefined') ? _renderQuestBase : renderQuest;
 /* v1.48b：多品类功能保留（数据回滚）/ 酒馆传闻 2 条 / 布局（健康 span2 + 连击顺序、委托页标题） */
 ck(typeof newRumor === 'function' && (function(){ const r = newRumor('2026-10-05'); return r.date === '2026-10-05' && (r.idx % RUMORS.length) !== (r.idx2 % RUMORS.length); })(),
    'v1.48b：newRumor 生成两条互不相同索引 + 日期');
-ck(renderQuest.toString().indexOf('正在进行的委托（') >= 0 && renderQuest.toString().indexOf('委托刷新 · ') >= 0,
+ck(_rq0.toString().indexOf('正在进行的委托（') >= 0 && _rq0.toString().indexOf('委托刷新 · ') >= 0,
    'v1.48b：委托页标题（正在进行的委托 / 委托刷新）');
-ck(renderQuest.toString().indexOf('右栏 · 今日状态') >= 0 && renderQuest.toString().indexOf('今日状态（v1.48b：自左栏迁入右栏顶部）') >= 0,
+ck(_rq0.toString().indexOf('右栏 · 今日状态') >= 0 && _rq0.toString().indexOf('今日状态（v1.48b：自左栏迁入右栏顶部）') >= 0,
    'v1.48b：今日状态归右栏');
 ck((function(){ const s = renderHealth.toString(); const a = s.indexOf('card span2'), b = s.indexOf('🔥 当前连击'), c = s.indexOf('📊 健康评分的作用'); return a >= 0 && b > a && c > b; })(),
    'v1.48b：健康页顺序（评分通栏 → 连击 → 作用说明）');
@@ -187,7 +189,7 @@ ck(_settleInner.toString().indexOf("Math.max(1, Math.round(q[5]*0.3))") >= 0 && 
    'v1.48d：失败结算 30% 报酬 + 30% 经验（至少 1）');
 /* v1.48e：月事件整月有效 + 成功率加成拆解 */
 ck(monthEventExpired() === false, 'v1.48e：月事件整月有效（expired 恒 false）');
-ck(renderQuest.toString().indexOf("安眠室/称号") >= 0, 'v1.48e：成功率加成拆解显示');
+ck(_rq0.toString().indexOf("安眠室/称号") >= 0, 'v1.48e：成功率加成拆解显示');
 /* v1.48f：图鉴委托详情 + 数量格式统一 + 月事件 Lv1 解锁 */
 ck(typeof qtyRangeTxt === 'function' && qtyRangeTxt([2,4]) === '×2-4' && qtyRangeTxt([3,3]) === '×3' && qtyRangeTxt(5) === '×5',
    'v1.48f：qtyRangeTxt 数量统一文案（区间 x-y / 等值单值）');
@@ -264,12 +266,12 @@ hck(html.indexOf('心情补上差距的 25%') >= 0
     'v1.61s：心情日结算改收敛式（向昨日健康分补差距 25%·四舍五入·早睡 +5——原分档 +10/+5/−5 与文案退役；0 值心情不再归缺省）');
 hck(html.indexOf('散步</b>同时只能派 1 只') >= 0 && html.indexOf('每天可派 1 只<b>散步</b>') < 0,
     'v1.61r：散步说明对齐实现（同时只能 1 只、无每日上限——原「每天可派 1 只」不符）');
-hck((html.match(/<span class="tb-i">/g) || []).length === 8, 'v1.57：8 个页签全部带图标（tb-i）');
+hck((html.match(/<span class="tb-i">/g) || []).length === 10, 'v1.57/v1.64/v1.66：10 个页签全部带图标（tb-i——v1.66 新增「市场」）');
 hck(html.indexOf('b.scrollIntoView({inline:"center"') >= 0, 'v1.57：当前页签自动滚入视野');
 hck(html.indexOf('main.addEventListener("touchstart"') >= 0 && html.indexOf('Math.abs(dx) < 70') >= 0
     && html.indexOf('nb.click()') >= 0, 'v1.57：内容区左右滑动手势切页（复用页签点击路径）');
 /* v1.48b：多品类数据回滚（功能代码保留）+ 酒馆传闻 2 条 + 健康 span2 + 委托页标题 */
-hck(html.indexOf('"蜂蜜":["食材","普通",600]') >= 0 && html.indexOf(',["草药"]]') < 0 && html.indexOf(',["食材"]]') < 0 && html.indexOf(',["特殊"]]') < 0,
+hck(html.indexOf('"蜂蜜":["食材","普通",60]') >= 0 && html.indexOf(',["草药"]]') < 0 && html.indexOf(',["食材"]]') < 0 && html.indexOf(',["特殊"]]') < 0,
     'v1.48b：M 表多品类数据已回滚（无第 4 位数组）');
 hck(html.indexOf('function matCats(') >= 0 && html.indexOf('function matHasCat(') >= 0,
     'v1.48b：多品类功能代码保留（matCats / matHasCat）');
@@ -363,7 +365,7 @@ hck(html.indexOf('"「"+L.stages[0].name+"」的变异值自二阶起才开始�
     && html.indexOf('（二阶起才积累变异值）') >= 0,
     'v1.55：阅读驱动拦截（一阶喂高级材料警告 + 喂食界面标注）');
 hck(html.indexOf('const PET_FIXED = {};') >= 0
-    && html.indexOf('"星界幼龙": {icon:"🐲", from:"传奇事件「星界远征」", rank:"传说",') >= 0
+    && html.indexOf('"星界幼龙": {icon:"🐲", from:"传奇事件「星界摇篮」", rank:"传说",') >= 0
     && html.indexOf('"星界巨龙", rate:0.03, exp:0.05') >= 0,
     'v1.55：4 只传奇伙伴并入 PET_LINES（PET_FIXED 清空）');
 /* v1.55b：宠物品阶体系（普通 < 精良 < 稀有 < 史诗 < 传说） */
@@ -399,9 +401,9 @@ hck(html.indexOf('const PET_PAT_TXT') >= 0 && html.indexOf('const PET_STORY') >=
     && html.indexOf('PET_WALK_TXT') >= 0 && html.indexOf('PET_THEATER_TXT') >= 0
     && html.indexOf('PET_NIGHT_TXT') >= 0 && html.indexOf('PET_FEST_SCENE') >= 0 && html.indexOf('PET_FEST_REACT') >= 0,
     'v1.56：文本库 8 组（抚摸 / 故事 / 365 / 心意 / 散步 / 小剧场 / 深夜 / 节日）');
-hck((html.match(/data-t="pet"/g) || []).length >= 2 && html.indexOf('id="tab-pet"') >= 0
-    && html.indexOf('renderPet()') >= 0 && html.indexOf('前往宠物页') < 0,
-    'v1.56：独立宠物页（导航 / 区块 / render 挂接；v1.61d 背包导流卡移除）');
+hck((html.match(/data-t="pet"/g) || []).length >= 1 && html.indexOf('id="tab-pet"') >= 0
+    && html.indexOf('renderPet()') >= 0 && html.indexOf('前往宠物页') < 0 && html.indexOf('gotoPetTab') < 0,
+    'v1.56：独立宠物页（导航 / 区块 / render 挂接；v1.61d 背包导流卡移除；v1.67 gotoPetTab 删除后 data-t="pet" 仅余页签 1 处）');
 hck(html.indexOf('petWalk:null') >= 0 && html.indexOf('petNick:{}') >= 0
     && html.indexOf('walkCount:0') >= 0 && html.indexOf('petNightDate') >= 0,
     'v1.56：newState 持久字段（petWalk / petNick / walkCount / petNightDate）');
@@ -478,9 +480,21 @@ hck(html.indexOf('"冥河灯油":["特殊","史诗",62000]') >= 0 && html.indexO
     && html.indexOf('"六域拼盘":"把六片遗落的土地摆上同一张桌') >= 0,
     'v1.58：新材料 / 装备 / 料理描述齐备（MAT_DESC / GEAR_FLAVOR / COOK_FLAVOR）');
 /* v1.59：传奇面额上调 + 9 铂金补键 + Lv4 简单档 + 弱出口装备 */
-hck(html.indexOf('"9铂金币":9000000') >= 0 && html.indexOf('"屠龙传说","精英",5,"噩梦","2铂金币",800') >= 0
-    && html.indexOf('"万龙之宴","精英",14,"噩梦","9铂金币",2300') >= 0,
-    'v1.59：传奇面额上调（屠龙 2铂金 / 万龙 9铂金）+ LEGEND_GOLD 补「9铂金币」');
+hck(html.indexOf('"9铂金币":9000000') >= 0 && html.indexOf('"屠龙传说","精英",5,"噩梦","3铂金币",1000') >= 0
+    && html.indexOf('"万龙之宴","精英",14,"噩梦","9铂金币",2300') >= 0
+    && html.indexOf('"星界摇篮","探索+精英",7,"噩梦","3铂金币",1050') >= 0,
+    'v1.67：传奇改版（屠龙 3铂金/1000 + 前置弑龙者；星界摇篮更名）+ LEGEND_GOLD 补「9铂金币」');
+/* v1.67：交易所日限 / 社交行内 onclick / 拉黑名单 / 日志转义 / 料理 N5 / 死代码清理 */
+hck(html.indexOf('exchangeBuyDaily:[0,10,15,20,25]') >= 0 && html.indexOf('今日交易所买入已达上限') >= 0,
+    'v1.67 N3：交易所每日买入上限随等级（CFG + 前端拦截）');
+hck(html.indexOf('function socNameOf(uid)') >= 0 && html.indexOf('socDelConfirm') < 0 && html.indexOf('socBlockConfirm') < 0,
+    'v1.67 A2/A4：好友行 onclick 只传 uid（昵称特殊字符不再破坏内联 JS）');
+hck(html.indexOf('已拉黑（') >= 0 && html.indexOf('socUnblock(') >= 0, 'v1.67 A3：已拉黑名单入口（查看 / 解除）');
+hck(html.indexOf('petEsc(l.m)') >= 0 && html.indexOf('id="nickIn" maxlength="6"') >= 0,
+    'v1.67 A5/A10：昵称限 6 字 + 日志文本转义');
+hck(html.indexOf('{n:"菌菇汤", main:{"蘑菇":4}, sub:{"泉水":2}, en:4') >= 0 && html.indexOf('enPct:0.5') >= 0
+    && html.indexOf('en:40, cap:0, bonus:0.12') >= 0,
+    'v1.67 N5：料理恢复精力重排（菌菇汤 4 … 巨龙盛宴 50%；v1.67a 史诗/传说维持原档）');
 hck(html.indexOf('"王都巡夜","短时","21:00-23:30",120,"简单",58000,58') >= 0
     && html.indexOf('"猎场驱兽","狩猎","08:00-23:30",180,"简单",60000,60') >= 0,
     'v1.59：Lv4 简单档报酬/经验下调（王都巡夜 5.8 万 / 猎场驱兽 6 万）');
@@ -593,6 +607,56 @@ hck(html.indexOf("tierW") < 0 && html.indexOf("v1.61k：拾取权重 = 内容自
     && html.indexOf("v1.61k：权重 = 掉表期望数量") >= 0 && html.indexOf("v1.61k：权重 = 区域掉率%") >= 0
     && html.indexOf("v1.61k：权重 = 必得数量") >= 0,
     'v1.61k：拾取权重 = 内容自身产出结构（委托期望数量 / 区域掉率% / 传奇必得数量 —— tierW 移除）');
+/* v1.65：组队副本（P2 · 桥接层注入委托页；数据段含池 + CFG.party） */
+hck(html.indexOf("const PARTY = [") >= 0 && html.indexOf("const PARTY_GROUPS = {") >= 0
+    && html.indexOf("const PARTY_TXT = {") >= 0 && html.indexOf("party:{") >= 0
+    && (html.match(/^  \["/gm) || []).length >= 24,
+    'v1.65：数据段含 PARTY 池（24 条）+ PARTY_GROUPS + PARTY_TXT + CFG.party');
+hck(html.indexOf("_renderQuestBase = renderQuest") >= 0 && html.indexOf("function mountParty(){") >= 0
+    && html.indexOf('anchor.after(c)') >= 0 && html.indexOf('c.id = "partyCard"') >= 0,
+    'v1.65：桥接层包装 renderQuest 注入副本卡（原型层零改动）');
+hck(["party_create", "party_invite", "party_accept", "party_decline", "party_start",
+     "party_act", "party_quit", "party_abandon", "party_offer_abandon", "party_claim"]
+     .every(function(a){ return html.indexOf('"' + a + '"') >= 0; }),
+    'v1.65：桥接层 10 个副本动作齐全');
+hck(html.indexOf("🎲 掷骰行动") >= 0 && html.indexOf("大成功 +2 格") >= 0
+    && html.indexOf("安慰奖 ≈1/4 必得材料") >= 0 && html.indexOf("未开启作废，精力全额退还") >= 0,
+    'v1.65：掷骰 / 大成功 / 安慰奖 / 精力退还文案');
+hck(html.indexOf('s.id = "partyDot"') >= 0 && html.indexOf('getElementById("partyDot")') >= 0
+    && html.indexOf("function updatePartyDot(") >= 0
+    && html.indexOf("#partyDot.on") >= 0 && html.indexOf("j.party_dot") >= 0,
+    'v1.65：委托页签红点（注入 + 样式 + 随响应更新）');
+hck(html.indexOf("PTY = j.party || null") >= 0 && html.indexOf("if(j.party !== undefined) PTY") >= 0,
+    'v1.65：副本数据随响应缓存（变量 PTY——与数据段 const PARTY 不重名）');
+/* v1.66：材料市场（P3 · 桥接层注入市场页；数据段含 CFG.market） */
+hck(html.indexOf("market:{") >= 0 && html.indexOf("unlockLv:3") >= 0
+    && html.indexOf("unlockGuild:3") >= 0 && html.indexOf('tiers:["普通","精良","稀有","史诗"]') >= 0
+    && html.indexOf("buyDaily:5") >= 0 && html.indexOf("buyWeekly:20") >= 0,
+    'v1.66：数据段含 CFG.market（解锁 / 品阶 / 限额 / 区间）');
+hck(html.indexOf('data-t="shop"') >= 0 && html.indexOf('data-t="market"') >= 0
+    && html.indexOf('data-t="shop"') < html.indexOf('data-t="market"')
+    && html.indexOf('data-t="market"') < html.indexOf('data-t="social"')
+    && html.indexOf('<section id="tab-market"') >= 0,
+    'v1.66：市场页签位于「公会」右侧、页面容器就位');
+hck(["marketHTML", "mktListDialog", "mktUpdBounds", "mktBuyDialog", "mktCancelConfirm",
+     "mktTimeTxt", "mktPriceHint", "loadMarket", "renderMarket", "updateMarketDot"]
+     .every(function(f){ return html.indexOf("function " + f + "(") >= 0; }),
+    'v1.66：桥接层市场渲染 / 交互函数齐全（托管上架 / 买入 / 下架弹窗）');
+hck(["market_list", "market_cancel", "market_buy"].every(function(a){ return html.indexOf('"' + a + '"') >= 0; }),
+    'v1.66：桥接层 3 个市场动作齐全（上架 / 下架 / 买入）');
+hck(html.indexOf('<span id="marketDot">') >= 0 && html.indexOf("#marketDot.on") >= 0
+    && html.indexOf("function updateMarketDot(") >= 0 && html.indexOf("j.market_dot") >= 0,
+    'v1.66：市场页签红点（注入 + 样式 + 随响应更新）');
+hck(html.indexOf("var MKT = null") >= 0 && html.indexOf("MKT = j.market || null") >= 0
+    && html.indexOf("if(MKT) renderMarket()") >= 0,
+    'v1.66：市场数据随响应缓存（变量 MKT——与 CFG.market 不重名）');
+hck(html.indexOf("if(!MKT || !MKT.unlock)") >= 0 && html.indexOf("_orig.call(b)") >= 0
+    && html.indexOf("材料市场需") >= 0,
+    'v1.66：页签点击包装（未解锁弹窗、不切换页）');
+hck(html.indexOf("挂单即托管") >= 0 && html.indexOf("免手续费") >= 0
+    && html.indexOf("天未售出自动下架退回") >= 0 && html.indexOf("单价区间 = 商店价") >= 0
+    && html.indexOf(".mkt-row{") >= 0,
+    'v1.66：托管 / 免手续费 / 单价区间 / 到期退回文案与样式');
 
 let evalFail = 0;
 try { eval(code + test); } catch(e){ console.log('FAIL 加载异常: ' + e.message); evalFail = 1; }

@@ -1,8 +1,14 @@
 # -*- coding: utf-8 -*-
 """Flask 版核心逻辑测试：python test_game.py
    覆盖：状态 / 补算 / 打卡 / 接取 / 结算 / 掉落 / 区间奖励 / 周月结算 / 成就 / 商店 / 打造 / 探索"""
+import random
 import sys
 from datetime import datetime, timedelta
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # v1.69：输出被管道/重定向时，❌ 等符号不再崩在打印上
+except Exception:
+    pass
 
 import game
 from game import (new_state, catch_up, settle, success_rate, calc_health,
@@ -63,11 +69,95 @@ print("  接取：" + s["active"][0]["name"] + "，成功率 " + str(round(s["ac
 print("=== 4. 结算与掉落 ===")
 q0 = game.C["Lv1"][0]     # 采集草药 {"止血草":[3,5]}
 mat0 = s["mats"].get("止血草", 0)
+_orig_rand = game.rand
+game.rand = lambda n=100: 50          # v1.69：锁「普通成功骰」——区间校验针对基础掉率（大成功 ×2 见 4b）
 res = settle(s, {"q": q0, "rate": 1.0, "qlv": 1, "meal": None}, msgs)
+game.rand = _orig_rand
 gain = s["mats"].get("止血草", 0) - mat0
-check(res["title"] in ("成功", "大成功！"), "结算成功")
+check(res["title"] == "成功", "结算成功")
 check(3 <= gain <= 5, "止血草掉落 " + str(gain) + " 应在 [3,5]")
 print("  结算：" + res["title"] + " roll " + str(res["roll"]) + " → " + " ".join(res["got"]))
+
+print("=== 4b. v1.69：大成功 → 全奖励 ×2 ===")
+_rc_save = game.rare_chance
+game.rare_chance = lambda st: 0.0      # 隔离稀有事件（避免其金币干扰 ×2 断言）
+
+
+def _crit_case(roll):
+    st = new_state()
+    st["mats"] = {}
+    random.seed(7)                     # 两次共用同一随机序列（数量判定一致，只有 crit 变量）
+    _o = game.rand
+    game.rand = lambda n=100: roll
+    try:
+        r = settle(st, {"q": q0, "rate": 1.0, "qlv": 1, "meal": None}, [])
+    finally:
+        game.rand = _o
+    return r, st
+
+
+_r50, _s50 = _crit_case(50)            # 普通成功
+_r3, _s3 = _crit_case(3)               # 大成功
+check(_r50["title"] == "成功" and _r3["title"] == "大成功！", "骰值 3 = 大成功 / 50 = 普通成功")
+check(_r3["gold"] == _r50["gold"] * 2, "大成功：报酬 ×2（" + str(_r50["gold"]) + " → " + str(_r3["gold"]) + "）")
+check(_r3["exp"] == _r50["exp"] * 2, "大成功：经验 ×2（" + str(_r50["exp"]) + " → " + str(_r3["exp"]) + "）")
+check(_s3["rep"] == _s50["rep"] * 2, "大成功：声望 ×2（" + str(_s50["rep"]) + " → " + str(_s3["rep"]) + "）")
+check(_s3["con"] == _s50["con"] * 2, "大成功：贡献 ×2（" + str(_s50["con"]) + " → " + str(_s3["con"]) + "）")
+check(_s3["mats"].get("止血草") == _s50["mats"].get("止血草") * 2,
+      "大成功：材料 ×2（" + str(_s50["mats"].get("止血草")) + " → " + str(_s3["mats"].get("止血草")) + "）")
+game.rare_chance = _rc_save
+print("  大成功实测：报酬/经验/声望/贡献/材料 全部 ×2 ✅")
+
+print("=== 4c. v1.69：规则道具守卫 + 失败保留 buff + 馈赠补发 ===")
+st = new_state(); st["items"] = {"谈判卷轴": 2}
+check(game.use_item(st, "谈判卷轴", []) is None and st["rare_next_pay"] == 0.15 and st["items"]["谈判卷轴"] == 1,
+      "谈判卷轴：无同类加成时正常使用并消耗")
+st["rare_next_pay"] = 0.25
+check(game.use_item(st, "谈判卷轴", []) is not None and st["items"]["谈判卷轴"] == 1 and st["rare_next_pay"] == 0.25,
+      "谈判卷轴：已有 +25% → 拒绝且不消耗（原被 max() 白烧）")
+
+
+def _buff_case(roll, rate):
+    st = new_state()
+    st["rare_next_pay"] = 0.15
+    st["rare_next_rate"] = 0.05
+    _o = game.rand
+    game.rand = lambda n=100: roll
+    try:
+        settle(st, {"q": q0, "rate": rate, "qlv": 1, "meal": None}, [])
+    finally:
+        game.rand = _o
+    return st
+
+
+_fail = _buff_case(90, 0.5)            # 90 > 50 → 失败
+_win = _buff_case(10, 0.5)             # 10 ≤ 50 → 成功（非大成功）
+check(_fail["rare_next_pay"] == 0.15 and _fail["rare_next_rate"] == 0.05, "下一次委托加成：失败保留（原失败照清）")
+check(_win["rare_next_pay"] == 0 and _win["rare_next_rate"] == 0, "下一次委托加成：成功消费")
+
+st = new_state()
+_res = {"name": q0[0], "gold": 1000}
+_save_rare, _save_rc = game.RARE, game.rare_chance
+game.RARE = [("意外的馈赠", 1, "pay", 0.5, "本次委托报酬 +50%")]
+game.rare_chance = lambda x: 1.0
+_m0 = st["money"]
+_ev = game.try_rare_event(st, "采集", q0[0], [], res=_res)
+game.RARE, game.rare_chance = _save_rare, _save_rc
+check(_ev and (st["money"] - _m0) == 500 and _res["gold"] == 1500,
+      "意外的馈赠：委托触发补发本次报酬 +50%（+" + str(st["money"] - _m0) + "）")
+
+print("=== 4d. v1.69：交易批量 ===")
+st = new_state(); st["lv_idx"] = 4; st["rep"] = 5000; st["money"] = 10 ** 9
+_msgs = []
+check(game.buy_mat(st, "青石", _msgs, 3) is None and st["mats"].get("青石") == 3 and st["exbuy"]["n"] == 3,
+      "交易所买入 ×3（限额累计 3）")
+_cap4 = (game.CFG.get("exchangeBuyDaily") or [0, 10, 15, 20, 25])[4]
+check(game.buy_mat(st, "青石", _msgs, 999) is None and st["exbuy"]["n"] == _cap4,
+      "交易所买入超量 → 自动截断到日限 " + str(_cap4))
+_e_cap = game.buy_mat(st, "青石", _msgs, 1)
+check(_e_cap is not None and "上限" in _e_cap, "交易所买入：日限用尽 → 提示")
+check(game.sell_mat(st, "青石", 4) is None and st["mats"]["青石"] == _cap4 - 4, "卖出 ×4（余 " + str(st["mats"]["青石"]) + "）")
+check(game.sell_mat(st, "青石", 0) is not None, "卖出：数量 0 拦截")
 
 print("=== 5. 数量区间递减权重 ===")
 cnt = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
@@ -173,7 +263,7 @@ m0, mat0 = s["money"], sum(s["mats"].values())
 bad = game.buy(s, 0, [], 4)
 check(bad is not None and s["money"] == m0, "超日限购被拒（普通材料包 ×4 > 日限 3）")
 game.buy(s, 0, [], 3)
-check(s["money"] == m0 - 18000 and sum(s["mats"].values()) == mat0 + 15, "限购内批量购买 ×3（-1.8 万，+15 材料）")
+check(s["money"] == m0 - 1500 and sum(s["mats"].values()) == mat0 + 15, "限购内批量购买 ×3（-1500 铜 · v1.63 材料包 5 银/个，+15 材料）")
 bad = game.buy(s, 0, [], 1)
 check(bad is not None, "达日限购后再买被拒")
 # v1.38o：疾风符咒日限 1（v1.61d：贡献商店首项；清醒/安眠已移至铂金商店）
@@ -1236,7 +1326,8 @@ check(list(_lc[8].keys())[0] == "龙息草", "龙巢外围巡查：主材料降�
 _sm = [q for q in game.C["Lv4"] if q[0] == "讨伐石魔像"][0]
 check(list(_sm[8].keys())[0] == "陨铁", "讨伐石魔像：主材料升为史诗（陨铁）")
 _jl = [q for q in game.C["Lv3"] if q[0] == "巨龙巢穴侦察"][0]
-check(list(_jl[8].keys())[0] == "龙骨" and _jl[8]["龙骨"] == [1, 1], "巨龙巢穴侦察：史诗降为单份（龙骨×1）")
+check(list(_jl[8].keys())[0] == "兽肉" and _jl[8]["兽肉"] == [2, 4] and _jl[8]["龙骨"] == [1, 1],
+      "巨龙巢穴侦察：兽肉保必掉（龙骨/龙鳞改概率副项——v1.63 经济重平衡）")
 _gl = [q for q in game.C["Lv4"] if q[0] == "古龙遗骸采集"][0]
 check(_gl[8]["龙角"] == [1, 3], "古龙遗骸采集：龙角概率量 1~5 → 1~3")
 
@@ -1447,13 +1538,17 @@ print("=== 39. v1.41 I6：大师层 ===")
 _mg = [g for g in game.GEAR if g[0] in ("大师之证", "宗师手套", "终焉披风", "大师徽章")]
 check(len(_mg) == 4, "大师层装备 4 件（3 传说 + 1 成就饰品）")
 check(any(n == "大师" and g == "大师徽章" for n, g in game.ACHV), "成就「大师」→ 大师徽章")
+# v1.67：传奇事件「星界远征」更名「星界摇篮」——迁移态验证
+_smv = game.new_state(); _smv["legend_done"] = ["星界远征", "屠龙传说"]
+game.migrate_state(_smv)
+check(_smv["legend_done"] == ["星界摇篮", "屠龙传说"], "v1.67：legend_done 更名迁移（星界远征 → 星界摇篮）")
 check(len(game.MASTER_SHOP["gear"]) == 3 and game.MASTER_SHOP["vitC"] == 20
       and game.MASTER_SHOP["gear"][0]["platC"] == 18,
       "MASTER_SHOP：3 装备 / 活力 20 铂金 / 首价 18 铂金")
 # 2) 解锁判定：3 传奇未解锁；4 传奇达成
-_s60 = new_state(); _s60["legend_done"] = ["屠龙传说", "星界远征", "魔神封印"]
+_s60 = new_state(); _s60["legend_done"] = ["屠龙传说", "星界摇篮", "魔神封印"]
 check(not game.master_unlocked(_s60), "3 个传奇 → 大师未解锁")
-_s60["legend_done"] = ["屠龙传说", "星界远征", "魔神封印", "时间回廊"]
+_s60["legend_done"] = ["屠龙传说", "星界摇篮", "魔神封印", "时间回廊"]
 game.check_achievements(_s60, [])
 check("大师" in _s60["achv"] and "大师徽章" in _s60["gear"], "4 个传奇 → 成就「大师」达成、徽章入包")
 check(game.master_unlocked(_s60), "≥4 个传奇 → 大师商店解锁")
@@ -1601,13 +1696,13 @@ check({"狩猎火龙", "驱赶绿龙", "与白龙探讨魔法", "金龙宝藏的
 _hy = next(q for q in game.C["Lv5"] if q[0] == "讨伐九头蛇")
 check("龙鳞" not in _hy[8] and "龙心" not in _hy[8] and "龙牙" not in _hy[8] and "九头蛇心脏" in _hy[8],
       "讨伐九头蛇改用九头蛇素材（不再掉龙材料）")
-# 巨龙盛宴：enPct 0.5（按精力上限 50% 恢复）——材料大块龙肉新增
+# 巨龙盛宴：enPct 0.5（按精力上限 50% 恢复；v1.67a：史诗/传说不削弱，维持原档）——材料大块龙肉新增
 _s99 = new_state()
 _s99["lv_idx"] = 4
 _feast_i = next(j for j, r in enumerate(game.CFG["recipes"]) if r["n"] == "巨龙盛宴")
 _feast_r = game.CFG["recipes"][_feast_i]
 check("大块龙肉" in game.recipe_ing(_feast_r) and "en" not in _feast_r and _feast_r.get("enPct") == 0.5,
-      "盛宴配方：+大块龙肉×3、en→enPct 0.5")
+      "盛宴配方：+大块龙肉、en→enPct 0.5（v1.67a）")
 for k, n in game.recipe_ing(_feast_r).items():
     _s99["mats"][k] = n
 _s99["energy"] = 0
@@ -1931,14 +2026,14 @@ print("=== 55. v1.51：A3 传奇同时限 1 + 专属传说装备条件 ===")
 # ① 4 事件带 gear 条件且装备名有效
 _g55 = {L[0]: (L[8] or {}).get("gear") for L in game.LEGEND}
 _gnames = {g[0] for g in game.GEAR}
-check(_g55.get("星界远征") == "星界护铠" and _g55.get("世界树种子") == "世界树之枝"
+check(_g55.get("星界摇篮") == "星界护铠" and _g55.get("世界树种子") == "世界树之枝"
       and _g55.get("龙神契约") == "龙瞳宝珠" and _g55.get("万龙之宴") == "金龙鳞铠"
       and all(v in _gnames for v in _g55.values() if v),
       "A3：4 事件专属条件（传说装备）+ 装备名有效")
 # ② eligible：无装备 → 不合格；有装备 → 合格
-_L55 = [L for L in game.LEGEND if L[0] == "星界远征"][0]
+_L55 = [L for L in game.LEGEND if L[0] == "星界摇篮"][0]
 _s55 = new_state()
-check(not game.legend_eligible(_s55, _L55), "A3：未拥有星界护铠 → 星界远征不符合条件")
+check(not game.legend_eligible(_s55, _L55), "A3：未拥有星界护铠 → 星界摇篮不符合条件")
 _s55["gear"].append("星界护铠")
 check(game.legend_eligible(_s55, _L55), "A3：拥有星界护铠 → 符合条件")
 # ③ 同时最多 1 个：进行中传奇未完成时接取被拒
@@ -2038,8 +2133,8 @@ check(_feast58["bonus"] > _plate58["bonus"] and _feast58["rate"] >= _plate58["ra
 print("=== 58. v1.59：传奇报酬上调 / Lv4 简单档梯度 / 弱出口装备补全 ===")
 # ① 5 个传奇事件报酬/经验上调（早期与长周期档不再被新内容反超；同档差距保留）
 _lg59 = {L[0]: L for L in game.LEGEND}
-check(_lg59["屠龙传说"][4] == "2铂金币" and _lg59["屠龙传说"][5] == 800, "屠龙传说：1铂金/500 → 2铂金/800")
-check(_lg59["星界远征"][4] == "3铂金币" and _lg59["星界远征"][5] == 1050, "星界远征：2铂金/800 → 3铂金/1050")
+check(_lg59["屠龙传说"][4] == "3铂金币" and _lg59["屠龙传说"][5] == 1000, "屠龙传说：v1.67 上调 3铂金/1000（v1.59 曾 2铂金/800）")
+check(_lg59["星界摇篮"][4] == "3铂金币" and _lg59["星界摇篮"][5] == 1050, "星界摇篮（原星界远征）：3铂金/1050（v1.67 更名改题）")
 check(_lg59["公会大师试炼"][4] == "2铂金币" and _lg59["公会大师试炼"][5] == 1000, "公会大师试炼：50金/600 → 2铂金/1000")
 check(_lg59["龙神契约"][4] == "7铂金币" and _lg59["龙神契约"][5] == 2000, "龙神契约：5铂金/1500 → 7铂金/2000")
 check(_lg59["万龙之宴"][4] == "9铂金币" and _lg59["万龙之宴"][5] == 2300, "万龙之宴：8铂金/2000 → 9铂金/2300")
@@ -2048,7 +2143,7 @@ check(_lg59["创世碎片"][4] == "10铂金币" and _lg59["虚空王座"][4] == 
 # ② LEGEND_GOLD 全键覆盖（v1.59 补「9铂金币」——此前缺键会静默回落 1 铂金）
 check(all(L[4] in game.LEGEND_GOLD for L in game.LEGEND), "传奇报酬面额全部可解析（LEGEND_GOLD 无缺键）")
 check(game.LEGEND_GOLD["9铂金币"] == 9000000, "LEGEND_GOLD 补「9铂金币」= 9000000")
-check(game.legend_rep(None, _lg59["屠龙传说"]) == 800, "屠龙传说声望随面额升至 800（400 + 2×100 + 200）")
+check(game.legend_rep(None, _lg59["屠龙传说"]) == 900, "屠龙传说声望随面额升至 900（400 + 3×100 + 200；v1.67）")
 # ③ Lv4 简单档梯度（上限 < 普通档下限；对齐 Lv5 档距）
 _c4 = {q[0]: q for lv in game.C.values() for q in lv}
 _lv4_simple = {q[0]: q for q in game.C["Lv4"] if q[4] == "简单"}
@@ -2374,6 +2469,85 @@ check(_md["wolf"]["mood"] == 75, "日结算集成：次日 61 · 健康分 95 ·
 _md["wolf"]["mood"] = 99
 game.pet_mood_daily(_md, [], 100, True)
 check(_md["wolf"]["mood"] == 100, "日结算集成：99 → 100 封顶（增量 5 后 clamp）")
+
+print()
+print("=== 60. v1.63：委托经济重平衡 v2（低阶材料基准价压缩 + Lv1 报酬新表 + 级联） ===")
+# ① 基准价分档带（普通÷10 / 精良÷5 / 稀有÷3；史诗·传说不动）
+_bands = {"普通": (30, 80), "精良": (320, 800), "稀有": (2700, 5000), "史诗": (40000, 95000), "传说": (300000, 600000)}
+_badp = [n for n, v in game.M.items() if not (_bands[v[1]][0] <= v[2] <= _bands[v[1]][1])]
+check(not _badp, "材料基准价分档（普通 30~80铜 / 精良 3.2~8银 / 稀有 27~50银 / 史诗·传说不动）"
+      + ("；越界 " + str(_badp[:5]) if _badp else ""))
+# ② Lv1 全 16 条新报酬
+_L1 = {"采集草药": 100, "采集蘑菇": 100, "拾取柴薪": 80, "修补渔网": 80, "驱赶田鼠": 140, "猎取山鸡": 110,
+       "猎取雪兔": 120, "砍伐木材": 100, "挖掘石材": 100, "收集山泉": 160, "猎杀野鹿": 150, "溪畔垂钓": 100,
+       "掏取岩蜂巢": 120, "驱赶乌鸦群": 90, "猎捕肥田鼠": 150, "夜巡麦田": 200}
+_badl1 = [q[0] for q in game.C["Lv1"] if _L1.get(q[0]) != q[5]]
+check(len(game.C["Lv1"]) == 16 and not _badl1, "Lv1 全部 16 条新报酬（铜~小银级，日收益归位）"
+      + ("；异常 " + str(_badl1) if _badl1 else ""))
+# ③ Lv2 微调 4 条
+_l2 = {q[0]: q for q in game.C["Lv2"]}
+check(_l2["月光草采集"][5] == 2500 and _l2["月光草采集"][8]["月光草"] == [1, 1, 0.55]
+      and list(_l2["月光草采集"][8].keys())[0] == "止血草",
+      "月光草采集：报酬 25 银 · 止血草首项 + 月光草 55% 副项")
+check(_l2["狼群驱赶"][5] == 3000 and list(_l2["狼群驱赶"][8].keys())[0] == "兽肉" and _l2["狼群驱赶"][8]["狼牙"] == [1, 1],
+      "狼群驱赶：兽肉首项 + 狼牙副项；报酬 30 银")
+check(_l2["采集松脂"][5] == 2000 and _l2["采集松脂"][8]["松脂"] == [1, 3] and _l2["采集松脂"][8]["香草"] == [1, 1],
+      "采集松脂：松脂 1~3 / 香草 1；报酬 20 银")
+check(_l2["采集晨露"][5] == 1400 and _l2["采集晨露"][8]["晨露花"] == [1, 2], "采集晨露：晨露花 1~2；报酬 14 银")
+# ④ Lv3 采集/狩猎/追踪类材料 ×1.3（抽查 3 条）
+_l3 = {q[0]: q for q in game.C["Lv3"]}
+check(_l3["深林鹿王追踪"][8] == {"鹿皮": [3, 5], "兽肉": [4, 8]}
+      and _l3["晨露药圃修剪"][8] == {"晨露花": [3, 5], "香草": [3, 5]}
+      and _l3["采集沼泽泥炭"][8] == {"蘑菇": [3, 7], "止血草": [3, 5]},
+      "Lv3 采集/狩猎/追踪类材料 ×1.3 回补（材料占比 ≈12%）")
+# ⑤ 抽查修复 + 材料包
+check([q for q in game.C["Lv4"] if q[0] == "古龙遗骸采集"][0][5] == 100000, "古龙遗骸采集：报酬 7 金 → 10 金")
+check(game.SHOP[0]["c"] == 500 and game.SHOP[1]["c"] == 2800, "材料包：普通 5 银 / 精良 28 银（约 2 倍溢价）")
+# ⑥ 引擎：掉表项单独概率（mat_qty_range 容忍 + 掉落行为双探针）
+check(list(game.mat_qty_range([1, 2, 0.15])) == [1, 2], "mat_qty_range 容忍第 3 位概率标注（返回 2 元区间）")
+_yd = [q for q in game.C["Lv1"] if q[0] == "猎杀野鹿"][0]
+_r63, _rr63 = game.rand, game.random.random
+_mmdd63 = game.today_str()[5:7] + "-" + game.today_str()[8:10]
+_saved63 = game.FESTIVALS.pop(_mmdd63, None)          # 隔离节日掉率倍率（如万圣夜 ×2）
+game.rand = lambda n: 6                               # 固定掷骰 6：成功且非大成功
+game.random.random = lambda: 0.10                     # < 15% → 鹿皮/鹿骨 均命中
+s63 = new_state()
+game.settle(s63, {"q": _yd, "rate": 1.0, "acceptTs": game.now_ms(), "finishTs": game.now_ms()}, [])
+check(s63["mats"].get("鹿皮", 0) >= 1 and s63["mats"].get("鹿骨", 0) >= 1 and s63["mats"].get("兽肉", 0) >= 2,
+      "猎杀野鹿：15% 副项命中（兽肉必得 + 鹿皮/鹿骨掉落）")
+s64 = new_state()
+game.random.random = lambda: 0.20                     # > 15% → 副项不落
+game.settle(s64, {"q": _yd, "rate": 1.0, "acceptTs": game.now_ms(), "finishTs": game.now_ms()}, [])
+check(s64["mats"].get("鹿皮", 0) == 0 and s64["mats"].get("鹿骨", 0) == 0 and s64["mats"].get("兽肉", 0) >= 2,
+      "猎杀野鹿：15% 未命中（副项不落，主材料必得不受影响）")
+game.rand, game.random.random = _r63, _rr63
+if _saved63 is not None:
+    game.FESTIVALS[_mmdd63] = _saved63
+
+print("=== 61. v1.67：料理 N5 / 交易所日限 N3 / 卖出防御 B1 / 打造唯一 C4 / 连击 C3 ===")
+# ① N5：料理恢复精力重设（低/中/高档抽检 + 盛宴 enPct）
+_r67 = {r["n"]: r for r in game.CFG["recipes"]}
+check(_r67["菌菇汤"]["en"] == 4 and _r67["风干肉条"]["en"] == 11 and _r67["星尘蜜露"]["en"] == 80 and _r67["龙血羹"]["en"] == 40,
+      "N5：料理精力重排（菌菇汤 4 / 风干肉条 11 / 星尘蜜露 80；v1.67a：史诗/传说回调原档）")
+check(_r67["巨龙盛宴"]["enPct"] == 0.5, "N5：巨龙盛宴 50% 精力上限（v1.67a 维持原档）")
+# ② N3：交易所每日买入上限随等级（Lv2 = 10）
+_t67 = new_state(); _t67["lv_idx"] = 1; _t67["money"] = 10 ** 9
+_t67["rep"] = game.CFG["guildReq"][1]                       # 公会 E（买入前置）
+_msgs67 = []
+check(all(game.buy_mat(_t67, "松木", _msgs67) is None for _ in range(10)) and _t67["mats"].get("松木") == 10,
+      "N3：Lv2 每日上限 10——前 10 个买入全部成功")
+check("上限" in (game.buy_mat(_t67, "松木", _msgs67) or ""), "N3：第 11 个被每日上限拦截")
+check(_t67["exbuy"]["n"] == 10, "N3：exbuy 计数落档 10")
+# ③ B1：卖出数量防御
+_t67b = new_state(); _t67b["lv_idx"] = 1; _t67b["mats"]["松木"] = 5   # Lv2 才开放卖出
+check("数量" in game.sell_mat(_t67b, "松木", "abc"), "B1：非数字数量被拒")
+check("数量" in game.sell_mat(_t67b, "松木", -3), "B1：负数数量被拒")
+check(game.sell_mat(_t67b, "松木", 99) is None and "松木" not in _t67b["mats"], "B1：超量按现有数卖出（清零入账）")
+# ④ C4：已拥有装备不可重复打造
+_t67c = new_state(); _t67c["gear"].append("铜剑")
+check("已拥有" in (game.craft(_t67c, "铜剑", []) or ""), "C4：已拥有装备拒绝重复打造")
+# ⑤ C3：sleep_streak 历史不足 → False（不越界）
+check(game.sleep_streak(new_state(), 3) is False, "C3：历史不足 n 天 → sleep_streak 返回 False")
 
 print()
 print("=" * 40)

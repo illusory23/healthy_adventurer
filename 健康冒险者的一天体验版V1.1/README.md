@@ -25,9 +25,6 @@ Flask版/
 ├─ app.py                  # Flask 服务（端口 5899）+ API 路由 + 账号体系
 ├─ game.py                 # 游戏核心逻辑（Python 移植，与原型一致）
 ├─ db.py                   # SQLite 持久化：users 账号表 + event_log（复制即备份）
-├─ test_game.py            # 核心逻辑测试（python test_game.py）
-├─ test_api.py             # 端到端 API 测试（python test_api.py）
-├─ tools_export_data.js    # 一次性工具：从原型 HTML 导出静态数据
 ├─ data/
 │  ├─ static_data.json     # 静态数据（委托/材料/装备/传奇/区域/配方…）
 │  └─ adventurer.db        # SQLite 存档（自动创建）
@@ -39,7 +36,7 @@ Flask版/
 ## 账号体系（v1.37）
 
 - **设备静默登录**：每台设备首次访问自动创建独立账号，令牌 Cookie 记住 1 年
-- **接入码**：每账号 8 位（如 `K7F2-9QZ3`），「冒险者信息 → 账号」页可复制；新设备输入即绑定 / 找回
+- **接入码**：每账号 8 位（无连字符，如 `K7F2QZ3B`），「冒险者信息 → 账号」页可复制；新设备输入即绑定 / 找回
 - **旧档迁移**：升级前的单存档，由**本机（localhost）首次打开**自动继承
 - **本机账号管理**：localhost 同页可查看全部账号（名字 / 接入码 / 最近登录）
 - 访问口令门保留（防公网扫描）；账号数据在 `users` 表
@@ -68,10 +65,8 @@ Flask版/
 
 ## 测试
 
-```bash
-python test_game.py     # 核心逻辑（484 项：补算/结算/掉落/周月/成就/宠物/图鉴…）
-python test_api.py      # 端到端（93 项：流程/口令门/多账号…，使用独立 test_api.db）
-```
+体验版不含独立测试脚本——核心逻辑与 Flask 版同源（差异仅社交层）。
+完整测试套件在仓库根目录：`python run_all_tests.py`（7 套：冒烟 / 创造模式 / 核心逻辑 / API / 社交 / 桥接复验 / 三方对拍）。
 
 ## 与原型的关系
 

@@ -21,7 +21,7 @@ const EXPO = ["CFG","M","GEAR","LEGEND","ACHV","ACHV_DESC","MAT_DESC","MAT_USE",
   "SKILLS","SKILL_COST","MONTH_EVENTS","REGIONS","C","SHOP","VIT_SHOP","CON_SHOP","PLAT_SHOP",
   "MASTER_SHOP","BP_SHOP","QUALITY_ORDER","MORDER","QUEST_REQ","QUEST_TURNIN","CHARM","MAT_ICON",
   "WOLF_STAGES","PET_LINES","PET_FIXED","PET_GIFTS","PET_FIND","TITLE_DESC","FESTIVALS","FESTIVAL_RANGES","CN_FEST_META","CN_LUNAR_FEST","FEST_EFF",
-  "CRAFT","QUEST_ITEM"];
+  "CRAFT","QUEST_ITEM","PARTY","PARTY_GROUPS","PARTY_TXT"];
 const FN = ["fmtMoney","fmtDur","cookTier","gearMainTxt","legendRep"];
 eval(code + "\n;global.__DS = {" +
   EXPO.map(function(k){ return k + ":" + k; }).join(",") + "," +
@@ -30,7 +30,9 @@ const D = global.__DS;
 
 /* ── CSV 工具 ── */
 function esc(v){ v = String(v == null ? "" : v); return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+let N_CSV = 0;                                                  // v1.65：表数计数（组队副本总表起动态）
 function csv(file, header, data){
+  N_CSV++;
   const lines = [header.join(",")].concat(data.map(function(r){ return r.map(esc).join(","); }));
   fs.writeFileSync(path.join(__dirname, file), "﻿" + lines.join("\r\n"), "utf-8");
   console.log("  " + file + "：" + data.length + " 行");
@@ -55,7 +57,7 @@ csv("材料总表.csv",
     return [k, _cats, D.M[k][1], D.fmtMoney(D.M[k][2]), D.MAT_DESC[k]||"", D.MAT_USE[D.M[k][0]]||""];
   }));
 
-/* ── ② 装备总表（85 件 · 含来源）── */
+/* ── ② 装备总表（131 件 · 含来源）── */
 const _masterGear = {}; (D.MASTER_SHOP.gear||[]).forEach(function(x){ _masterGear[x.n] = x; });
 const _achvOf = {}; D.ACHV.forEach(function(a){ if(a.gear) _achvOf[a.gear] = a.n; });
 csv("装备总表.csv",
@@ -83,11 +85,13 @@ csv("图纸总表.csv",
     return [g[0] + "图纸", g[0], g[1], D.CFG.guildName[info.guild] + " 级", info.price + " " + info.cur];
   }));
 
-/* ── ④ 委托总表（130 条 · 含链前置 / 上交 / 多日）── */
+/* ── ④ 委托总表（157 条 · 含链前置 / 上交 / 多日）── */
 const _qRows = [];
 D.CFG.levels.forEach(function(lv, i){
   (D.C[lv] || []).forEach(function(q){
-    const rate0 = Math.min(D.CFG.hardCap[i], Math.max(D.CFG.floor[i], D.CFG.sucBase[i] + (D.CFG.diffMod[q[4]] || 0)));
+    const _ov = D.CFG.diffModByLv[i + 1] || {};   // v1.67：难度修正按逐级表（与 game.py / 前端 questRate 同口径；原用扁平表致 Lv3~5 行偏低）
+    const _dm = (q[4] in _ov) ? (_ov[q[4]] === null ? 0 : _ov[q[4]]) : (D.CFG.diffMod[q[4]] || 0);
+    const rate0 = Math.min(D.CFG.hardCap[i], Math.max(D.CFG.floor[i], D.CFG.sucBase[i] + _dm));
     let cond = "";
     if(D.QUEST_REQ[q[0]]) cond += "链条：需先完成「" + D.QUEST_REQ[q[0]] + "」";
     if(D.QUEST_TURNIN && D.QUEST_TURNIN[q[0]]) cond += (cond ? "；" : "") + "资源指定：持有「" + D.QUEST_TURNIN[q[0]] + "」→ 结算自动上交，报酬翻倍";
@@ -102,13 +106,17 @@ csv("委托总表.csv",
 /* ── ⑤ 商店商品（6 商店 + 交易所规则）── */
 const _sRows = [];
 D.SHOP.forEach(function(it){ _sRows.push(["公会商店","E","铜币", it.n, D.fmtMoney(it.c), it.lim ? ("每" + it.lim[0] + " " + it.lim[1]) : "—", it.d||""]); });
-D.VIT_SHOP.forEach(function(it){ _sRows.push(["活力点商店","—","活力点", it.n, it.vit + " 点", "—", it.d||""]); });
-D.CON_SHOP.forEach(function(it){ _sRows.push(["贡献商店","D","贡献", it.n, it.con + " 贡献", it.lim ? ("每" + it.lim[0] + " " + it.lim[1]) : "—", (it.g ? ("公会 " + D.CFG.guildName[it.g] + " 级解锁　") : "") + (it.d||"")]); });
-D.PLAT_SHOP.forEach(function(it){ _sRows.push(["铂金商店","S", it.goldC ? "金币" : "铂金币", it.n, it.goldC ? (it.goldC + " 金币") : (it.platC + " 铂金币"), it.lim ? ("每" + it.lim[0] + " " + it.lim[1]) : "—", (it.sel ? it.sel.join(" / ") : "规则道具：当日健康锁定 100 分")]); });
+D.VIT_SHOP.forEach(function(it){ _sRows.push(["活力点商店","E","活力点", it.n, it.vit + " 点", "—", it.d||""]); });   // v1.67：随公会商店页开放（F 级整页不显示）
+D.CON_SHOP.forEach(function(it){
+  let _d = it.d || "";
+  if(it.g) _d = _d.replace(/·\s*[A-Z] 级解锁$/, "");   // v1.67：与「公会 X 级解锁」前缀去重（原 精英委托重掷券 双写）
+  _sRows.push(["贡献商店","D","贡献", it.n, it.con + " 贡献", it.lim ? ("每" + it.lim[0] + " " + it.lim[1]) : "—", (it.g ? ("公会 " + D.CFG.guildName[it.g] + " 级解锁　") : "") + _d]);
+});
+D.PLAT_SHOP.forEach(function(it){ _sRows.push(["铂金商店","持有 ≥1 铂金币", it.goldC ? "金币" : "铂金币", it.n, it.goldC ? (it.goldC + " 金币") : (it.platC + " 铂金币"), it.lim ? ("每" + it.lim[0] + " " + it.lim[1]) : "—", (it.sel ? it.sel.join(" / ") : (it.d || "—"))]); });   // v1.67：解锁口径 v1.61d 起为「持有 ≥1 铂金币」；文案回落 d（原恒为健康锁定 100 分）
 (D.MASTER_SHOP.gear||[]).forEach(function(x){ _sRows.push(["大师商店","成就「大师」","铂金币+材料", x.n, x.platC + " 铂金币 + " + fmtIng(x.mats), "一次性", x.desc||""]); });
 _sRows.push(["大师商店","成就「大师」","铂金币", "指定传说材料 ×2", "6 铂金币", "每周 1", D.PLAT_SHOP[0].sel.join(" / ")]);
 _sRows.push(["大师商店","成就「大师」","铂金币", "大师的馈赠（活力点 +500）", "20 铂金币", "不限", "终局活力点出口"]);
-_sRows.push(["交易所","E","金币/银币", "买入材料（买入价 = 卖出价 ×3）", "—", "—", "仅普通 / 精良 / 稀有；史诗走贡献商店、传说走铂金商店"]);
+_sRows.push(["交易所","E","金币/银币", "买入材料（买入价 = 卖出价 ×3）", "—", "每日随等级", "仅普通 / 精良 / 稀有；史诗走贡献商店、传说走铂金商店；每日买入上限随等级（Lv1~5：0/10/15/20/25 个，v1.67）"]);
 csv("商店商品.csv",
   ["商店","解锁","货币","商品","价格","限购","说明"], _sRows);
 
@@ -124,14 +132,15 @@ csv("料理总表.csv",
     return [r.n, t, "Lv" + (QI(t) + 1), fmtIng(ing), r.desc || "", mode];
   }));
 
-/* ── ⑦ 传奇事件总表（12 个 · 含静态条件）── */
+/* ── ⑦ 传奇事件总表（15 个 · 含静态条件）── */
 function _legendCond(L){
   const c = L[8] || {};
   if(c.q) return "需完成前置委托「" + c.q + "」";
-  if(c.q40) return "累计完成 40 次 Lv5 以下委托";
+  if(c.q40) return "累计完成 250 次 Lv5 以下委托";   // v1.67：v1.60 起由 40 提高为 250
   if(c.sleep30) return "最近 30 天 ≥27 天 23:30 前入睡";
   if(c.legend) return "需完成传奇事件「" + c.legend + "」";
-  if(c.allLegend) return "完成其余全部 11 个传奇事件";
+  if(c.gear) return "需拥有传说装备「" + c.gear + "」";   // v1.67：补 gear 条件分支（原缺 → 显示「—」）
+  if(c.allLegend) return "完成其余全部 " + (D.LEGEND.length - 1) + " 个传奇事件";
   return "—";
 }
 csv("传奇事件总表.csv",
@@ -140,7 +149,7 @@ csv("传奇事件总表.csv",
     return [L[0], L[1], L[2], L[3], L[4], L[5], D.legendRep(L), L[6] || "—", L[7] || "—", _legendCond(L), "✅ 可窥见"];
   }));
 
-/* ── ⑧ 成就总表（17 条）── */
+/* ── ⑧ 成就总表（20 条）── */
 csv("成就总表.csv",
   ["成就","达成条件","奖励","可见性"],
   D.ACHV.map(function(a){
@@ -150,7 +159,7 @@ csv("成就总表.csv",
     return [a.n, D.ACHV_DESC[a.n] || "—", reward, a.hide ? "隐藏（达成前不可见）" : "常显"];
   }));
 
-/* ── ⑨ 探索区域总表（16 个 · 含门槛与掉落）── */
+/* ── ⑨ 探索区域总表（22 个 · 含门槛与掉落）── */
 csv("探索区域总表.csv",
   ["区域","开放时间","探索点","耗时","门槛","掉落（概率）"],
   D.REGIONS.map(function(r){
@@ -161,6 +170,20 @@ csv("探索区域总表.csv",
     if(r.deep) gate.push("深处层");
     const drops = (r.d || []).filter(function(p){ return p[0]; }).map(function(p){ return p[0] + " " + p[1] + "%"; }).join(" / ");
     return [r.n, r.t, r.c, r.h + "h", gate.length ? gate.join(" + ") : "—", drops];
+  }));
+
+/* ── ⑨b 组队副本总表（v1.65 · 24 条 · P2 社交层）── */
+csv("组队副本总表.csv",
+  ["副本","品阶","难度档","精力","时长","报酬","目标格数(3人/6人)","掉落（首项必得）","文案（5 则）"],
+  D.PARTY.map(function(p){
+    const drop = Object.keys(p[5]).map(function(k){
+      const v = p[5][k];
+      const name = k.charAt(0) === "@" ? ("随机[" + (D.PARTY_GROUPS[k.slice(1)] || []).join("/") + "]") : k;
+      return name + "×" + v[0] + (v[1] > v[0] ? "~" + v[1] : "") + (v.length > 2 ? "(" + Math.round(v[2]*100) + "%)" : "");
+    }).join("、");
+    const goal = Math.ceil(3 * 3 * D.CFG.party.goalMul) + " / " + Math.ceil(6 * 3 * D.CFG.party.goalMul);
+    return [p[0], p[1], p[2], p[3], D.CFG.party.durH[p[1]] + "h", D.fmtMoney(p[4]), goal, drop,
+            (D.PARTY_TXT[p[0]] || []).join("")];
   }));
 
 /* ── ⑩ 月度世界事件表（12 个月池）── */
@@ -183,6 +206,7 @@ const _itemSrc = {};
 D.SHOP.forEach(function(it){ if(it.item) _itemSrc[it.item] = "公会商店（" + D.fmtMoney(it.c) + "）"; });
 D.VIT_SHOP.forEach(function(it){ if(it.item) _itemSrc[it.item] = (_itemSrc[it.item] ? _itemSrc[it.item] + " / " : "") + "活力点商店（" + it.vit + " 点）"; });
 D.CON_SHOP.forEach(function(it){ if(it.item) _itemSrc[it.item] = (_itemSrc[it.item] ? _itemSrc[it.item] + " / " : "") + "贡献商店（" + it.con + " 贡献）"; });
+D.PLAT_SHOP.forEach(function(it){ if(it.item) _itemSrc[it.item] = (_itemSrc[it.item] ? _itemSrc[it.item] + " / " : "") + "铂金商店（" + (it.goldC ? (it.goldC + " 金币") : (it.platC + " 铂金币")) + (it.lim ? "，每" + it.lim[0] + " " + it.lim[1] : "") + "）"; });   // v1.67：补铂金商店来源（原遗漏）
 Object.keys(D.CRAFT).forEach(function(k){   // v1.46：准备物可合成（追加来源）
   _itemSrc[k] = (_itemSrc[k] ? _itemSrc[k] + " / " : "") + "炼金台合成";
 });
@@ -305,7 +329,7 @@ csv("称号总表.csv", ["称号","类别","效果","来源"], _titleRows);
 const P = [];
 function p(cat, k, v){ P.push([cat, k, v]); }
 p("货币","换算","1 铂金 = 100 金 = 10,000 银 = 1,000,000 铜");
-p("货币","交易所买入","买入价 = 卖出价 ×3（仅普通/精良/稀有）");
+p("货币","交易所买入","买入价 = 卖出价 ×3（仅普通/精良/稀有）；每日买入上限随等级（Lv1~5：0/10/15/20/25 个，v1.67 N3）");
 p("等级","Lv1~Lv5 基础成功率 B", D.CFG.sucBase.map(function(x){ return Math.round(x*100)+"%"; }).join(" / "));
 p("等级","Lv1~Lv5 E 上限", D.CFG.eCap.map(function(x){ return Math.round(x*100)+"%"; }).join(" / "));
 p("等级","Lv1~Lv5 硬上限 Cap", D.CFG.hardCap.map(function(x){ return Math.round(x*100)+"%"; }).join(" / "));
@@ -316,10 +340,10 @@ p("等级","Lv1~Lv5 单次抽取数", D.CFG.drawCount.join(" / "));
 p("委托","每日接取上限","4 次（公会有额外委托 +1）");
 p("委托","刷新点","" + D.CFG.refreshHours.join(" / ") + " 点（常规 1 小时内可接；最后一次 21:00~23:30——v1.41f3；节日各 +1 小时）");
 p("委托","成功率公式","min(Cap, max(Floor, B + D + Δ + 健康×0.2% + E + N))");
-p("委托","难度修正","简单 +10% / 普通 0 / 困难 −10% / 噩梦 −20%");
+p("委托","难度修正","按等级逐级：简单 Lv1~2 +10% / Lv3~4 +8% / Lv5 +5%；普通 0；困难 −10%；噩梦 Lv3 无档 · Lv4 −15% · Lv5 −20%");
 p("委托","等级差修正 Δ","每高 1 级 +12pp，上限 +36pp");
 p("委托","熬夜惩罚 N","−15%（未熬夜 0）");
-p("传奇","出现概率","每日 8:00 判定 15%（冥念护符满级 +5%）");
+p("传奇","出现概率","每日跨天后的首次打开判定 15%（冥念护符满级 +5%；v1.50 起不绑 8:00 刷新点）");
 p("传奇","低语预览","未达资格时每日 2% 概率窥见（红字迹象 → 风味窗 → 不可参与）");
 p("传奇","成功率公式","min(65%, max(5%, 5% + D + 健康×0.5% + E(≤10%) + 护符/饰品)）");
 p("传奇","每周接取","每周 1 次（公会 P 级「至尊」2 次）");
@@ -329,7 +353,7 @@ p("公会","技能树上限", "F~S：0/0/5/10/15/20/25（W/H/P 保持 25）");
 p("探索","每日次数","2 次；前一日健康 <60 当日不可探索");
 p("探索","区域门槛","委托解锁 / 公会等级 / 等级（三重判定，未解锁区域不显示）");
 p("酒馆料理","品阶开放","Lv1 普通 / Lv2 精良 / Lv3 稀有 / Lv4 史诗 / Lv5 传说（v1.41f4：公会厨房迁入酒馆）");
-p("商店","可见性","未解锁内容完全隐藏（贡献 D / 铂金 S / 大师 成就 / 图纸档位按等级 / 护符级别）");
+p("商店","可见性","未解锁内容完全隐藏（贡献 D / 铂金商店 持有 ≥1 铂金币，v1.61d / 大师 成就 / 图纸档位按等级 / 护符级别）");
 p("护符","冥念护符 Lv1~Lv5 消耗", D.CHARM.map(function(c){ return c.cost; }).join(" / ") + " 活力点");
 p("护符","冥念护符 Lv1~Lv5 报酬", D.CHARM.map(function(c){ return Math.round(c.pay*100)+"%"; }).join(" / "));
 p("护符","冥念护符 Lv1~Lv5 成功率", D.CHARM.map(function(c){ return Math.round(c.rate*100)+"%"; }).join(" / "));
@@ -343,6 +367,39 @@ p("时间","委托截止","23:30 后不能发起新委托");
 p("节日","假期区间","国庆 10-01~10-07 整段按节日生效（v1.41c；其余为单日节日）");
 p("节日","窗口延长","接取窗口 +1 小时 / 三餐打卡前后各 +30 分钟 / 入睡·起床打卡尾部 +1 小时（v1.41c）");
 p("节日","专属效果","逐节日差异化加成（v1.41f）——国庆报酬成功率 / 清明采集探索率 / 腊八料理翻倍 / 重阳探索翻倍等，17 个节日详见《节日总表》");
+(function(){
+  const s = D.CFG.social;                                   // v1.64：仅 Flask 版社交层（P1 邮件 + 好友）
+  if(!s) return;
+  p("社交（v1.64 · 仅 Flask 版）","好友上限 / 日申请上限", s.friendMax + " 位 / " + s.friendReqDaily + " 次（自然日）");
+  p("社交（v1.64 · 仅 Flask 版）","普通材料赠送", "每日合计 ≤" + s.giftLowDaily + " 个（单次同限；被拒 / 超时不占额度）");
+  p("社交（v1.64 · 仅 Flask 版）","史诗 / 传说赠送", "每周合计送出 ≤" + s.giftHighWeekly + " 个、接收 ≤" + s.giftHighWeekly + " 个（ISO 周；v1.67 按数量，待接收计入）");
+  p("社交（v1.64 · 仅 Flask 版）","赠送门槛（接收方）", "普通/精良 初始 · 稀有 Lv2 · 史诗 Lv3 · 传说 Lv4");
+  p("社交（v1.64 · 仅 Flask 版）","邮件", "赠送 " + s.giftExpireDays + " 天未接收自动退回（退回邮件）；普通邮件 " + s.mailExpireDays + " 天过期；拒收原路退回");
+  p("社交（v1.64 · 仅 Flask 版）","隐私", "健康分默认隐藏；赠送权限默认仅好友；申请默认允许");
+})();
+(function(){
+  const q = D.CFG.party;                                   // v1.65：组队副本（P2）
+  if(!q) return;
+  p("组队副本（v1.65 · 仅 Flask 版）","解锁 / 位置", "Lv" + q.unlockLv + "；委托页右栏「自由探索」正下方");
+  p("组队副本（v1.65 · 仅 Flask 版）","刷新", "每日 " + String(q.refHour).padStart(2, "0") + ":00 刷 1 个（当日有效、可放弃；" + q.inviteHours + "h 未开启作废，精力与周次数退还）");
+  p("组队副本（v1.65 · 仅 Flask 版）","人数 / 开启", q.sizeMin + "~" + q.sizeMax + " 人；≥" + q.startMin + " 人队长可开启；每周参与 ≤" + q.weeklyMax + " 次（不占接取上限与同时进行位）");
+  p("组队副本（v1.65 · 仅 Flask 版）","门槛", "等级 ≥ 副本等级 + 昨日健康分：精良 " + q.gate["精良"] + " / 稀有 " + q.gate["稀有"] + " / 史诗 " + q.gate["史诗"] + " / 传说 " + q.gate["传说"]);
+  p("组队副本（v1.65 · 仅 Flask 版）","精力", "精良 " + q.energy["精良"].join("/") + " · 稀有 " + q.energy["稀有"].join("/") + " · 史诗 " + q.energy["史诗"].join("/") + " · 传说 " + q.energy["传说"].join("/") + "（轻装/标准/重装）");
+  p("组队副本（v1.65 · 仅 Flask 版）","时长", "精良 " + q.durH["精良"] + "h / 稀有 " + q.durH["稀有"] + "h / 史诗 " + q.durH["史诗"] + "h / 传说 " + q.durH["传说"] + "h");
+  p("组队副本（v1.65 · 仅 Flask 版）","行动", "每人 " + q.actions + " 次（随时掷）；成功 +1 格、掷 1~" + q.critRoll + " 大成功 +2 格；目标 = ceil(人数×3×" + q.goalMul + ")");
+  p("组队副本（v1.65 · 仅 Flask 版）","结算", "达标立即通关（报酬 + 掉落）；到期未达标失败 → 安慰奖 ≈1/" + Math.round(1 / q.failAid) + " 必得材料；中途退出无奖励不退精力");
+})();
+(function(){
+  const m = D.CFG.market;                                  // v1.66：材料市场（P3）
+  if(!m) return;
+  p("材料市场（v1.66 · 仅 Flask 版）","解锁 / 位置", "Lv" + m.unlockLv + " 且公会 " + D.CFG.guildName[m.unlockGuild] + " 级；页签位于「公会」右侧（未解锁点击弹窗不切换）");
+  p("材料市场（v1.66 · 仅 Flask 版）","可交易品阶", m.tiers.join(" / ") + "（传说、道具、装备、图纸一律不可；史诗需 Lv" + m.epicLv + "）");
+  p("材料市场（v1.66 · 仅 Flask 版）","挂单", "同时 ≤" + m.maxListings + " 单；每日上架 ≤" + m.dailyListings + " 次；上架即托管（先扣背包）");
+  p("材料市场（v1.66 · 仅 Flask 版）","时长 / 费用", m.listingDays + " 天未售出自动下架退回（退回邮件）；免手续费");
+  p("材料市场（v1.66 · 仅 Flask 版）","定价", "单价 = 商店价 × " + m.priceMin + " ~ × " + m.priceMax + "（商店价 = 基准价 × " + m.shopMul + "，全品阶）；参考价显示 = 基准价");
+  p("材料市场（v1.66 · 仅 Flask 版）","买入限额", "每人每日 ≤" + m.buyDaily + " 个、每周 ≤" + m.buyWeekly + " 个（ISO 周）；可部分购买；禁止买自己的单");
+  p("材料市场（v1.66 · 仅 Flask 版）","结算", "货款进卖家邮件（领取入账）；下架原样退回；到期 sweep 下架 + 退回邮件（幂等）");
+})();
 csv("参数速查.csv", ["分类","条目","值"], P);
 
 /* ── ⑰ 势力与种族总表（v1.45：六色龙 / 恶魔 / 魔鬼 / 中立与敌对种族；引用自动校验）── */
@@ -485,4 +542,4 @@ csv("委托准备物表.csv",
   csv("宠物拾取表.csv", ["场景","触发概率","心情修正","材料池","拾取权重","数量上限"], _findRows);
 }
 
-console.log("全部完成 ✅（共 20 张表）");
+console.log("全部完成 ✅（共 " + N_CSV + " 张表）");

@@ -69,7 +69,7 @@ ck(S.wolf && S.wolf.mood === 100 && S.wolf.bondDone.length === 4, "v1.56：小�
 ck(typeof petMetaOf === "function" && typeof petMoodDaily === "function"
    && typeof petPat === "function" && typeof petWalkStart === "function"
    && typeof petTheater === "function" && typeof setPetNick === "function"
-   && typeof renderPet === "function" && typeof gotoPetTab === "function",
+   && typeof renderPet === "function",
    "v1.56：情感系统函数齐全（原型层）");
 ck(petMetaOf("月光狐") && petMetaOf("月光狐").mood === 100, "v1.56：petMetaOf 读取拉满心情");
 renderPet();

@@ -64,6 +64,7 @@ showAlert = function(m,t){ alertN++; dlgCap = {t:t||"提示", b:m||"", btns:[]};
 /* v1.53：资源消耗类操作统一二次确认——测试中自动点「确定」，并计数供断言 */
 let confirmN = 0;
 showConfirm = function(m, onOk, t){ confirmN++; dlgCap = {t:t||"确认", b:m||"", btns:[]}; onOk && onOk(); };
+renderSocial = function(){};   // v1.64：社交页定义在桥接层（Flask 专属）——冒烟只跑原型层，补空实现
 
 /* ═══════════ 1. 全委托结算（Lv1~Lv5 共 70 个） ═══════════ */
 console.log("\\n===== 1. 全委托结算（每级每个都跑）=====");
@@ -78,7 +79,9 @@ async function runQ(q, lv){
   const gold0 = S.money;
   const _tn = QUEST_TURNIN[q[0]] || null;               // v1.41 I4：上交型委托结算会扣 1 个材料
   const _tnHave = _tn ? (S.mats[_tn]||0) : 0;
+  const _rB = rand; rand = function(){ return 50; };    // v1.69：锁「普通成功骰」——区间校验针对基础掉率（大成功全奖励 ×2 见专节）
   await settle({q:q, qlv:lv, rate:1, acceptTs:Date.now(), finishTs:Date.now()+3600000, name:q[0], meal:null});
+  rand = _rB;
   const first = Object.keys(q[8]||{})[0];
   const _tnUsed = (_tn && _tn === first && _tnHave >= 1) ? 1 : 0;
   let gainedN = 0;
@@ -239,12 +242,14 @@ console.log("\\n===== 5. 装备（53 件逐穿检查）=====");
   const _fR = FESTIVAL_RANGES.splice(0);
   const _fS = FESTIVALS[todayStr().slice(5)]; delete FESTIVALS[todayStr().slice(5)];
   const mB = S.money;
+  const _rB2 = rand; rand = function(){ return 50; };    // v1.69：锁非大成功骰（大成功改全奖励 ×2，基线断言不再列大成功值）
   await settle({q:["晨间测试","采集","全天",60,"简单",100,1,8,{}], qlv:1, rate:1, meal:null,
     acceptTs:Date.now(), finishTs:Date.now()+3600000, name:"晨间测试"});
+  rand = _rB2;
   FESTIVAL_RANGES.push.apply(FESTIVAL_RANGES, _fR);
   if(_fS) FESTIVALS[todayStr().slice(5)] = _fS;
   const dG = S.money - mB;
-  check(dG === 122 || dG === 146, "晨间+成就饰品报酬应为 122（大成功 146），实际 " + dG);
+  check(dG === 122, "晨间+成就饰品报酬应为 122，实际 " + dG);
   console.log("  晨间报酬实测：+铜 " + dG + "（122 = 100×(1+12%+10%)）✅");
   S.equipped = {weapon:null,armor:null,accessory:null,charmSlot:null};
   // v1.38o：穿戴精力上限装备——当前与上限同步 +差值；卸下收敛至新上限
@@ -344,7 +349,7 @@ console.log("\\n===== 7. 公会厨房（9 个配方全做）=====");
     S.energy = 0;
     const _em = energyMaxNow();
     cook(_iFe);
-    check(S.energy === Math.round(_em * 0.5), "v1.42：巨龙盛宴恢复 50% 精力上限（" + S.energy + "/" + _em + "）");
+    check(S.energy === Math.round(_em * 0.5), "v1.67a：巨龙盛宴恢复 50% 精力上限（维持原档；" + S.energy + "/" + _em + "）");
   }
   // 料理加成实测：蜜渍烤鱼 +3% 报酬（100×1.03=103，大成功 125）
   const _mir = CFG.recipes.filter(function(r){ return r.n === "蜜渍烤鱼"; })[0];
@@ -353,15 +358,16 @@ console.log("\\n===== 7. 公会厨房（9 个配方全做）=====");
   const _fR2 = FESTIVAL_RANGES.splice(0);          // v1.41c：同样隔离节日 +20% 报酬影响
   const _fS2 = FESTIVALS[todayStr().slice(5)]; delete FESTIVALS[todayStr().slice(5)];
   const mB = S.money;
+  const _rB3 = rand; rand = function(){ return 50; };    // v1.69：锁非大成功骰
   await settle({q:["料理测试","采集","全天",60,"简单",100,1,8,{}], qlv:1, rate:1, meal:activeMeal(),
     acceptTs:Date.now(), finishTs:Date.now()+3600000, name:"料理测试"});
+  rand = _rB3;
   FESTIVAL_RANGES.push.apply(FESTIVAL_RANGES, _fR2);
   if(_fS2) FESTIVALS[todayStr().slice(5)] = _fS2;
   const dG = S.money - mB;
   S.titles = _bT7;
   const _mbExp = Math.round(100 * (1 + _mir.bonus));           // 普通：100×1.03 = 103
-  const _critExp = Math.round(120 * (1 + _mir.bonus));         // 大成功（报酬 ×1.2）：120×1.03 = 124
-  check(dG === _mbExp || dG === _critExp, "料理报酬加成应为 " + _mbExp + "（大成功 " + _critExp + "），实际 " + dG);
+  check(dG === _mbExp, "料理报酬加成应为 " + _mbExp + "，实际 " + dG);
   console.log("  蜜渍烤鱼报酬实测：+铜 " + dG + "（" + _mbExp + " = 100×" + (1+_mir.bonus).toFixed(2) + "）✅");
   // 香草烤肉成功率实测（v1.32：改用 Lv4 困难样本——原「护送贵族」在 Δ 加强后已达 cap，测不出 +2%）
   const q3 = ["讨伐独眼巨人","精英","08:00-23:30",180,"困难",50000,60,62,{"巨人骨":[1,3]}];
@@ -396,7 +402,7 @@ console.log("\\n===== 8. 商店 / 兑换 / 技能 / 护符 / 稀有事件 / 存�
   const _matP = _matTotal();
   document.getElementById("sbR_c_0").value = "1";   // 模拟弹窗选 ×1 后点「确认购买」
   dlgCap.btns[1].fn();
-  check(_matTotal() === _matP + 5 && S.money === _mK - 6000, "弹窗确认 → 购买 ×1（+5 材料，-6000 铜）");
+  check(_matTotal() === _matP + 5 && S.money === _mK - 500, "弹窗确认 → 购买 ×1（+5 材料，-500 铜 · v1.63 材料包 5 银/个）");
   buy(0, 2);                                        // 补满日限（3/3）
   const _cfA = confirmN;
   buy(0, 1);
@@ -1057,8 +1063,8 @@ console.log("\\n===== 18. v1.38s 批次 =====");
     check(Object.keys(_sm[8])[0] === "陨铁" && (M["陨铁"]||[])[1] === "史诗",
           "讨伐石魔像：主材料升为史诗（陨铁）");
     const _jl = C["Lv3"].filter(function(x){ return x[0] === "巨龙巢穴侦察"; })[0];
-    check(Object.keys(_jl[8])[0] === "龙骨" && _jl[8]["龙骨"][0] === 1 && _jl[8]["龙骨"][1] === 1,
-          "巨龙巢穴侦察：史诗降为单份（龙骨×1 + 龙鳞概率）");
+    check(Object.keys(_jl[8])[0] === "兽肉" && _jl[8]["龙骨"][0] === 1 && _jl[8]["龙骨"][1] === 1,
+          "巨龙巢穴侦察：兽肉保必掉（龙骨/龙鳞改概率副项——v1.63 经济重平衡）");
     const _gl = C["Lv4"].filter(function(x){ return x[0] === "古龙遗骸采集"; })[0];
     check(_gl[8]["龙角"][1] === 3, "古龙遗骸采集：龙角概率量 1~5 → 1~3");
     // 委托详情掉落保密：主材料直接显示；副材料未获得显示 ？？？
@@ -1285,9 +1291,9 @@ console.log("\\n===== 23. v1.41 I6：大师层 =====");
   check(MASTER_SHOP.gear.length === 3 && MASTER_SHOP.vitC === 20 && MASTER_SHOP.gear[0].platC === 18, "MASTER_SHOP：3 装备 / 活力 20 / 首价 18 铂金");
   // 2) 解锁判定：3 传奇未解锁；4 传奇达成
   const _lb = S.legendDone.slice(), _ab3 = S.achv.slice(), _tb3 = S.titles.slice(), _mb3 = S.money, _mt3 = S.mats, _gb3 = S.gear.slice();
-  S.legendDone = ["屠龙传说","星界远征","魔神封印"]; S.achv = [];
+  S.legendDone = ["屠龙传说","星界摇篮","魔神封印"]; S.achv = [];
   check(!masterUnlocked(), "3 个传奇 → 大师未解锁（商店隐藏）");
-  S.legendDone = ["屠龙传说","星界远征","魔神封印","时间回廊"]; S.achv = [];
+  S.legendDone = ["屠龙传说","星界摇篮","魔神封印","时间回廊"]; S.achv = [];
   checkAchievements();
   check(S.achv.indexOf("大师") >= 0 && S.gear.indexOf("大师徽章") >= 0, "4 个传奇 → 成就「大师」达成、徽章入包");
   check(masterUnlocked(), "大师商店解锁");
@@ -1870,10 +1876,10 @@ console.log("\\n===== 36. v1.58：六域遗珍 + 探索点/天 移除 =====");
 console.log("\\n===== 37. v1.59：传奇报酬 / Lv4 简单档 / 弱出口装备 =====");
 {
   const _lg59 = {}; LEGEND.forEach(function(L){ _lg59[L[0]] = L; });
-  check(_lg59["屠龙传说"][4] === "2铂金币" && _lg59["屠龙传说"][5] === 800, "v1.59：屠龙传说 → 2铂金/800");
-  check(_lg59["星界远征"][4] === "3铂金币" && _lg59["公会大师试炼"][4] === "2铂金币"
+  check(_lg59["屠龙传说"][4] === "3铂金币" && _lg59["屠龙传说"][5] === 1000 && _lg59["屠龙传说"][6] === "龙心×3、龙瞳结晶×2", "v1.67：屠龙传说 → 3铂金/1000 + 龙心×3·龙瞳结晶×2");
+  check(_lg59["星界摇篮"][4] === "3铂金币" && _lg59["公会大师试炼"][4] === "2铂金币"
         && _lg59["龙神契约"][4] === "7铂金币" && _lg59["万龙之宴"][4] === "9铂金币",
-    "v1.59：星界/试炼/龙神/龙宴 面额上调到位");
+    "v1.67：星界摇篮（更名）/试炼/龙神/龙宴 面额到位");
   check(LEGEND.every(function(L){ return LEGEND_GOLD[L[4]]; }), "v1.59：传奇面额全部可解析（LEGEND_GOLD 无缺键）");
   check(LEGEND_GOLD["9铂金币"] === 9000000, "v1.59：LEGEND_GOLD 补「9铂金币」");
   // Lv4 简单档
@@ -1977,6 +1983,38 @@ console.log("\\n===== 38. v1.60/v1.61：大师试炼 250 / 疗养圣所（无门
   console.log("  v1.60/v1.61 大师试炼 / 疗养圣所 / 深处 / 护符 / 重掷券 / 探索解锁 ✅");
 }
 
+console.log("\\n===== 39. v1.69：大成功全奖励 ×2 / 数量弹窗 / 卷轴守卫 =====");
+{
+  // ① 大成功（掷 1–5）：报酬 / 经验 / 声望 / 贡献 / 材料 全部 ×2
+  const _q69 = ["测试委托69","采集","08:00-23:30",60,"普通",1000,100,5,{"蘑菇":[4,4]}];   // 掉表固定 [4,4]，便于 ×2 断言
+  const _rare69 = tryRareEvent, _rc69 = rareChance;
+  tryRareEvent = function(){ return null; };            // 隔离稀有事件对金钱的干扰
+  const _run69 = async function(roll){
+    S.money = 0; S.exp = 0; S.rep = 0; S.con = 0; S.mats = {};
+    S.rareNextPay = 0; S.rareNextRate = 0; S.buffNext = null; S.titles = []; S.lastMeal = null;
+    const _rb = rand; rand = function(){ return roll; };
+    await settle({q:_q69, qlv:1, rate:1, acceptTs:Date.now(), finishTs:Date.now(), name:_q69[0], meal:null});
+    rand = _rb;
+    return {m:S.money, e:S.exp, r:S.rep, c:S.con, p:S.mats["蘑菇"]||0};
+  };
+  const n69 = await _run69(50), c69 = await _run69(3);
+  check(c69.m === n69.m * 2, "v1.69 大成功报酬 ×2（" + n69.m + " → " + c69.m + "）");
+  check(c69.e === n69.e * 2, "v1.69 大成功经验 ×2（" + n69.e + " → " + c69.e + "）");
+  check(c69.r === n69.r * 2, "v1.69 大成功声望 ×2（" + n69.r + " → " + c69.r + "）");
+  check(c69.c === n69.c * 2, "v1.69 大成功贡献 ×2（" + n69.c + " → " + c69.c + "）");
+  check(c69.p === n69.p * 2, "v1.69 大成功材料 ×2（" + n69.p + " → " + c69.p + "）");
+  tryRareEvent = _rare69; rareChance = _rc69;
+
+  // ② 源码级：数量弹窗 / 买卖传数量 / 卷轴守卫 / 失败保留 buff / 馈赠补发
+  check(typeof qtyDialog === "function" && typeof coinFx === "function", "v1.69 数量弹窗与买卖反馈函数就位");
+  check(html.indexOf('apiCall("sell", {name:name, cnt:n})') >= 0, "v1.69 卖出传数量（cnt）");
+  check(html.indexOf('apiCall("buy_mat", {name:name, cnt:n})') >= 0, "v1.69 交易所买入传数量（cnt）");
+  check(html.indexOf('已有更强的成功率加成') >= 0 && html.indexOf('已有更强的报酬加成') >= 0, "v1.69 规则道具遇更高加成 → 拒绝且不消耗");
+  check(html.indexOf('if(ok){ S.rareNextRate = 0; S.rareNextPay = 0; }') >= 0, "v1.69 下一次委托加成：成功才消费（失败保留）");
+  check(html.indexOf('稀有事件在结算之后才判定') >= 0, "v1.69 「意外的馈赠」委托触发改为补发 +50%");
+  console.log("  v1.69 大成功 ×2 / 数量弹窗 / 卷轴守卫 ✅");
+}
+
 console.log("\\n========== 冒烟总结 ==========");
 console.log("  断言通过 " + PASS + " 项 | 异常 " + FAIL + " 项 " + (FAIL ? "❌" : "✅ 全部通过"));
 console.log("  （弹窗拦截 " + alertN + " 次）");
@@ -2009,7 +2047,7 @@ const _h38r = [
   ["v1.41c 节日窗口函数（taskWinNow/mealWinNow）", html.indexOf("function taskWinNow") >= 0 && html.indexOf("function mealWinNow") >= 0],
   ["v1.58 六域遗珍材料 6 种入表", html.indexOf('"冥河灯油":["特殊","史诗",62000]') >= 0 && html.indexOf('"冰晶果":["食材","史诗",60000]') >= 0],
   ["v1.58 探索点/天 词条移除", html.indexOf('探索点+1/天') < 0 && html.indexOf('/探索点\\+(\\d+)\\/天/') < 0],
-  ["v1.59 传奇面额上调 + 9 铂金补键", html.indexOf('"9铂金币":9000000') >= 0 && html.indexOf('"屠龙传说","精英",5,"噩梦","2铂金币",800') >= 0],
+  ["v1.67 传奇面额上调 + 星界摇篮 + 9 铂金补键", html.indexOf('"9铂金币":9000000') >= 0 && html.indexOf('"屠龙传说","精英",5,"噩梦","3铂金币",1000,"龙心×3、龙瞳结晶×2"') >= 0 && html.indexOf('"星界摇篮","探索+精英",7,"噩梦","3铂金币",1050') >= 0],
   ["v1.59 弱出口装备入表", html.indexOf('"花岗岩重锤","普通","武器",0.01') >= 0 && html.indexOf('"古币坠饰","稀有","饰品",0.08') >= 0],
   ["v1.59b 良好档活力点+1（结算 + 区间奖励）", html.indexOf("else if(sc>=60){ rep=2; con=1; vit=1; }") >= 0 && html.indexOf("else if(sc>=60){ nb.pay=0.05; nb.con=1; nb.vit=1; }") >= 0],
   ["v1.60 大师试炼 250（前后端同值）", html.indexOf("S.doneBelow5 < 250") >= 0 && html.indexOf("累计完成 250 次 Lv5 以下委托") >= 0],

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """一键跑全部测试套件（项目根运行：python run_all_tests.py，或双击 跑全部测试.bat）
-   依次执行：原型冒烟 / 原型创造模式 / Flask 核心逻辑 / Flask API / game.html 桥接 / 双端对拍
+   依次执行：原型冒烟 / 原型创造模式 / Flask 核心逻辑 / Flask API / Flask 社交基建 / game.html 桥接 / 双端对拍
    退出码：0 = 全过；1 = 有失败（供批处理/CI 判断）"""
 import os
 import subprocess
@@ -16,6 +16,7 @@ SUITES = [
     ("Flask 前端 · 创造模式",  ROOT / "创造模式测试原型", ["node", "_smoke_creator.js"]),
     ("Flask · 核心逻辑",     ROOT / "Flask版",          [PY, "test_game.py"]),
     ("Flask · API 端到端",   ROOT / "Flask版",          [PY, "test_api.py"]),
+    ("Flask · 社交基建",     ROOT / "Flask版",          [PY, "test_social.py"]),
     ("Flask · game.html 桥接", ROOT / "Flask版",        ["node", "_verify_game_html.js"]),
     ("双端 · 公式对拍",      ROOT / "Flask版",          [PY, "_parity_check.py"]),
 ]

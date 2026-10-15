@@ -1,5 +1,5 @@
 // 导航拦截回归：无宠物时点击「🐾 宠物」→ 弹窗提示且不进入；有宠物（含小狼/历史档）→ 正常进入
-// 另含：背包导流卡走同一拦截、导流卡计数不重复
+// v1.67：背包导流卡于 v1.61d 移除、gotoPetTab 已删除，相关场景一并清理
 // 运行：node _probe_nav.js
 const fs = require('fs');
 global.localStorage = { _d:{}, getItem(k){ return this._d[k]||null; }, setItem(k,v){ this._d[k]=v; }, removeItem(k){ delete this._d[k]; } };
@@ -16,7 +16,7 @@ const _tabpages = {};
 ["quest","tavern","health","bag","pet","shop","gallery","log"].forEach(t=>{
   _tabpages["tab-"+t] = fakeEl();
 });
-/* click() 桥接：gotoPetTab 用 querySelector 找按钮再 .click() */
+/* click() 桥接：模拟页签按钮点击（拦截逻辑挂在 onclick 上） */
 Object.values(_btnMap).forEach(el=>{ el.click = () => { if(el.onclick) el.onclick(); }; });
 
 global.document = {
@@ -91,17 +91,7 @@ reset(true); _dlgs = [];
 _btnMap.pet.onclick();
 ok(S.wolf !== null && _dlgs.length === 0 && _tabpages["tab-pet"].classList.contains("on"), "历史档经 migrate 补入小狼 → 正常进入");
 
-/* ─ 场景 4：背包导流卡 gotoPetTab 走同一拦截 ─ */
-S.pets = []; S.wolf = null;
-reset(true); _dlgs = [];
-gotoPetTab();
-ok(_dlgs.length === 1 && _dlgs[0].b.indexOf("您还没有伙伴") >= 0, "无宠物时导流卡 → 同样弹窗");
-
-/* ─ 背包导流卡计数（小狼不重复计） ─ */
-S.pets = ["小狼", "月光狐"]; S.wolf = {stage: 1, growth: 0, mutate: 0, fedDate: "", fedCount: 0};
-render();
-const _bag = document.getElementById("tab-bag").innerHTML || "";
-ok(_bag.indexOf("🐾 宠物（2）") >= 0, "导流卡计数正确（小狼+月光狐 = 2，不重复）");
+/* 场景 4/5（背包导流卡）：v1.61d 移除导流卡、v1.67 删除 gotoPetTab —— 已随功能下线清理 */
 
 console.log(PASS + " 通过 / " + FAIL + " 失败");
 if(FAIL > 0) process.exit(1);

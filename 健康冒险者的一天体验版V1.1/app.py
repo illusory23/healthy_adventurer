@@ -6,6 +6,7 @@
   - 手机（同一 WiFi）：http://电脑IP:5899
 """
 import logging
+import os
 import secrets
 import socket
 import threading
@@ -235,7 +236,7 @@ def _dispatch(s, d, msgs):
     if act == "buy_plat":                              # v1.50：铂金商店·统一购买（全部铂金币结算）
         return game.buy_plat(s, msgs, i("idx", 0), d.get("mat"))
     if act == "buy_mat":                               # v1.41 H3：交易所买入
-        return game.buy_mat(s, d.get("name", ""), msgs)
+        return game.buy_mat(s, d.get("name", ""), msgs, d.get("cnt"))   # v1.69：支持批量（cnt）
     if act == "buy_master_gear":                       # v1.41 I6：大师商店·专属装备
         return game.buy_master_gear(s, msgs, i("idx"))
     if act == "buy_master_mat":                        # v1.41 I6：大师商店·指定传说材料
@@ -315,11 +316,15 @@ def _dispatch(s, d, msgs):
     if act == "set_carry_pet":                         # v1.38f：携带宠物切换
         return game.set_carry_pet(s, d.get("name") or "", msgs)
     if act == "import_save":                           # v1.38d：存档互通（camel → snake）
+        _now_i = int(time.time() * 1000)               # v1.67 B2：导入冷却（防快速往返复制材料）
+        if _now_i - int(s.get("last_import") or 0) < 10 * 60 * 1000:
+            return "导入过于频繁——两次导入之间请间隔 10 分钟"
         s2 = game.import_save_state(d.get("data"))
         if s2 is None:
             return "导入文件格式不正确（需要存档 JSON）"
         s.clear()
         s.update(s2)
+        s["last_import"] = _now_i
         msgs.append("📂 已导入存档：" + (s2.get("name") or "未命名"))
         return None
     if act == "reset":
@@ -439,7 +444,10 @@ def api_state():
 
 @app.post("/api/action")
 def api_action():
-    d = request.get_json(force=True, silent=True) or {}
+    d = request.get_json(force=True, silent=True)   # v1.67 C9：非对象 JSON → 可读报错（原 .get 直接崩 500）
+    if d is not None and not isinstance(d, dict):
+        return jsonify({"ok": False, "error": "请求格式不正确（需要 JSON 对象）"})
+    d = d or {}
     act = d.get("action")
     if act == "bind_code":                             # v1.37：接入码换绑
         return _bind_code(d)
@@ -451,8 +459,16 @@ def api_action():
     msgs = []
     with _lock_for(u["id"]):                       # v1.50：并发互斥
         s = _load(u["id"], msgs)
-        msgs += game.catch_up(s)
-        err = _dispatch(s, d, msgs)
+        try:                                       # v1.67 B3：毒档兜底——结算 / 分发异常不再砖掉账号（原每次请求 500）
+            msgs += game.catch_up(s)
+        except Exception:
+            app.logger.exception("catch_up 异常（uid=%s）", u["id"])
+            msgs.append("⚠️ 跨天结算出错已跳过——若反复出现请联系服主。")
+        try:
+            err = _dispatch(s, d, msgs)
+        except Exception:
+            app.logger.exception("dispatch 异常（uid=%s act=%s）", u["id"], d.get("action"))
+            err = "操作失败：存档数据异常（已跳过本次操作，请联系服主）"
         db.flush_event_log(s, u["id"])             # v1.50：先 flush（更新水位）再 save（水位落库）
         db.save_user_state(u["id"], s)
         return _payload(s, msgs, err, u)
@@ -517,20 +533,56 @@ def _setup_logging():
         pass
 
 
+def _print_banner(bak_ok):
+    """v1.68 启动横幅（体验版）：只留当下要用的信息——地址 / 口令 / 账号 / 备份 / 停服方式"""
+    bar, thin = "=" * 66, "-" * 66
+    ip = local_ip()
+    lan = ("http://" + ip + ":5899 （需与电脑同一 WiFi）" if ip != "127.0.0.1"
+           else "未检测到局域网 IP——电脑似乎未联网")
+    print(bar)
+    print("  《健康的冒险者的一天》体验版 服务已启动 · " + time.strftime("%Y-%m-%d %H:%M"))
+    print(thin)
+    print("  本机游玩：http://localhost:5899")
+    print("  手机游玩：" + lan)
+    print("  远程口令：" + ACCESS_KEY + " （首次访问输入一次 · 见 access_key.txt）")
+    print(thin)
+    print("  账号：每台设备独立；跨设备用「冒险者信息 → 账号」接入码找回")
+    print("  数据备份：" + ("今日已备 · data/backups/ 保留最近 14 份" if bak_ok
+                          else "[失败] 请检查 data/backups 目录是否可写"))
+    print("  运行须知：电脑不休眠 · 本窗口勿关（关窗即停服）")
+    print(bar)
+
+
+def _auto_open_browser():
+    """v1.68：一键启动（run.bat 设 GAME_AUTO_OPEN=1）时，等端口就绪后自动打开浏览器；
+       命令行直接 python app.py 不设该变量，行为不变（不自动开）"""
+    if os.environ.get("GAME_AUTO_OPEN") != "1":
+        return
+
+    def _worker():
+        deadline = time.time() + 20.0                 # 最多等 20 秒
+        while time.time() < deadline:
+            try:
+                socket.create_connection(("127.0.0.1", 5899), timeout=0.3).close()
+                break
+            except OSError:
+                time.sleep(0.2)
+        else:
+            return
+        try:
+            import webbrowser
+            webbrowser.open("http://localhost:5899")
+        except Exception:
+            pass
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 if __name__ == "__main__":
     _setup_logging()
     bak_ok = _maybe_backup(force=True)                 # v1.39（A3）：启动先备一份当日档
-    ip = local_ip()
-    print("=" * 52)
-    print("  《健康的冒险者的一天》服务已启动")
-    print("  电脑浏览器：http://localhost:5899")
-    print("  手机访问  ：http://" + ip + ":5899  （同一 WiFi）")
-    print("  远程访问口令：" + ACCESS_KEY)
-    print("  （手机首次访问时输入一次；保存在 access_key.txt，改动后重启生效）")
-    print("  账号：每台设备首次访问自动创建独立账号；跨设备用「冒险者信息 → 账号」的接入码找回")
-    print("  今日数据库备份：" + ("已就绪（data/backups/，保留最近 14 份）" if bak_ok
-                              else "❌ 失败——请检查 data/backups 目录是否可写"))
-    print("=" * 52)
+    _print_banner(bak_ok)
+    _auto_open_browser()
     try:
         from waitress import serve                    # v1.39（B3）：生产级 WSGI 引擎（原 Werkzeug 开发服）
         app.logger.info("waitress 启动 0.0.0.0:5899（threads=8）")

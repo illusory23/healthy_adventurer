@@ -5,7 +5,8 @@
 ## 快速开始
 
 ```bash
-双击 run.bat          # 或命令行：python app.py
+双击 一键启动.bat      # 单窗口启动（服务就跑在这个窗口里），就绪后自动打开浏览器
+                       # 等效：双击 run.bat；或命令行：python app.py（不自动开浏览器）
 ```
 
 启动后：
@@ -22,6 +23,8 @@ iPhone：Safari 打开 → 分享 → 添加到主屏幕 → 全屏运行（v1.3
 
 ```
 Flask版/
+├─ 一键启动.bat            # 双击即开（单窗口；v1.68）
+├─ run.bat / 重启服务.bat / 停止服务.bat   # 启停脚本（见 ../09_技术方案.md）
 ├─ app.py                  # Flask 服务（端口 5899）+ API 路由 + 账号体系
 ├─ game.py                 # 游戏核心逻辑（Python 移植，与原型一致）
 ├─ db.py                   # SQLite 持久化：users 账号表 + event_log（复制即备份）

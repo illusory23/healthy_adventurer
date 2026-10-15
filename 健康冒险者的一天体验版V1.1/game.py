@@ -269,6 +269,7 @@ def new_state():
         # ── v1.38m：商店限购计数（跨天/跨周幂等重置） ──
         "shop_daily": {"date": t, "cnt": {}},          # 每日限购：{date, cnt:{商品名: 已购数}}
         "shop_weekly": {"week": week_key(), "cnt": {}},  # 每周限购：{week, cnt:{商品名: 已购数}}
+        "exbuy": {"date": "", "n": 0},                 # v1.67：交易所每日买入计数（上限随等级；懒重置）
     }
 
 
@@ -333,6 +334,12 @@ def migrate_state(s):
         s["shop_weekly"] = {"week": "", "cnt": {}}
     s["shop_weekly"].setdefault("week", "")
     s["shop_weekly"].setdefault("cnt", {})
+    if not isinstance(s.get("exbuy"), dict):           # v1.67：交易所买入计数
+        s["exbuy"] = {"date": "", "n": 0}
+    # v1.67：传奇事件「星界远征」更名「星界摇篮」——旧档完成记录迁移
+    _ld = s.get("legend_done")
+    if isinstance(_ld, list) and "星界远征" in _ld:
+        s["legend_done"] = ["星界摇篮" if x == "星界远征" else x for x in _ld]
     # v1.40：历史档修复——传奇奖励中误入「藏品」的装备/图纸转入正式背包（世界树护符/时间沙漏/陨星武器图纸）
     tp = s.get("trophies") or []
     if tp:
@@ -386,9 +393,22 @@ def _coerce_import(s):
         if not isinstance(s.get(k), list):
             s[k] = list(base.get(k) or [])
     for k in ("mats", "items", "equipped", "blueprints", "skills", "done_quests", "pet_data",
-              "tim_titles", "shop_daily", "shop_weekly", "health", "daily"):
+              "tim_titles", "shop_daily", "shop_weekly", "health", "daily",
+              "meal_cap", "pet_nick", "exbuy"):        # v1.67：补 3 类内层字段（原缺失 → 毒档可砖账号）
         if not isinstance(s.get(k), dict):
             s[k] = dict(base[k])
+    for k in ("pet_walk", "wolf"):                     # v1.67：允许 None / dict 两态
+        if s.get(k) is not None and not isinstance(s.get(k), dict):
+            s[k] = None
+    _exb = s.get("exbuy") or {}
+    s["exbuy"] = {"date": _exb.get("date") if isinstance(_exb.get("date"), str) else "",
+                  "n": _exb["n"] if isinstance(_exb.get("n"), int) and not isinstance(_exb.get("n"), bool)
+                       and _exb["n"] >= 0 else 0}
+    for k in ("mats", "items"):                        # v1.67：值清洗——只留正整数（防字符串 / 负数脏值拖垮结算与渲染）
+        d2 = s.get(k)
+        if isinstance(d2, dict):
+            s[k] = {kk: vv for kk, vv in d2.items()
+                    if isinstance(kk, str) and isinstance(vv, int) and not isinstance(vv, bool) and vv > 0}
     if not isinstance((s.get("health") or {}).get("done"), list) or len(s["health"]["done"]) != 7:
         s["health"] = dict(base["health"])
     if not isinstance((s.get("daily") or {}).get("quests"), list):
@@ -397,7 +417,7 @@ def _coerce_import(s):
             not isinstance(v, (str, type(None))) for v in s["equipped"].values()):
         s["equipped"] = dict(base["equipped"])
     for k in ("lv_idx", "exp", "rep", "con", "vit", "money", "energy", "explore",
-              "accepted", "total_quests", "heat_n", "echo", "incense"):
+              "accepted", "total_quests", "heat_n", "echo", "incense", "done_below5"):
         v = s.get(k)
         if not isinstance(v, int) or isinstance(v, bool) or v < 0:
             s[k] = base.get(k, 0)
@@ -750,8 +770,8 @@ def is_morning_quest(q):
     return st < 9 * 60 and en > 6 * 60
 
 
-def success_rate(s, q):
-    qi = QUEST_LV.get(q[0], s["lv_idx"])   # v1.30：基础率/上限按委托等级套用
+def success_rate(s, q, qi=None):
+    qi = QUEST_LV.get(q[0], s["lv_idx"]) if qi is None else qi   # v1.30：基础率/上限按委托等级套用；v1.65：副本按品阶档显式传入
     B = CFG["sucBase"][qi]
     ov = CFG["diffModByLv"].get(str(qi + 1), {})
     diff = q[4]
@@ -892,7 +912,7 @@ PET_LINES = {
                "exp": 0.12, "rate": 0.01}},
     # ── v1.55：4 只传奇伙伴升级为完整养成线（可携带 / 喂食 / 进化 / 变异）──
     #    一阶加成 = 原固定加成（老档无损）；终阶略高于常规线，属传奇事件（终局内容）定位。
-    "星界幼龙": {"icon": "🐲", "from": "传奇事件「星界远征」", "rank": "传说", "need": 300,
+    "星界幼龙": {"icon": "🐲", "from": "传奇事件「星界摇篮」", "rank": "传说", "need": 300,
               "favs": {"星尘蜜": 18, "星辉花": 17, "星核": 17, "星陨岩": 16, "星尘": 8},
               "muts": {"世界树汁液": 15, "龙心": 12, "龙血": 5, "暗影草": 4},
               "stages": [
@@ -1510,6 +1530,8 @@ def feed_pet(s, n, food, msgs):
     if L.get("readDriven") and mv and pd["stage"] < 2:   # v1.55：一阶不积累变异值——别浪费高级材料
         return ("「" + L["stages"][0]["name"] + "」的变异值自二阶起才开始积累——现在喂会浪费。先陪它读书吧：阅读 "
                 + str(read_count(s)) + " / " + str(pet_read_need(n, 1)) + " 次。")
+    if not L.get("readDriven") and pd["stage"] >= 3 and not mv:   # v1.67：成长已满——普通食材只浪费一次喂食机会
+        return ("「" + L["stages"][2]["name"] + "」的成长已完成——普通食材不再增加成长值（高级特殊材料仍可积累变异值）。")
     s["mats"][food] -= 1
     if s["mats"][food] <= 0:
         del s["mats"][food]
@@ -1611,7 +1633,7 @@ def roll_qty(lo, hi):
 
 
 def mat_qty_range(v):
-    return v if isinstance(v, list) else [v, v]
+    return [v[0], v[1]] if isinstance(v, list) else [v, v]   # v1.63：容忍第 3 位「掉表项单独概率」标注
 
 
 # ══════════════ 委托池 ══════════════
@@ -1785,7 +1807,7 @@ def sleep_streak(s, n):
         return h["sleep"] or h["date"] in sh                # v1.40：连击保险日计入（保险真正保住连击，不再只是显示）
     hist = s["history"][-n:]
     if len(hist) < n:
-        return len(hist) > 0 and all(_ok(h) for h in hist)
+        return False                                        # v1.67：历史不足 n 天不发放（原新档 1~2 天即领「连续 n 天」）
     return sum(1 for h in hist if _ok(h)) >= n - 3          # 断连保护（每月 3 次容错）
 
 
@@ -1925,7 +1947,7 @@ def rare_chance(s):
     return min(0.25, p)
 
 
-def try_rare_event(s, quest_tag, quest_name, msgs, explore_mode=False):
+def try_rare_event(s, quest_tag, quest_name, msgs, explore_mode=False, res=None):
     if random.random() >= rare_chance(s):
         return None
     total = sum(r[1] for r in RARE)
@@ -1958,7 +1980,17 @@ def try_rare_event(s, quest_tag, quest_name, msgs, explore_mode=False):
         msg = "+" + str(val) + " 活力点"
     elif typ == "pay":
         if quest_name:
-            msg = "「" + quest_name + "」报酬 +50%"
+            # v1.69：委托场景下补发「本次报酬 +50%」——稀有事件判定发生在结算之后，
+            #   原实现只弹文案、不加钱（空头支票）；现按实际结算报酬补钱并同步结算卡与账本
+            add = int(round((res or {}).get("gold", 0) * 0.5))
+            if res is not None and add > 0:
+                res["gold"] += add
+                s["money"] += add
+                if s.get("daily"):
+                    s["daily"]["gold"] += add
+                msg = "「" + quest_name + "」报酬 +50%（+" + fmt_money(add) + "）"
+            else:
+                msg = "「" + quest_name + "」报酬 +50%"
         else:
             s["money"] += 5000
             msg = "探索触发 → 改为获得 50 银币"
@@ -2069,7 +2101,7 @@ def settle(s, a, msgs):
     if ok:
         gold = q[5]
         if crit:
-            gold = int(round(gold * 1.2))
+            gold *= 2                                 # v1.69：大成功 → 报酬双倍（原 +20%）
         m = a.get("meal")
         pay_mul = 1 + gear_bonus(s) + gear_acc_bonus(s) + _eff["pay"].get(q[1], 0) + pet_bonus(s)["pay"]
         if _eff["pay"].get("晨间") and is_morning_quest(q):
@@ -2089,6 +2121,8 @@ def settle(s, a, msgs):
         pay_mul += skill_pay(s, q)
         gold = int(round(gold * pay_mul))
         exp = int(round(q[6] * (1 + _eff["exp"] + pet_bonus(s)["exp"] + _fe.get("exp", 0))))   # v1.41f：劳动节·经验 +50%
+        if crit:
+            exp *= 2                              # v1.69：大成功 → 经验双倍
     else:
         # v1.48d：失败得 30% 报酬 + 30% 经验（各至少 1），无掉落
         gold = max(1, int(round(q[5] * 0.3)))
@@ -2106,7 +2140,9 @@ def settle(s, a, msgs):
     got_obj = {}
     if ok and q[8]:
         for idx, k in enumerate(q[8].keys()):
-            _drop = (mat_drop_rate(k) + wolf_mat_bonus(s) + pet_bonus(s)["mat"]) * _fe.get("mat_drop_mul", 1)   # v1.41f：万圣夜·掉率翻倍
+            _v = q[8][k]
+            _p = _v[2] if isinstance(_v, list) and len(_v) > 2 else None   # v1.63：掉表项单独概率（鹿皮×1~2(15%) 等）
+            _drop = ((mat_drop_rate(k) if _p is None else _p) + wolf_mat_bonus(s) + pet_bonus(s)["mat"]) * _fe.get("mat_drop_mul", 1)   # v1.41f：万圣夜·掉率翻倍
             if idx == 0 or random.random() < min(1, _drop):
                 lo, hi = mat_qty_range(q[8][k])
                 n2 = roll_qty(lo, hi)
@@ -2114,15 +2150,18 @@ def settle(s, a, msgs):
                     n2 = max(1, int(round(n2 * (1 + _eff["mat"]))))
                 if _fe.get("mat_qty_pct"):                     # v1.41f：七夕·乞巧（数量 +50%）
                     n2 = max(1, int(round(n2 * (1 + _fe["mat_qty_pct"]))))
+                if crit:
+                    n2 *= 2                                    # v1.69：大成功 → 材料数量双倍
                 s["mats"][k] = s["mats"].get(k, 0) + n2
                 got.append(k + "×" + str(n2))
                 got_obj[k] = n2
 
     q_lv = QUEST_LV.get(q[0], s["lv_idx"]) + 1            # v1.51 A4：声望 / 贡献均按「委托等级」（不再按玩家等级）
     rep = quest_rep(s, q, q_lv) if ok else 0
-    if ok and crit:
-        rep += 5
     con = int(round(q_lv * (1 + _eff["con"]))) if ok else 0
+    if ok and crit:                                       # v1.69：大成功 → 声望 / 贡献双倍（原「声望 +5」）
+        rep *= 2
+        con *= 2
     s["rep"] += rep
     s["con"] += con
 
@@ -2158,9 +2197,11 @@ def settle(s, a, msgs):
         s["total_quests"] = s.get("total_quests", 0) + 1
         check_achievements(s, msgs)
 
-    # 稀有事件「下一次委托」加成：本次结算即消费（无论成败）
-    s["rare_next_rate"] = 0
-    s["rare_next_pay"] = 0
+    # v1.69：下一次委托加成（幸运币 / 专注药剂 / 谈判卷轴 / 稀有事件）——成功才消费；
+    #   失败保留到下一次（原实现无论成败都清零 → 失败即纯亏，与「下一次委托」语义不符）
+    if ok:
+        s["rare_next_rate"] = 0
+        s["rare_next_pay"] = 0
 
     pet_note = pet_quest_gain(s, q, ok, a.get("qlv", s["lv_idx"] + 1))   # v1.38f：携带宠物成长
     title = "大失败" if (not ok and fumble) else ("大成功！" if (ok and crit) else ("成功" if ok else "失败"))
@@ -2175,7 +2216,7 @@ def settle(s, a, msgs):
             "gold" if ok else "bad")
     check_level_up(s)
     # v1.50：稀有事件判定（每次委托结算、成败都判）——对齐原型（原缺失；探索模式另有独立触发）
-    try_rare_event(s, q[1], q[0], msgs)
+    try_rare_event(s, q[1], q[0], msgs, res=res)      # v1.69：传结算结果——「意外的馈赠」据此补发 +50%
     return res
 
 
@@ -2763,11 +2804,8 @@ def take_sick_leave(s, day, msgs):
     覆盖日计入「保护日」：sleep_streak / _sleep_streak 视为保持连击（不抵消熬夜惩罚与其他结算）。"""
     catch_up(s)
     d = s["health"]["date"]
-    ym = d[:7]
-    used = sum(1 for x in (s.get("sick_days") or []) if x[:7] == ym)
-    if used >= SICK_MONTHLY:
-        return "本月病假已用完（每月 " + str(SICK_MONTHLY) + " 天）。"
     target = d
+    last = None
     if day == "yesterday":
         target = (parse_date(d) - timedelta(days=1)).strftime("%Y-%m-%d")
         hist = s.get("history") or []
@@ -2780,10 +2818,15 @@ def take_sick_leave(s, day, msgs):
             return "昨日已被连击保险覆盖，无需补请。"
         if last.get("sleep"):
             return "昨日已正常早睡，无需补请。"
-        last["score"] = SICK_LOCK_SCORE            # v1.61：补请昨日 → 昨日记录评分改写为 59
     else:
         if (s.get("sick_days") or []).count(target):
             return "今日已请过病假。"
+    ym = target[:7]                       # v1.67：额度按「目标日期」所属月份计（原按当前月——月初补请上月会误占新月额度且上月额度形同虚设）
+    used = sum(1 for x in (s.get("sick_days") or []) if x[:7] == ym)
+    if used >= SICK_MONTHLY:
+        return "该月份病假已用完（" + ym + " 当月已请 " + str(used) + "/" + str(SICK_MONTHLY) + " 天）。"
+    if day == "yesterday":
+        last["score"] = SICK_LOCK_SCORE            # v1.61：补请昨日 → 昨日记录评分改写为 59
     days = s.setdefault("sick_days", [])
     days.append(target)
     if len(days) > 60:
@@ -2961,12 +3004,13 @@ def catch_up(s, now=None):
                  - datetime.strptime(s.get("created") or t, "%Y-%m-%d")).days
     except ValueError:
         _days = 0
-    if _days > 0 and _days % 30 == 0 and s.get("anniv_last") != _days:
-        s["anniv_last"] = _days
+    _milestone = (_days // 30) * 30                    # v1.67：按「已跨过的最高 30 天里程碑」发放（原要求恰为 30 倍数——断天上线会永久漏发）
+    if _milestone > 0 and s.get("anniv_last") != _milestone:
+        s["anniv_last"] = _milestone
         s["vit"] += 20
         s["daily"]["vit"] = s["daily"].get("vit", 0) + 20
-        msgs.append("🎂 冒险者纪念日：来到这个世界 " + str(_days) + " 天！奖励活力点 +20")
-        add_log(s, "🎂 冒险者纪念日：" + str(_days) + " 天，活力点 +20", "gold")
+        msgs.append("🎂 冒险者纪念日：来到这个世界 " + str(_milestone) + " 天！奖励活力点 +20")
+        add_log(s, "🎂 冒险者纪念日：" + str(_milestone) + " 天，活力点 +20", "gold")
 
     # ④ 刷新点
     lp = latest_point(now)
@@ -3063,6 +3107,23 @@ def take_name(s, name):
     return None
 
 
+def settle_pending_on_checkin(s, msgs):
+    """v1.67：打卡时结算跨天待结算委托（对齐原型 settlePending；
+       文案承诺「次日打卡时结算」，原服务端只在 ≥12:00 才结算）"""
+    keep = []
+    n = 0
+    for a in s.get("active", []):
+        if a.get("pending"):
+            settle(s, a, msgs)
+            n += 1
+        else:
+            keep.append(a)
+    s["active"] = keep
+    if n:
+        add_log(s, "☀️ 打卡触发 " + str(n) + " 个跨天委托的结算", "gold")
+    return n
+
+
 def toggle_task(s, i, msgs, now=None):
     try:
         i = int(i)
@@ -3091,6 +3152,7 @@ def toggle_task(s, i, msgs, now=None):
         s["train_energy"] = 15
         msgs.append("🏋️ 训练场生效（公会 D）：坚持运动 → 永久精力上限 +15")
     calc_health(s)
+    settle_pending_on_checkin(s, msgs)   # v1.67：打卡触发跨天结算（对齐原型与文案承诺）
     return None
 
 
@@ -3116,6 +3178,7 @@ def toggle_meal(s, idx, msgs, now=None):
             s["vit"] += _fvt2
     h["done"][5] = 1 if all(meals) else 0     # 「完整吃三餐」= 早午晚三项全点
     calc_health(s)
+    settle_pending_on_checkin(s, msgs)   # v1.67：打卡触发跨天结算（对齐原型与文案承诺）
     return None
 
 
@@ -3140,6 +3203,7 @@ def add_multi(s, i, delta, msgs, now=None):
     if i == 1 and int(delta) > 0 and guild_idx(s) >= 3:
         s["lib_date"] = today_str()
     calc_health(s)
+    settle_pending_on_checkin(s, msgs)   # v1.67：打卡触发跨天结算（对齐原型与文案承诺）
     return None
 
 
@@ -3194,7 +3258,7 @@ def accept_quest(s, idx, msgs, name=None, point=None):
     _dur = int(round(q[3] * (1 + today_fest_eff().get("dur", 0))))   # v1.41f：儿童节·委托耗时 −30%
     s["active"].append({"q": q, "rate": rate, "qlv": lv_num(s), "meal": active_meal(s), "dur": _dur,
                         "acceptTs": now_ms(), "finishTs": now_ms() + _dur * 60 * 1000, "name": q[0]})
-    msgs.append("📥 接取「" + q[0] + "」耗时 " + fmt_dur(q[3]) + "，成功率 " + str(round(rate * 100)) + "%")
+    msgs.append("📥 接取「" + q[0] + "」耗时 " + fmt_dur(_dur) + "，成功率 " + str(round(rate * 100)) + "%")   # v1.67：显示节日修正后的实际耗时
     return None
 
 
@@ -3311,6 +3375,20 @@ def use_gale(s, i, msgs):
     return None
 
 
+def _use_next_buff(s, key, add, item):
+    """v1.69：下一次委托的 buff 写入（幸运币 / 专注药剂 / 谈判卷轴共用）。
+       已有 ≥ 本次加成时——原实现 max() 静默吞掉、道具照扣（白烧钱）；现改为拒绝且不消耗。"""
+    cur = s.get(key, 0) or 0
+    if cur >= add - 1e-9:
+        return ("已有更强的加成（" + str(int(round(cur * 100))) + "%）尚未用掉——「"
+                + item + "」未使用、也未消耗。")
+    s[key] = add
+    s["items"][item] -= 1
+    if s["items"][item] <= 0:
+        del s["items"][item]
+    return None
+
+
 def use_item(s, name, msgs):
     if not s["items"].get(name):
         return "没有该道具。"
@@ -3376,26 +3454,23 @@ def use_item(s, name, msgs):
         msgs.append("⌛ 使用时之怀表 → 本批委托接取窗口重置为 " + _fmt_hours_txt(pool_window_ms(s)) + " 小时")
         return None
     if name == "幸运币":
-        s["rare_next_rate"] = max(s.get("rare_next_rate", 0), 0.05)
-        s["items"][name] -= 1
-        if s["items"][name] <= 0:
-            del s["items"][name]
+        _e = _use_next_buff(s, "rare_next_rate", 0.05, name)      # v1.69：已有更高加成时拒绝且不消耗
+        if _e:
+            return _e
         msgs.append("🍀 使用幸运币 → 下一次委托成功率 +5%")
         return None
     # ── v1.32 新增四道具 ──
     if name == "专注药剂":
-        s["rare_next_rate"] = max(s.get("rare_next_rate", 0), 0.03)
-        s["items"][name] -= 1
-        if s["items"][name] <= 0:
-            del s["items"][name]
+        _e = _use_next_buff(s, "rare_next_rate", 0.03, name)
+        if _e:
+            return _e
         msgs.append("🎯 使用专注药剂 → 下一次委托成功率 +3%")
         return None
     if name == "谈判卷轴":
-        s["rare_next_pay"] = max(s.get("rare_next_pay", 0), 0.15)
-        s["items"][name] -= 1
-        if s["items"][name] <= 0:
-            del s["items"][name]
-        msgs.append("📜 使用谈判卷轴 → 下一次委托报酬 +15%")
+        _e = _use_next_buff(s, "rare_next_pay", 0.15, name)
+        if _e:
+            return _e
+        msgs.append("📜 使用谈判卷轴 → 下一次委托报酬 +15%（失败不消耗）")
         return None
     if name == "旅行干粮":
         before = s["energy"]
@@ -3489,7 +3564,12 @@ EXPLORE_LV2_NEED = 12
 
 def do_explore(s, i, msgs):
     catch_up(s)
-    i = int(i)
+    try:
+        i = int(i)
+    except (TypeError, ValueError):
+        return "没有这个探索地点。"
+    if not (0 <= i < len(REGIONS)):      # v1.67：边界校验（原负索引回绕 / 越界直接 500）
+        return "没有这个探索地点。"
     r = REGIONS[i]
     if s["lv_idx"] < 1:
         return "自由探索需要达到 Lv2 后解锁。"
@@ -3751,7 +3831,15 @@ def sell_mat(s, name, cnt=None):
         return "没有该材料。"
     if s["lv_idx"] < 1:
         return "交易所尚未开放（升到 Lv2 解锁卖出）。"
-    n = 1 if cnt is None else min(int(cnt), s["mats"][name])      # 原型：单次卖出 1 个
+    if not M.get(name):                                  # v1.67：脏档中的未知材料名不可卖出（原 M[name] 直接 KeyError）
+        return "「" + name + "」不是可交易的材料。"
+    try:
+        n = 1 if cnt is None else int(cnt)               # 原型：单次卖出 1 个
+    except (TypeError, ValueError):
+        return "数量不正确。"
+    if n < 1:                                            # v1.67：负数 / 零拦截（原负数会反向「铸」材料并扣钱）
+        return "数量不正确。"
+    n = min(n, s["mats"][name])
     total = M[name][2] * n
     s["mats"][name] -= n
     if s["mats"][name] <= 0:
@@ -3767,12 +3855,17 @@ def sell_all(s, msgs):
         return "交易所尚未开放。"
     total = 0
     cnt = 0
+    sold = {}
     for k, v in s["mats"].items():
+        if k not in M or not isinstance(v, int) or isinstance(v, bool) or v <= 0:
+            continue                                     # v1.67：未知材料名 / 脏值跳过且保留（原 M[k] 直接 KeyError）
         total += M[k][2] * v
         cnt += v
+        sold[k] = v
     if not cnt:
         return "背包里没有材料。"
-    s["mats"] = {}
+    for k in sold:
+        s["mats"].pop(k, None)
     s["money"] += total
     add_log(s, "💱 一键卖出 " + str(cnt) + " 个材料 → +" + fmt_money(total), "")
     return None
@@ -4025,8 +4118,9 @@ def buy_plat(s, msgs, i=0, mat=None):
     return None
 
 
-def buy_mat(s, name, msgs):
-    """v1.41 H3：交易所买入（卖出价 ×3；E 级解锁；普通/精良/稀有）"""
+def buy_mat(s, name, msgs, n=1):
+    """v1.41 H3：交易所买入（卖出价 ×3；E 级解锁；普通/精良/稀有）
+       v1.69：支持一次买多个（n）——按「今日限额剩余 / 铜币 / 参数合法性」三重约束自动截断"""
     if s["lv_idx"] < 1:
         return "交易所尚未开放。"
     if guild_idx(s) < 1:
@@ -4036,14 +4130,32 @@ def buy_mat(s, name, msgs):
         return "没有该材料。"
     if m[1] not in BUY_TIERS:
         return "「" + m[1] + "」材料不在交易所买入范围（史诗走贡献商店 / 传说走铂金商店）。"
+    try:
+        n = 1 if n is None else int(n)
+    except (TypeError, ValueError):
+        return "数量不正确。"
+    if n < 1:
+        return "数量不正确。"
+    _cap_list = CFG.get("exchangeBuyDaily") or [0, 10, 15, 20, 25]   # v1.67：交易所每日买入上限（随等级提高）
+    _cap = _cap_list[min(4, max(0, s["lv_idx"]))]
+    _ex = s.get("exbuy") if isinstance(s.get("exbuy"), dict) else {}
+    if _ex.get("date") != today_str():
+        _ex = {"date": today_str(), "n": 0}
+    _left = _cap - _ex.get("n", 0)
+    if _left <= 0:
+        return ("今日交易所买入已达上限（" + str(_cap) + " 个/日，随等级提升）"
+                + "——需要更多材料可去「🛒 市场」看看玩家的挂单。")
     price = m[2] * 3
-    if s["money"] < price:
+    n = min(n, _left, s["money"] // price)          # v1.69：按限额与铜币截断（原标题买 1 个）
+    if n < 1:
         return "铜币不足（需要 " + str(price) + "）。"
-    s["money"] -= price
-    s["mats"][name] = s["mats"].get(name, 0) + 1
+    _ex["n"] = _ex.get("n", 0) + n
+    s["exbuy"] = _ex
+    s["money"] -= price * n
+    s["mats"][name] = s["mats"].get(name, 0) + n
     if name not in s.get("seen_mats", []):
         s.setdefault("seen_mats", []).append(name)
-    msgs.append("💱 买入 " + name + " ×1")
+    msgs.append("💱 买入 " + name + " ×" + str(n) + "（今日已买 " + str(_ex["n"]) + "/" + str(_cap) + "）")
     return None
 
 
@@ -4173,6 +4285,8 @@ def craft(s, name, msgs):
         return "没有这件装备。"
     if g[5] == "—":
         return "「" + name + "」不能打造，只能通过成就或事件获得。"
+    if name in s["gear"]:                                # v1.67：已拥有不再重复打造（每件装备唯一，原可重复叠放积灰）
+        return "你已拥有「" + name + "」——每件装备只此一件，无需重复打造。"
     if name not in s["blueprints"]:
         return "没有「" + name + "」图纸。"
     mm = craft_main_mat(name)
@@ -4397,7 +4511,11 @@ def evolve_wolf(s, msgs):
     if w.get("mutate", 0) < WOLF_MUTATE_NEED:
         return ("变异值尚未积满（" + str(w.get("mutate", 0)) + " / " + str(WOLF_MUTATE_NEED)
                 + "）。继续喂食高级特殊材料：龙血 / 暗影草 +5、龙心 / 世界树汁液 +12 变异值。")
-    s["wolf"] = {"stage": 4, "growth": 0, "mutate": 0, "fedDate": "", "fedCount": 0}
+    w["stage"] = 4                                       # v1.67：原重建整个 dict 会丢附加字段（心情等）
+    w["growth"] = 0
+    w["mutate"] = 0
+    w["fedDate"] = ""
+    w["fedCount"] = 0
     add_log(s, "🌌 巨狼变异为「远古魔狼」：材料掉落率 +8%、委托成功率 +3%", "gold")
     if s.get("daily"):
         s["daily"]["events"].append("🐺 宠物变异：远古魔狼")
