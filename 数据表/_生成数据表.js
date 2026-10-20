@@ -16,7 +16,12 @@ global.alert = () => {}; global.confirm = () => true; global.setInterval = () =>
 
 const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, '创造模式测试原型', '健康的冒险者的一天.html'), 'utf-8');
-const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// v1.73（P2）：不再依赖「第一个无属性 <script>」——跳过 importmap，按主脚本特征选取
+const _mainScript = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+  .map(function(m){ return m[1]; })
+  .find(function(s){ return s.indexOf("function newState") >= 0; });
+if(!_mainScript){ console.error("未找到主游戏脚本块（function newState）"); process.exit(1); }
+const code = _mainScript;
 const EXPO = ["CFG","M","GEAR","LEGEND","ACHV","ACHV_DESC","MAT_DESC","MAT_USE","ITEM_DESC",
   "SKILLS","SKILL_COST","MONTH_EVENTS","REGIONS","C","SHOP","VIT_SHOP","CON_SHOP","PLAT_SHOP",
   "MASTER_SHOP","BP_SHOP","QUALITY_ORDER","MORDER","QUEST_REQ","QUEST_TURNIN","CHARM","MAT_ICON",
@@ -82,7 +87,7 @@ csv("图纸总表.csv",
   ["图纸名","对应装备","品质","解锁公会","价格"],
   D.GEAR.filter(function(g){ return g[5] !== "—"; }).map(function(g){
     const info = D.BP_SHOP[g[1]];
-    return [g[0] + "图纸", g[0], g[1], D.CFG.guildName[info.guild] + " 级", info.price + " " + info.cur];
+    return [g[0] + "图纸", g[0], g[1], D.CFG.guildName[info.guild] + " 级", D.fmtMoney(g[6])];
   }));
 
 /* ── ④ 委托总表（157 条 · 含链前置 / 上交 / 多日）── */
@@ -110,7 +115,7 @@ D.VIT_SHOP.forEach(function(it){ _sRows.push(["活力点商店","E","活力点",
 D.CON_SHOP.forEach(function(it){
   let _d = it.d || "";
   if(it.g) _d = _d.replace(/·\s*[A-Z] 级解锁$/, "");   // v1.67：与「公会 X 级解锁」前缀去重（原 精英委托重掷券 双写）
-  _sRows.push(["贡献商店","D","贡献", it.n, it.con + " 贡献", it.lim ? ("每" + it.lim[0] + " " + it.lim[1]) : "—", (it.g ? ("公会 " + D.CFG.guildName[it.g] + " 级解锁　") : "") + _d]);
+  _sRows.push(["贡献商店","D","贡献", it.n, it.con + " 贡献", it.lim ? ("每" + it.lim[0] + " " + it.lim[1]) : "—", (it.g ? ("公会 " + D.CFG.guildName[it.g] + " 级解锁　") : "") + (it.lv ? ("冒险者 Lv" + it.lv + " 解锁　") : "") + _d]);
 });
 D.PLAT_SHOP.forEach(function(it){ _sRows.push(["铂金商店","持有 ≥1 铂金币", it.goldC ? "金币" : "铂金币", it.n, it.goldC ? (it.goldC + " 金币") : (it.platC + " 铂金币"), it.lim ? ("每" + it.lim[0] + " " + it.lim[1]) : "—", (it.sel ? it.sel.join(" / ") : (it.d || "—"))]); });   // v1.67：解锁口径 v1.61d 起为「持有 ≥1 铂金币」；文案回落 d（原恒为健康锁定 100 分）
 (D.MASTER_SHOP.gear||[]).forEach(function(x){ _sRows.push(["大师商店","成就「大师」","铂金币+材料", x.n, x.platC + " 铂金币 + " + fmtIng(x.mats), "一次性", x.desc||""]); });
@@ -161,7 +166,7 @@ csv("成就总表.csv",
 
 /* ── ⑨ 探索区域总表（22 个 · 含门槛与掉落）── */
 csv("探索区域总表.csv",
-  ["区域","开放时间","探索点","耗时","门槛","掉落（概率）"],
+  ["区域","开放时间","探索点","耗时","经验","门槛","掉落（概率）"],   // v1.70：加「经验」列
   D.REGIONS.map(function(r){
     const gate = [];
     if(r.unlock) gate.push("完成委托「" + r.unlock.quest + "」");
@@ -169,7 +174,7 @@ csv("探索区域总表.csv",
     if(r.lv) gate.push("冒险者 Lv" + r.lv);
     if(r.deep) gate.push("深处层");
     const drops = (r.d || []).filter(function(p){ return p[0]; }).map(function(p){ return p[0] + " " + p[1] + "%"; }).join(" / ");
-    return [r.n, r.t, r.c, r.h + "h", gate.length ? gate.join(" + ") : "—", drops];
+    return [r.n, r.t, r.c, r.h + "h", "+" + (r.e || 0), gate.length ? gate.join(" + ") : "—", drops];
   }));
 
 /* ── ⑨b 组队副本总表（v1.65 · 24 条 · P2 社交层）── */
@@ -338,12 +343,12 @@ p("等级","升级所需累计经验", D.CFG.expNeed.join(" / "));
 p("等级","Lv1~Lv5 精力上限", D.CFG.energyMax.join(" / "));
 p("等级","Lv1~Lv5 单次抽取数", D.CFG.drawCount.join(" / "));
 p("委托","每日接取上限","4 次（公会有额外委托 +1）");
-p("委托","刷新点","" + D.CFG.refreshHours.join(" / ") + " 点（常规 1 小时内可接；最后一次 21:00~23:30——v1.41f3；节日各 +1 小时）");
+p("委托","刷新点","" + D.CFG.refreshHours.join(" / ") + " 点（常规 2 小时内可接；最后一次 21:00~23:30 2.5 小时——v1.76；节日各 +1 小时）");
 p("委托","成功率公式","min(Cap, max(Floor, B + D + Δ + 健康×0.2% + E + N))");
 p("委托","难度修正","按等级逐级：简单 Lv1~2 +10% / Lv3~4 +8% / Lv5 +5%；普通 0；困难 −10%；噩梦 Lv3 无档 · Lv4 −15% · Lv5 −20%");
 p("委托","等级差修正 Δ","每高 1 级 +12pp，上限 +36pp");
 p("委托","熬夜惩罚 N","−15%（未熬夜 0）");
-p("传奇","出现概率","每日跨天后的首次打开判定 15%（冥念护符满级 +5%；v1.50 起不绑 8:00 刷新点）");
+p("传奇","出现概率","每日跨天后的首次打开判定 15%（冥念护符满级 +5%；v1.50 起不绑 7:00 刷新点）");
 p("传奇","低语预览","未达资格时每日 2% 概率窥见（红字迹象 → 风味窗 → 不可参与）");
 p("传奇","成功率公式","min(65%, max(5%, 5% + D + 健康×0.5% + E(≤10%) + 护符/饰品)）");
 p("传奇","每周接取","每周 1 次（公会 P 级「至尊」2 次）");
@@ -352,6 +357,7 @@ p("公会","F~P 各等级声望", D.CFG.guildName.map(function(n, i){ return n +
 p("公会","技能树上限", "F~S：0/0/5/10/15/20/25（W/H/P 保持 25）");
 p("探索","每日次数","2 次；前一日健康 <60 当日不可探索");
 p("探索","区域门槛","委托解锁 / 公会等级 / 等级（三重判定，未解锁区域不显示）");
+p("探索","区域经验","完成必得（中途返回无）——各区域固定值 +10 ~ +65，随区域档位递增（v1.70）");
 p("酒馆料理","品阶开放","Lv1 普通 / Lv2 精良 / Lv3 稀有 / Lv4 史诗 / Lv5 传说（v1.41f4：公会厨房迁入酒馆）");
 p("商店","可见性","未解锁内容完全隐藏（贡献 D / 铂金商店 持有 ≥1 铂金币，v1.61d / 大师 成就 / 图纸档位按等级 / 护符级别）");
 p("护符","冥念护符 Lv1~Lv5 消耗", D.CHARM.map(function(c){ return c.cost; }).join(" / ") + " 活力点");
@@ -405,10 +411,14 @@ csv("参数速查.csv", ["分类","条目","值"], P);
 /* ── ⑰ 势力与种族总表（v1.45：六色龙 / 恶魔 / 魔鬼 / 中立与敌对种族；引用自动校验）── */
 const _qnames = new Set(); Object.keys(D.C).forEach(function(lv){ (D.C[lv]||[]).forEach(function(q){ _qnames.add(q[0]); }); });
 const _FACTIONS = [
-  ["龙族（六色龙）","中立",
-   "六色龙各据一方：绿龙牧毒雾、火龙焚山脊、白龙求知、金龙重契、蓝龙驭雷、黑龙游影。龙材是终局料理与神兵的核心，猎龙悬赏从不缺勇者。",
-   ["狩猎火龙","驱赶绿龙","与白龙探讨魔法","金龙宝藏的谈判","平息蓝龙之怒","追踪黑龙的阴翳","弑龙者","古龙遗骸采集","巨龙巢穴侦察","猎杀双足飞龙","龙血商人的订单","龙巢外围巡查"],
-   ["金龙鳞","龙炎结晶","魔力结晶","雷霆龙牙","暗影龙鳞","剧毒龙牙","绿龙胆囊","龙鳞","龙骨","龙血","龙牙","龙角","龙心","巨龙竖瞳","大块龙肉"]],
+  ["色彩龙（五色）","敌对（白龙中立）",
+   "绿龙牧毒雾、火龙焚山脊、白龙求知、蓝龙驭雷、黑龙游影。色彩龙多为领地意识极强的猛兽：猎龙者以刀剑与它们对话，掉落以龙血、龙肉、胆囊等尸体材料为主；白龙是例外，更愿意与学者交换知识。",
+   ["狩猎火龙","驱赶绿龙","与白龙探讨魔法","平息蓝龙之怒","追踪黑龙的阴翳","弑龙者","古龙遗骸采集","巨龙巢穴侦察","猎杀双足飞龙","龙血商人的订单","龙巢外围巡查"],
+   ["龙炎结晶","魔力结晶","雷霆龙牙","暗影龙鳞","剧毒龙牙","绿龙胆囊","龙鳞","龙骨","龙血","龙牙","龙角","龙心","巨龙竖瞳","大块龙肉"]],
+  ["金属龙种（五色）","中立（友善）",
+   "金、银、青铜、赤铜、黄铜五色金属龙。它们鳞如锻铁、重视契约与试炼，通常不以死斗相向：委托多为谈判、试炼、谜题与辩论。掉落以自然脱落的鳞、角、牙与吐息结晶为主，不产龙血、龙肉、龙骨。",
+   ["金龙宝藏的谈判","银龙的月光审判","青铜龙的潮汐试炼","赤铜龙的熔炉谜题","黄铜龙的沙海辩论"],
+   ["金龙鳞","银龙鳞","青铜龙牙","赤铜龙角","黄铜龙息结晶","龙鳞"]],
   ["深渊恶魔","敌对",
    "深渊领主封印之后漏网的低阶恶魔与裂隙造物，黑雾过处生机断绝。恶魔之角与混沌碎片，是它们存在过的唯一证据。",
    ["镇压恶魔裂隙","猎杀深渊恶魔","血战遗迹考察","深渊领主封印","潜入深渊神殿","深渊回响·远征"],
@@ -475,6 +485,7 @@ const _FACTIONS = [
    []],
 ];
 const _factWarn = [];
+const _prepErr = [];             // v1.73（P2）：引用校验失败 → 生成器以非 0 退出（不再只警告）
 _FACTIONS.forEach(function(f){
   f[3].forEach(function(n){ if(!_qnames.has(n)) _factWarn.push(f[0] + " 委托缺：" + n); });
   f[4].forEach(function(n){ if(!D.M[n]) _factWarn.push(f[0] + " 材料缺：" + n); });
@@ -492,7 +503,7 @@ const _qlvOf = (function(){
 })();
 const _needOf = function(lv){ return lv === "Lv5" ? 3 : (lv === "Lv4" ? 2 : 1); };
 {
-  const _pbad = [];
+  const _pbad = _prepErr;
   Object.keys(D.QUEST_ITEM).forEach(function(k){
     if(!_qnames.has(k)) _pbad.push("委托缺：" + k);
     if(!D.CRAFT[D.QUEST_ITEM[k]]) _pbad.push("配方缺：" + D.QUEST_ITEM[k]);
@@ -542,4 +553,10 @@ csv("委托准备物表.csv",
   csv("宠物拾取表.csv", ["场景","触发概率","心情修正","材料池","拾取权重","数量上限"], _findRows);
 }
 
+if(_factWarn.length || _prepErr.length){
+  console.error("❌ 引用校验未通过（共 " + (_factWarn.length + _prepErr.length) + " 处）：");
+  _factWarn.forEach(function(m){ console.error("  - 势力表：" + m); });
+  _prepErr.forEach(function(m){ console.error("  - 准备物表：" + m); });
+  process.exit(1);
+}
 console.log("全部完成 ✅（共 " + N_CSV + " 张表）");

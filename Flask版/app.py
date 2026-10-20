@@ -19,7 +19,7 @@ v1.65（社交 P2）：组队副本
   - 门槛 = 等级 + 昨日健康分（60/70/75/80）；每周参与 ≤3；未开启作废全额退还精力
   - 结算奖励 / 退还精力均为「待处理标记」，由本人下次打开时在其锁内入账（不跨账号写档）
 v1.66（社交 P3）：材料市场
-  - 解锁 = Lv3 且公会 C；页签位于「公会」右侧；可交易普通 / 精良 / 稀有 / 史诗（传说不可）
+  - 解锁 = Lv3 且公会 D（v1.75：C → D）；页签位于「公会」右侧；可交易普通 / 精良 / 稀有 / 史诗（传说不可）
   - 挂单即托管（≤3 单 / 每日 ≤3 次 / 3 天到期自动下架退回）；免手续费；
     单价 ∈ [商店价×0.9, 商店价×3]（商店价 = 基准价×3）；买入每日 ≤5 每周 ≤20；史诗需 Lv4
   - 货款入卖家邮件（proceeds）；到期退回 = 退回邮件；global_sweep 接入
@@ -27,6 +27,11 @@ v1.68：一键启动（单窗口）——启动横幅重排（去版本流水账
   经 run.bat 启动时（GAME_AUTO_OPEN=1）端口就绪后自动打开浏览器；直接在命令行 python app.py 不自动开
 v1.69：改档接口 /admin/dev（仅本机）——供「存档工具.py」交互模式在线调用（在跑的服务里改，改完即时生效）；
   写档前自动备份整档到 data/backups/manual-*.json；操作逻辑与离线工具共用 devops.py（杜绝双份漂移）
+v1.70：探索区域经验——完成探索固定获得经验（REGIONS 的 e 字段，+10 ~ +65）
+v1.71c：全商店审查——贡献商店指定史诗材料包 300 → 600（普通/精良/稀有不变）；其余商店未改价
+v1.72：金属龙种（银 / 青铜 / 赤铜 / 黄铜）——4 条委托链、4 种材料、4 件传说装备、传奇「金属龙会」；
+  阵营对齐：色彩龙敌对/中立保留尸体材料，金属龙友善不产龙血/龙肉/龙骨/龙心
+v1.73：传奇事件酒馆传闻——16 个传奇事件各 8 条专属传闻，出现时随机抽 2~3 条在酒馆展示
 """
 import copy
 import html
@@ -56,7 +61,7 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024        # v1.39（B7）：请求体上限 4MB（防超大 JSON 拖垮）
 
 # v1.68：版本号——只在启动横幅显示，便于「重启后确认新代码已生效」；与 README 版本表同步
-VERSION = "v1.69"
+VERSION = "v1.74"
 
 # ══════════════ 访问口令门（远程访问保护 · v1.26）══════════════
 # 手机经樱花内网穿透等公网方式访问时，须先输入访问口令（本机 localhost 免输）。
@@ -75,6 +80,52 @@ def _load_access_key():
 
 
 ACCESS_KEY = _load_access_key()
+
+# v1.73（P1-1）：服主工具 token——TCP 隧道下 remote_addr/Host 都可伪造，仅靠「本机判断」不足。
+# token 首次运行生成并写入 admin_token.txt；启动横幅打印带 token 的服主链接。
+ADMIN_TOKEN_FILE = Path(__file__).parent / "admin_token.txt"
+ADMIN_COOKIE = "gp_admin"
+
+
+def _load_admin_token():
+    if ADMIN_TOKEN_FILE.exists():
+        k = ADMIN_TOKEN_FILE.read_text(encoding="utf-8").strip()
+        if k:
+            return k
+    k = secrets.token_urlsafe(18)
+    ADMIN_TOKEN_FILE.write_text(k, encoding="utf-8")
+    return k
+
+
+ADMIN_TOKEN = _load_admin_token()
+
+
+def _admin_token_ok():
+    tok = (request.headers.get("X-Admin-Token")
+           or request.args.get("token")
+           or request.cookies.get(ADMIN_COOKIE) or "")
+    if not tok:
+        return False
+    try:                                   # 非 ASCII token 不能让 compare_digest 抛 TypeError（500）
+        return secrets.compare_digest(str(tok).encode("utf-8"), ADMIN_TOKEN.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def _same_origin():
+    """管理端 POST 的同源校验（Origin / Referer 任一存在时必须同源）。"""
+    o = request.headers.get("Origin")
+    if o:
+        return o.rstrip("/") == request.host_url.rstrip("/")
+    ref = request.headers.get("Referer")
+    if ref:
+        return ref.startswith(request.host_url)
+    return True
+
+
+def _admin_denied():
+    return (not _is_local_host()) or (not _admin_token_ok()) or (
+        request.method == "POST" and not _same_origin())
 
 GATE_HTML = """<!doctype html>
 <html lang="zh"><head><meta charset="utf-8">
@@ -270,10 +321,8 @@ def _access_gate():
     _maybe_backup()
     _maybe_prune()
     sweep.run()                                # v1.62：全局维护通道（内部节流 60s + 异常隔离）
-    if request.path.startswith("/admin") and not _is_local_host():
-        return "<h3>🖥️ 服主工具仅本机（服务器电脑）可用</h3>", 403
     if request.path.startswith("/admin") or request.path.startswith("/api/accounts"):
-        return None                            # 服主工具/账号管理：仅本机判权在各自处理器内；不参与注册闸门
+        return None                            # 服主工具/账号管理：本机 + token 判权在各自处理器内；不参与注册闸门
     if request.path == "/register":            # 注册页：自行解析令牌，跳过账号解析
         return None
     g.user = _current_user()
@@ -351,11 +400,17 @@ def register_submit():
     if err is not None:
         return _register_html(nick=nick, err=err)
     u = db.create_user(nick)
+    if not u:                                   # v1.73（P2）：并发抢注同名 → 友好提示并归还邀请码用量
+        if not local:
+            db.refund_invite(code)
+        return _register_html(nick=nick, err="「" + nick + "」已经有人用了，换一个吧。")
     s = game.new_state()
     s["name"] = nick
     db.save_user_state(u["id"], s)
     db.claim_user(u["id"])
-    app.logger.info("新账号注册：%s（id=%s，%s）", nick, u["id"], "本机" if local else "邀请码 " + code)
+    # v1.73（P2）：邀请码不明文落日志（只留前 2 位，其余打码）
+    _code_log = "邀请码 " + (code[:2] + "******" if len(code) > 2 else "***") if not local else "本机"
+    app.logger.info("新账号注册：%s（id=%s，%s）", nick, u["id"], _code_log)
     g.new_token = u["token"]
     return redirect("/")
 
@@ -408,7 +463,7 @@ def _dispatch(s, d, msgs, uid=0):
     if act == "use_item":
         return game.use_item(s, d.get("name", ""), msgs)
     if act == "gale":
-        return game.use_gale(s, i("idx"), msgs)
+        return game.use_gale(s, i("idx"), msgs, d.get("name"), d.get("acceptTs"))
     if act == "cook":
         return game.cook(s, i("idx"), msgs)
     if act == "buy":
@@ -486,10 +541,29 @@ def _dispatch(s, d, msgs, uid=0):
     if act == "take_legend":
         return game.take_legend(s, msgs)
     if act == "results_ack":
-        s["results"] = []
-        s["levelups"] = []                # v1.38r：升级详情队列（UI 已消费）
-        s["pending_rare"] = []
-        s["pending_legend"] = None
+        # v1.73（P1-3）：只消费前端本次已展示的条数——播放期间 catch_up 新入队的通知保留。
+        # 旧客户端不传计数时保持原行为（全部清空）。
+        def _consume(key, count_key):
+            q = s.get(key) or []
+            if count_key not in d:
+                del q[:]
+                return
+            try:
+                n = max(0, int(d.get(count_key)))
+            except (TypeError, ValueError):
+                n = 0
+            del q[:min(n, len(q))]
+        _consume("results", "n_results")
+        _consume("levelups", "n_levelups")
+        _consume("pending_rare", "n_rare")
+        if "n_legend" not in d:
+            s["pending_legend"] = None
+        else:
+            try:
+                if int(d.get("n_legend")) > 0:
+                    s["pending_legend"] = None
+            except (TypeError, ValueError):
+                pass
         return None
     if act == "yesterday_ack":
         s["yesterday_shown"] = True
@@ -510,6 +584,8 @@ def _dispatch(s, d, msgs, uid=0):
             return "你还有未领取的退回件或货款——先领取后再导入"
         if any(r["status"] == "pending" for r in db.gift_rows_since(uid, 0)):
             return "你还有等待对方处理的赠送——等对方领取 / 拒收（或超时退回）后再导入"
+        if db.party_member_active(uid) or db.party_leader_active(uid):
+            return "你还有进行中的组队副本——先完成 / 退出后再导入"
         s2 = game.import_save_state(d.get("data"))
         if s2 is None:
             return "导入文件格式不正确（需要存档 JSON）"
@@ -753,33 +829,85 @@ def api_action():
         except Exception:
             app.logger.exception("catch_up 异常（uid=%s）", u["id"])
             msgs.append("⚠️ 跨天结算出错已跳过——若反复出现请联系服主。")
+        # v1.73（P1-2）：dispatch 在副本上执行；存档 UPDATE 与社交/市场/副本 side-table 同一事务。
+        # 异常时回滚 side-table，并且不把「做了一半」的内存写回；catch_up 的结果仍单独保存。
+        work = copy.deepcopy(s)
+        tx_ok = False
         try:
-            err = _dispatch(s, d, msgs, u["id"])
+            db.begin()
+            tx_ok = True
         except Exception:
-            app.logger.exception("dispatch 异常（uid=%s act=%s）", u["id"], act)
-            err = "操作失败：存档数据异常（已跳过本次操作，请联系服主）"
-        soc = social.overview(u["id"]) if act in SOCIAL_ACTS else None   # v1.64：社交页数据随响应
-        pty = party.overview(u["id"], s, msgs) if act in PARTY_ACTS else None   # v1.65：组队副本数据（含惰性退款）
-        mkt = market.overview(u["id"], s) if act in MARKET_ACTS else None   # v1.66：市场页数据
-        db.flush_event_log(s, u["id"])             # v1.50：先 flush（更新水位）再 save（水位落库）
-        db.save_user_state(u["id"], s)
+            app.logger.exception("开启事务失败（uid=%s）", u["id"])
+        if tx_ok:
+            try:
+                err = _dispatch(work, d, msgs, u["id"])
+            except Exception:
+                app.logger.exception("dispatch 异常（uid=%s act=%s）", u["id"], act)
+                db.rollback()
+                tx_ok = False
+                err = "操作失败：存档数据异常（已跳过本次操作，请联系服主）"
+        else:
+            err = "操作失败：数据库繁忙（本次操作未生效，请稍后重试）"
+        if tx_ok:
+            # 概览各自兜底：某个视图异常不回滚已成功的动作，也不让整个 /api/action 500
+            try:
+                soc = social.overview(u["id"]) if act in SOCIAL_ACTS else None
+            except Exception:
+                app.logger.exception("social.overview 异常（uid=%s）", u["id"])
+                soc = None
+            try:
+                pty = party.overview(u["id"], work, msgs) if act in PARTY_ACTS else None
+            except Exception:
+                app.logger.exception("party.overview 异常（uid=%s）", u["id"])
+                pty = None
+            try:
+                mkt = market.overview(u["id"], work) if act in MARKET_ACTS else None
+            except Exception:
+                app.logger.exception("market.overview 异常（uid=%s）", u["id"])
+                mkt = None
+            try:
+                db.flush_event_log(work, u["id"])  # v1.50：先 flush（更新水位）再 save（水位落库）
+                db.save_user_state(u["id"], work)
+                db.commit()
+                s = work
+            except Exception:
+                app.logger.exception("保存事务失败（uid=%s act=%s）", u["id"], act)
+                db.rollback()
+                err = "操作失败：保存存档出错（本次操作未生效，请联系服主）"
+                # catch_up 的结果单独落库（不含本次 dispatch）
+                try:
+                    db.flush_event_log(s, u["id"])
+                    db.save_user_state(u["id"], s)
+                except Exception:
+                    app.logger.exception("catch_up 状态保存失败（uid=%s）", u["id"])
+                soc = pty = mkt = None
+        else:
+            soc = pty = mkt = None
+            # 本次 dispatch 未生效；仍保存 catch_up 的结果（若数据库可用）
+            try:
+                db.flush_event_log(s, u["id"])
+                db.save_user_state(u["id"], s)
+            except Exception:
+                app.logger.exception("catch_up 状态保存失败（uid=%s）", u["id"])
         return _payload(s, msgs, err, u, social_data=soc, party_data=pty, market_data=mkt)
 
 
 @app.get("/api/accounts")
 def api_accounts():
-    """本机账号管理面板数据（仅 localhost 可见）"""
-    if not _is_local_host():
-        return jsonify({"ok": False, "error": "账号管理仅本机（localhost）可查看"}), 403
+    """本机账号管理面板数据（仅 localhost + 服主 token）"""
+    if _admin_denied():
+        return jsonify({"ok": False, "error": "账号管理仅本机可用（且需要服主 token）"}), 403
     return jsonify({"ok": True, "accounts": db.list_users()})
 
 
 @app.post("/api/accounts/delete")
 def api_accounts_delete():
-    """删除账号（仅 localhost）：body {"id": N}——账号与其事件日志一并清除，不可恢复"""
-    if not _is_local_host():
-        return jsonify({"ok": False, "error": "账号管理仅本机（localhost）可用"}), 403
-    d = request.get_json(force=True, silent=True) or {}
+    """删除账号（仅 localhost + 服主 token）：body {"id": N}——账号与其事件日志一并清除，不可恢复"""
+    if _admin_denied():
+        return jsonify({"ok": False, "error": "账号管理仅本机可用（且需要服主 token）"}), 403
+    if not request.is_json:
+        return jsonify({"ok": False, "error": "请求必须是 application/json"}), 415
+    d = request.get_json(silent=True) or {}
     try:
         uid = int(d.get("id"))
     except (TypeError, ValueError):
@@ -920,13 +1048,26 @@ ADMIN_HTML = """<!doctype html>
 def admin_page():
     if not _is_local_host():
         return "<h3>🖥️ 服主工具仅本机（服务器电脑）可用</h3>", 403
+    if request.args.get("token"):
+        if not _admin_token_ok():
+            return "<h3>🚫 服主 token 不正确</h3>", 403
+        # token 换 cookie 后立即重定向，避免 token 留在地址栏 / 历史记录
+        msg = request.args.get("msg")
+        resp = redirect("/admin" + (("?msg=" + _urlquote(msg)) if msg else ""))
+        resp.set_cookie(ADMIN_COOKIE, ADMIN_TOKEN, max_age=30 * 86400,
+                        httponly=True, samesite="Strict")
+        return resp
+    if not _admin_token_ok():
+        return ("<h3>🔐 服主工具需要 token</h3>"
+                "<p>请使用启动服务时控制台打印的「服主工具」链接（形如 "
+                "http://localhost:5899/admin?token=…）。</p>"), 403
     return _admin_html(request.args.get("msg") or "")
 
 
 @app.post("/admin/invite/new")
 def admin_invite_new():
-    if not _is_local_host():
-        return "<h3>🖥️ 服主工具仅本机可用</h3>", 403
+    if _admin_denied():
+        return "<h3>🖥️ 服主工具仅本机可用（且需要 token）</h3>", 403
     code = db.create_invite_code(request.form.get("uses", 5),
                                  request.form.get("hours", 72),
                                  request.form.get("note", ""))
@@ -936,8 +1077,8 @@ def admin_invite_new():
 
 @app.post("/admin/invite/revoke")
 def admin_invite_revoke():
-    if not _is_local_host():
-        return "<h3>🖥️ 服主工具仅本机可用</h3>", 403
+    if _admin_denied():
+        return "<h3>🖥️ 服主工具仅本机可用（且需要 token）</h3>", 403
     code = (request.form.get("code") or "").strip().upper()
     ok = db.revoke_invite_code(code)
     return redirect("/admin?msg=" + _urlquote(("已吊销邀请码 " + code) if ok else "吊销失败：码不存在"))
@@ -945,8 +1086,8 @@ def admin_invite_revoke():
 
 @app.post("/admin/account/op")
 def admin_account_op():
-    if not _is_local_host():
-        return "<h3>🖥️ 服主工具仅本机可用</h3>", 403
+    if _admin_denied():
+        return "<h3>🖥️ 服主工具仅本机可用（且需要 token）</h3>", 403
     try:
         uid = int(request.form.get("id"))
     except (TypeError, ValueError):
@@ -969,8 +1110,8 @@ def admin_account_op():
 @app.post("/admin/broadcast")
 def admin_broadcast():
     """v1.64：广播邮件——给全部已命名账号发系统邮件（30 天过期）"""
-    if not _is_local_host():
-        return "<h3>🖥️ 服主工具仅本机可用</h3>", 403
+    if _admin_denied():
+        return "<h3>🖥️ 服主工具仅本机可用（且需要 token）</h3>", 403
     title = (request.form.get("title") or "").strip()[:40]
     body = (request.form.get("body") or "").strip()[:300]
     if not title:
@@ -991,9 +1132,11 @@ def admin_dev():
        仅本机可及（与 /admin 同门槛 _is_local_host）；写档前自动备份整档到 data/backups/manual-*.json。
        体：{"uid": 3, "op": "set", "args": {"key": "money", "value": "1000000"}}
        → {"ok": true, "msg": "…", "msgs": [...], "backup": "manual-user3-….json"}"""
-    if not _is_local_host():
-        return jsonify({"ok": False, "error": "改档接口仅本机（服务器电脑）可用"}), 403
-    d = request.get_json(force=True, silent=True)
+    if _admin_denied():
+        return jsonify({"ok": False, "error": "改档接口仅本机可用（且需要 token）"}), 403
+    if not request.is_json:
+        return jsonify({"ok": False, "error": "请求必须是 application/json"}), 415
+    d = request.get_json(silent=True)
     if not isinstance(d, dict):
         return jsonify({"ok": False, "error": "请求格式不正确（需要 JSON 对象）"})
     try:
@@ -1080,7 +1223,8 @@ def _print_banner(bak_ok):
     print("  本机游玩：http://localhost:5899")
     print("  手机游玩：" + lan)
     print("  远程口令：" + ACCESS_KEY + " （首次访问输入一次 · 见 access_key.txt）")
-    print("  服主工具：http://localhost:5899/admin （仅服务器本机）")
+    print("  服主工具：http://localhost:5899/admin?token=" + ADMIN_TOKEN)
+    print("            （仅服务器本机；token 已存 admin_token.txt，勿外传）")
     print(thin)
     print("  新玩家注册：本机免注册；手机 / 远程需「邀请码 + 昵称」")
     print("  数据备份：" + ("今日已备 · data/backups/ 保留最近 14 份" if bak_ok

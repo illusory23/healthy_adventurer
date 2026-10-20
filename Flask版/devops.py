@@ -71,16 +71,18 @@ def _roll_of(v):
 
 @contextlib.contextmanager
 def fixed_roll(roll):
-    """临时把 game.rand 固定为 roll（None = 不干预）——settle 内的掷骰即锁定值"""
+    """临时把本线程的掷骰固定为 roll（None = 不干预）——settle 内的掷骰即锁定值。
+       v1.73（P2）：改为 game.rand 的线程局部覆盖，不再全局替换 game.rand，
+       在线改档时不会影响同进程其他玩家请求的掷骰。"""
     if roll is None:
         yield
         return
-    orig = game.rand
-    game.rand = lambda n=100: roll
+    prev = getattr(game._rand_local, "fixed", None)
+    game._rand_local.fixed = roll
     try:
         yield
     finally:
-        game.rand = orig
+        game._rand_local.fixed = prev
 
 
 # ══════════════════ 操作注册表 ══════════════════
@@ -410,7 +412,8 @@ def op_gear(s, name="", slot=""):
     name = str(name).strip()
     g = game.gear_def(name)
     _need(g, "没有这件装备：" + name)
-    added = name not in s["gear"]
+    owned = name in game.owned_gear(s)
+    added = not owned
     if added:
         s["gear"].append(name)
     tail = ""
@@ -420,6 +423,13 @@ def op_gear(s, name="", slot=""):
         key = slot_map.get(str(slot).strip())
         _need(key, "槽位只能是：武器 / 护甲 / 饰品 / 护符")
         old = s["equipped"].get(key)
+        # v1.73（P2）：同一件装备不能同时占两个槽——先从其他槽卸下（所有权只有一份）
+        for k2, v2 in list(s["equipped"].items()):
+            if k2 != key and v2 == name:
+                s["equipped"][k2] = None
+        # 被顶下来的旧装备回背包，不能凭空消失
+        if old and old != name and old not in s["gear"]:
+            s["gear"].append(old)
         s["equipped"][key] = name
         if name in s["gear"]:
             s["gear"].remove(name)
@@ -581,10 +591,9 @@ def op_carry(s, name=""):
 def op_unlock_all(s):
     msgs = []
     n_bp = _all_blueprints(s)
-    for name, _g in game.ACHV:
-        if name not in s["achv"]:
-            s["achv"].append(name)
-    game.check_achievements(s, msgs)
+    # v1.73（P2）：force=True 让成就走正常发奖（饰品 / 称号 / 日志）；
+    # 原实现先把名字塞进 achv 再检查，check 会全部跳过 → 成就有了、奖励没发
+    game.check_achievements(s, msgs, force=True)
     for t in getattr(game, "ACHV_TITLE", []) or []:
         if t not in s["titles"]:
             s["titles"].append(t)
@@ -615,10 +624,7 @@ def op_titles_all(s):
 @op("achv_all", "补全成就（连奖励一起发）", "6 收集")
 def op_achv_all(s):
     msgs = []
-    for name, _g in game.ACHV:
-        if name not in s["achv"]:
-            s["achv"].append(name)
-    game.check_achievements(s, msgs)
+    game.check_achievements(s, msgs, force=True)   # v1.73（P2）：连同奖励一起发
     return "成就 %d / %d：%s" % (len(s["achv"]), len(game.ACHV), "、".join(s["achv"]))
 
 
@@ -648,11 +654,16 @@ def op_explore_clear(s):
 @op("month_event", "推进月度世界事件进度", "7 探索与世界", [("n", "加多少进度", "999")])
 def op_month_event(s, n="999"):
     msgs = []
-    game.month_event_tick(s, msgs) if hasattr(game, "month_event_tick") else None
+    game.month_event_tick(s, [])          # 换月后先生成本月事件（幂等）
     cur = game.month_event_now(s)
     _need(cur, "本月没有世界事件（或已过期）")
-    game.month_event_add(s, msgs, "quest", _int(n, name="进度"))
-    return "月度事件「%s」进度已推进%s" % (cur.get("key"), ("；" + "；".join(msgs)) if msgs else "")
+    # v1.73（P2）：按本月事件的实际类型计数——原实现硬编码 "quest"，
+    # 遇到 task / explore 类型的月份会「显示已推进但进度不变」
+    game.month_event_add(s, msgs, cur["ev"]["t"], _int(n, name="进度"))
+    now = game.month_event_now(s)
+    return "月度事件「%s」进度：%d / %d%s" % (
+        now["ev"]["n"], now["cnt"], now["ev"]["need"],
+        ("；" + "；".join(msgs)) if msgs else "")
 
 
 # ────────── 8 复位 ──────────

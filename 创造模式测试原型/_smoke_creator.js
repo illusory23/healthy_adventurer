@@ -27,7 +27,12 @@ global.confirm = () => true;
 global.setInterval = () => 0;
 
 const html = fs.readFileSync(__dirname + '/健康的冒险者的一天.html', 'utf-8');
-const main = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// v1.73（P2）：不再依赖「第一个无属性 <script>」——跳过 importmap，按主脚本特征选取
+const _mainScript = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+  .map(function(m){ return m[1]; })
+  .find(function(s){ return s.indexOf("function newState") >= 0; });
+if(!_mainScript){ console.error("未找到主游戏脚本块（function newState）"); process.exit(1); }
+const main = _mainScript;
 const creator = html.match(/<script id="creator-mode">([\s\S]*?)<\/script>/);
 if(!creator){
   console.log('❌ 未找到创造模式 script 块（<script id="creator-mode">）');
@@ -103,12 +108,12 @@ ck(S.pets.indexOf("绒球兽") >= 0 && S.petData["绒球兽"].stage === 1, "creP
 crePetSet("绒球兽", "stage", 3);
 ck(S.petData["绒球兽"].stage === 3, "crePetSet：改阶段");
 
-/* 图鉴宠物节（v1.51b）+ 装备补全（v1.52）+ v1.57 种族链 + v1.58 六域遗珍 + v1.59 弱出口补全：全图鉴解锁 → 477 / 477 */
+/* 图鉴宠物节（v1.51b）+ 装备补全（v1.52）+ v1.57 种族链 + v1.58 六域遗珍 + v1.59 弱出口补全：全图鉴解锁 → 490 / 490 */
 S.pets = []; S.petData = {}; S.wolf = null;
 creGalleryAll();
 renderGallery();
 const _galPet = document.getElementById("tab-gallery").innerHTML || "";
-ck(_galPet.indexOf("477 / 477") >= 0, "图鉴全解锁：477 / 477（含 v1.58 新增 6 材料 / 7 装备 / 4 料理 + v1.59 新增 3 装备）");
+ck(_galPet.indexOf("490 / 490") >= 0, "图鉴全解锁：490 / 490（含 v1.58 新增 6 材料 / 7 装备 / 4 料理 + v1.59 新增 3 装备 + v1.72 金属龙 4 材料 / 4 装备 / 4 委托 / 1 传奇）");
 ck(_galPet.indexOf("🐾 宠物") >= 0 && _galPet.indexOf("星界幼龙") >= 0 && _galPet.indexOf("捣蛋鬼") >= 0, "图鉴宠物节：固定宠物与养成线入册");
 /* 小狼：已养（S.wolf 四阶）时显示当前形态名 */
 S.wolf = {stage: 4, growth: 0, mutate: 0};

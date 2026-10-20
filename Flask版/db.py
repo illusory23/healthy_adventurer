@@ -12,8 +12,10 @@ v1.62（社交 P0）：邀请码注册 + 好友码 + 封禁
   - 服务器所在电脑（localhost）保持免注册直通；昵称唯一性由 name_taken 校验
 """
 import json
+import os
 import secrets
 import sqlite3
+import threading
 import time
 import shutil
 from contextlib import closing
@@ -175,7 +177,7 @@ def _new_code():
 _init_done_path = None
 
 
-def conn():
+def _raw_conn():
     """打开数据库连接。初始化（建表/补列/迁移）仅每库首次执行；
        启用 WAL（读写并发不互锁）与 busy_timeout（锁等待 5 秒，替代默认"立即报错"）。"""
     global _init_done_path
@@ -189,8 +191,94 @@ def conn():
         c.executescript(_SCHEMA)
         _ensure_columns(c)
         _migrate_legacy(c)
+        ensure_friend_codes(c)          # P2：迁移后补一轮，旧档迁入的首个账号也能立刻拿到好友码
         _init_done_path = str(DB_PATH)
     return c
+
+
+# ══════════════ v1.73：请求级事务（存档 UPDATE 与社交/市场/副本 side-table 同提交）══════════════
+_tx_local = threading.local()
+
+
+class _TxConn:
+    """事务期间的连接代理：底层共用同一 SQLite 连接；commit/rollback/close 由事务边界统一处理。
+       各业务函数照常 `with closing(conn()) as c:`，但不会提前提交或关闭。"""
+    def __init__(self, c):
+        object.__setattr__(self, "_c", c)
+
+    def __getattr__(self, name):
+        return getattr(self._c, name)
+
+    def __setattr__(self, name, value):
+        setattr(self._c, name, value)
+
+    def execute(self, *args, **kwargs):
+        return self._c.execute(*args, **kwargs)
+
+    def executemany(self, *args, **kwargs):
+        return self._c.executemany(*args, **kwargs)
+
+    def executescript(self, *args, **kwargs):
+        return self._c.executescript(*args, **kwargs)
+
+    def commit(self):
+        return None
+
+    def rollback(self):
+        return None
+
+    def close(self):
+        return None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def begin():
+    """开启请求级事务（可嵌套；最外层真正 BEGIN IMMEDIATE）。"""
+    depth = getattr(_tx_local, "depth", 0)
+    if depth:
+        _tx_local.depth = depth + 1
+        return
+    c = _raw_conn()
+    c.execute("BEGIN IMMEDIATE")
+    _tx_local.conn = c
+    _tx_local.depth = 1
+
+
+def commit():
+    depth = getattr(_tx_local, "depth", 0)
+    if depth > 1:
+        _tx_local.depth = depth - 1
+        return
+    c = getattr(_tx_local, "conn", None)
+    if c is not None:
+        c.commit()
+        c.close()
+    _tx_local.conn = None
+    _tx_local.depth = 0
+
+
+def rollback():
+    c = getattr(_tx_local, "conn", None)
+    if c is not None:
+        try:
+            c.rollback()
+        finally:
+            c.close()
+    _tx_local.conn = None
+    _tx_local.depth = 0
+
+
+def conn():
+    """事务中返回共享连接代理；否则返回独立连接。"""
+    c = getattr(_tx_local, "conn", None)
+    if c is not None:
+        return _TxConn(c)
+    return _raw_conn()
 
 
 def _ensure_columns(c):
@@ -281,9 +369,9 @@ def _migrate_legacy(c):
     except Exception:
         name = ""
     cur = c.execute(
-        "INSERT INTO users (name, token, code, migrated, created_at, last_login, data) "
-        "VALUES (?, ?, ?, 1, ?, 0, ?)",
-        (name, _new_token(), _new_code(), _now_ms(), row["data"]))
+        "INSERT INTO users (name, token, code, friend_code, migrated, created_at, last_login, data) "
+        "VALUES (?, ?, ?, ?, 1, ?, 0, ?)",
+        (name, _new_token(), _new_code(), _new_code(), _now_ms(), row["data"]))
     c.execute("UPDATE event_log SET user_id = ? WHERE user_id = 0", (cur.lastrowid,))
     c.commit()
 
@@ -318,7 +406,9 @@ def find_unclaimed_migrated():
 
 
 def create_user(name=""):
-    """新建账号：name 为空 = 旧式空档（本机免注册直通）；v1.62 远程注册时带昵称建号"""
+    """新建账号：name 为空 = 旧式空档（本机免注册直通）；v1.62 远程注册时带昵称建号。
+       v1.73（P2）：昵称被并发抢注时返回 None（不再对着同一个重名重试 30 次后抛 500）；
+       其余唯一键（token / 接入码 / 好友码）冲突才重试。"""
     name = (name or "").strip()
     with closing(conn()) as c:
         for _ in range(30):
@@ -330,9 +420,23 @@ def create_user(name=""):
                 c.commit()
                 return _row_to_user(c.execute("SELECT * FROM users WHERE id = ?",
                                               (cur.lastrowid,)).fetchone())
-            except sqlite3.IntegrityError:
+            except sqlite3.IntegrityError as e:
+                if name and ("users.name" in str(e) or "idx_users_name_uni" in str(e)):
+                    return None                    # 昵称刚刚被别的请求抢注
                 continue
     raise RuntimeError("无法生成唯一接入码")
+
+
+def refund_invite(code):
+    """注册在「建号失败」后归还一次邀请码用量（仅回补到 uses_total 以内）"""
+    code = (code or "").strip().upper()
+    if not code:
+        return False
+    with closing(conn()) as c:
+        cur = c.execute("UPDATE invite_codes SET uses_left = uses_left + 1 "
+                        "WHERE code = ? AND revoked = 0 AND uses_left < uses_total", (code,))
+        c.commit()
+        return cur.rowcount == 1
 
 
 def claim_user(uid):
@@ -370,19 +474,25 @@ def delete_user_if_fresh(uid):
 def delete_user(uid):
     """本机账号管理（v1.38q2）：删除账号并清除其事件日志（不可恢复）；
        v1.64：同步清理其社交数据（好友边 / 申请 / 拉黑 / 邮件——含他人发给其的待领取邮件）；
-       v1.65：清理其副本数据（作为队长的整队一并消失；作为队员的行一并移除）；
-       v1.66：清理其市场挂单（在售的行连同托管材料一并删除）"""
+       v1.65：清理其副本数据（作为队长的整队一并结束；作为队员的行一并移除）；
+       v1.66：清理其市场挂单（在售的行连同托管材料一并删除）；
+       v1.73：不吞他人资产——已送出的待领取礼物保留（对方仍可领取），
+               队长账号被删时给其他在队成员记待退精力（party 行保留作退款凭据）"""
     with closing(conn()) as c:
         c.execute("DELETE FROM event_log WHERE user_id = ?", (uid,))
         c.execute("DELETE FROM friend_edge WHERE a = ? OR b = ?", (uid, uid))
         c.execute("DELETE FROM friend_req WHERE from_uid = ? OR to_uid = ?", (uid, uid))
         c.execute("DELETE FROM block_list WHERE a = ? OR b = ?", (uid, uid))
-        c.execute("DELETE FROM mail WHERE uid = ? OR (from_uid = ? AND status = 'pending')", (uid, uid))
+        # 只删「收件人是本人」的邮件；本人送出的待领礼物属于对方，保留可领
+        c.execute("DELETE FROM mail WHERE uid = ?", (uid,))
         c.execute("DELETE FROM market WHERE seller = ?", (uid,))
-        _pids = [r["id"] for r in c.execute("SELECT id FROM party WHERE uid = ?", (uid,)).fetchall()]
-        for pid in _pids:
-            c.execute("DELETE FROM party WHERE id = ?", (pid,))
-            c.execute("DELETE FROM party_member WHERE party_id = ?", (pid,))
+        # 队长注销：队伍无法继续，给其他成员记 refund=1（保留 party 行，退款查询要 JOIN 它）
+        for r in c.execute("SELECT id FROM party WHERE uid = ? "
+                           "AND status IN ('offer','open','running')", (uid,)).fetchall():
+            pid = r["id"]
+            c.execute("UPDATE party_member SET status = 'refunded', refund = 1 "
+                      "WHERE party_id = ? AND uid <> ? AND status = 'in'", (pid, uid))
+            c.execute("UPDATE party SET status = 'refunded', expire_at = 0 WHERE id = ?", (pid,))
             c.execute("DELETE FROM party_invite WHERE party_id = ?", (pid,))
         c.execute("DELETE FROM party_member WHERE uid = ?", (uid,))
         c.execute("DELETE FROM party_invite WHERE uid = ?", (uid,))
@@ -538,6 +648,33 @@ def load_user_state(uid):
         return None, True
 
 
+def load_user_states(uids):
+    """v1.73（P2）：批量读取存档 {uid: (state, corrupted)}——一次查询，
+       供社交概览等「一页要读很多人的档」的场景避免 N+1；损坏档同样另存 data/corrupt/。"""
+    ids = list(dict.fromkeys(int(x) for x in (uids or [])))
+    out = {}
+    if not ids:
+        return out
+    got = {}
+    with closing(conn()) as c:
+        for i in range(0, len(ids), 900):        # SQLite 变量上限 999：分批查询
+            part = ids[i:i + 900]
+            rows = c.execute("SELECT id, data FROM users WHERE id IN ("
+                             + ",".join("?" for _ in part) + ")", part).fetchall()
+            got.update({r["id"]: r["data"] for r in rows})
+    for uid in ids:
+        raw = got.get(uid)
+        if raw is None:
+            out[uid] = (None, False)
+            continue
+        try:
+            out[uid] = (json.loads(raw), False)
+        except Exception:
+            _keep_corrupt(uid, raw)
+            out[uid] = (None, True)
+    return out
+
+
 def _keep_corrupt(uid, raw):
     """存档 JSON 损坏：原文另存 data/corrupt/user<id>-<ts>.json（不覆盖、不删除原档）"""
     try:
@@ -604,19 +741,32 @@ def prune_event_log(keep_per_user=2000):
     return total
 
 
+_backup_lock = threading.Lock()
+
+
 def backup_daily():
     """v1.38：每日自动备份——data/backups/adventurer-YYYY-MM-DD.db，滚动保留最近 14 份（v1.39：7→14）。
        用 SQLite 的 VACUUM INTO 做原子快照；不支持时 WAL 检查点后回退文件复制。
+       v1.73（P2）：进程内互斥 + 先写 .tmp 再原子替换——并发首请求不会各写一份，
+       中断只会留下 .tmp（下次清掉），不会把半份文件当成「今日已备份」。
        返回 True = 今日备份已就绪（含"今日已存在"）；False = 失败（调用方不记日期，下次重试）。"""
     bak_dir = DB_PATH.parent / "backups"
     bak_dir.mkdir(parents=True, exist_ok=True)
     dst = bak_dir / ("adventurer-" + time.strftime("%Y-%m-%d") + ".db")
     if not DB_PATH.exists():
         return False
-    if not dst.exists():
+    with _backup_lock:
+        if dst.exists():
+            _prune_backups(bak_dir)
+            return True
+        tmp = dst.with_name(dst.name + ".tmp")
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
         try:
             with closing(conn()) as c:
-                c.execute("VACUUM INTO ?", (str(dst),))
+                c.execute("VACUUM INTO ?", (str(tmp),))
         except Exception:
             try:
                 with closing(conn()) as c:             # WAL 下先合并回主文件再复制
@@ -624,11 +774,23 @@ def backup_daily():
             except Exception:
                 pass
             try:
-                shutil.copy2(str(DB_PATH), str(dst))
+                shutil.copy2(str(DB_PATH), str(tmp))
             except Exception:
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
                 return False
-    _prune_backups(bak_dir)
-    return True
+        try:
+            os.replace(str(tmp), str(dst))             # 原子落位：要么没有，要么完整
+        except Exception:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            return False
+        _prune_backups(bak_dir)
+        return True
 
 
 def _prune_backups(bak_dir):
@@ -1123,23 +1285,6 @@ def market_mine(seller, limit=20):
     with closing(conn()) as c:
         return [dict(r) for r in c.execute(
             "SELECT * FROM market WHERE seller = ? ORDER BY id DESC LIMIT ?", (seller, limit)).fetchall()]
-
-
-def market_set(lid, expect=None, **fields):
-    """条件更新（幂等）：qty / sold / status / off_reason"""
-    cols = [k for k in ("qty", "sold", "status", "off_reason") if k in fields]
-    if not cols:
-        return False
-    sets = [k + " = ?" for k in cols]
-    args = [fields[k] for k in cols]
-    args.append(lid)
-    where = "id = ?" + (" AND status = ?" if expect else "")
-    if expect:
-        args.append(expect)
-    with closing(conn()) as c:
-        cur = c.execute("UPDATE market SET " + ", ".join(sets) + " WHERE " + where, args)
-        c.commit()
-        return cur.rowcount == 1
 
 
 def market_take(lid, qty):

@@ -37,7 +37,9 @@ REM --- Start the server here (same window) and open the browser when ready ---
 title AdventurerGame - port 5899
 set GAME_AUTO_OPEN=1
 python app.py
+set "RC=%errorlevel%"
 
 echo.
 echo Server stopped (or failed to start). Press any key to close.
 pause >nul
+exit /b %RC%

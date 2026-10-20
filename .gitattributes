@@ -1,0 +1,15 @@
+# v1.73（P2）：统一换行约定，避免「索引 CRLF / 工作区 LF」导致整文件 diff
+* text=auto eol=lf
+
+# 项目约定：Windows 双击脚本与以下测试/体验版文件保持 CRLF
+*.bat text eol=crlf
+Flask版/test_game.py text eol=crlf
+健康冒险者的一天体验版V1.1/game.py text eol=crlf
+
+# 生成/运行产物按二进制处理（本身已被 .gitignore 排除，双保险）
+*.db binary
+*.db-wal binary
+*.db-shm binary
+*.png binary
+*.jpg binary
+*.ico binary

@@ -2,7 +2,7 @@
 """v1.66（社交 P3）：材料市场业务逻辑
 
 - 仅存在于 Flask 版（社交层）；原型保持单机、体验版不含社交层（见 11_社交与协作.md 11.1）
-- 解锁 = Lv3 且公会 C；可交易品阶 = 普通 / 精良 / 稀有 / 史诗（**传说 / 道具 / 装备 / 图纸不可**）
+- 解锁 = Lv3 且公会 D（v1.75：C → D）；可交易品阶 = 普通 / 精良 / 稀有 / 史诗（**传说 / 道具 / 装备 / 图纸不可**）
 - 挂单即托管：上架先从背包扣除 → 成交交付 / 卖家下架原样退回（退回直入本人存档——本人请求锁内）
   / 3 天到期由 sweep 下架 → **退回邮件**（不跨账号写档）
 - 定价：单价 ∈ [商店价×0.9, 商店价×3.0]；商店价 = 基准价×3（全品阶统一）；参考价 = 基准价；免手续费
@@ -32,14 +32,18 @@ def _lv(s):
 
 
 def _day_start_ms(now=None):
-    d = (now or datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
-    return int(d.timestamp() * 1000)
+    """v1.73：与游戏日同口径（06:00 日界线）。"""
+    d = now or datetime.now()
+    gd = datetime.strptime(game.today_str(d), "%Y-%m-%d").replace(hour=game.DAY_CUTOFF_HOUR)
+    return int(gd.timestamp() * 1000)
 
 
 def _week_start_ms(now=None):
-    d = (now or datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
-    d -= timedelta(days=d.weekday())
-    return int(d.timestamp() * 1000)
+    d = now or datetime.now()
+    gd = datetime.strptime(game.today_str(d), "%Y-%m-%d")
+    gd -= timedelta(days=gd.weekday())
+    gd = gd.replace(hour=game.DAY_CUTOFF_HOUR)
+    return int(gd.timestamp() * 1000)
 
 
 def _load(uid):
@@ -49,7 +53,7 @@ def _load(uid):
 
 def _guild_ok(s):
     """公会 ≥ C（CFG.guildName 索引：F0 E1 D2 C3）"""
-    return game.guild_idx(s) >= cfg("unlockGuild", 3)
+    return game.guild_idx(s) >= cfg("unlockGuild", 2)   # v1.75：默认 D 级（索引 F0 E1 D2）
 
 
 def unlocked(s):
@@ -102,7 +106,7 @@ def overview(uid, me_s):
                              "base": game.M[k][2], "shop": _shop_price(k), "lo": lo, "hi": hi})
     return {
         "unlock": unlocked(me_s),
-        "unlock_txt": "需 Lv" + str(cfg("unlockLv", 3)) + " 且公会 C 级",
+        "unlock_txt": "需 Lv" + str(cfg("unlockLv", 3)) + " 且公会 D 级",
         "me": {"lv": lv, "guild": game.CFG["guildName"][game.guild_idx(me_s)],
                "epic_ok": lv >= cfg("epicLv", 4),
                "list_active": db.market_active_count(uid),
@@ -132,7 +136,7 @@ def dot(uid):
 
 def list_mat(uid, me_s, mat, qty, price, msgs):
     if not unlocked(me_s):
-        return "材料市场需 Lv" + str(cfg("unlockLv", 3)) + " 且公会 C 级才能使用"
+        return "材料市场需 Lv" + str(cfg("unlockLv", 3)) + " 且公会 D 级才能使用"
     if not _tradable(mat):
         return "该品阶不可上架（可交易：普通 / 精良 / 稀有 / 史诗；传说与道具 / 装备 / 图纸不可）"
     if _tier(mat) == "史诗" and _lv(me_s) < cfg("epicLv", 4):
@@ -184,7 +188,7 @@ def cancel(uid, me_s, lid, msgs):
 
 def buy(uid, me_s, lid, qty, msgs):
     if not unlocked(me_s):
-        return "材料市场需 Lv" + str(cfg("unlockLv", 3)) + " 且公会 C 级才能使用"
+        return "材料市场需 Lv" + str(cfg("unlockLv", 3)) + " 且公会 D 级才能使用"
     r = db.market_get(lid)
     if not r or r["status"] != "on":
         return "该挂单已售罄或下架"

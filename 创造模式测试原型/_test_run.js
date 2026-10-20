@@ -24,7 +24,12 @@ global.confirm = () => false;
 global.setInterval = () => 0;
 
 const html = fs.readFileSync(__dirname + '/健康的冒险者的一天.html', 'utf-8');
-const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// v1.73（P2）：不再依赖「第一个无属性 <script>」——跳过 importmap，按主脚本特征选取
+const _mainScript = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+  .map(function(m){ return m[1]; })
+  .find(function(s){ return s.indexOf("function newState") >= 0; });
+if(!_mainScript){ console.error("未找到主游戏脚本块（function newState）"); process.exit(1); }
+const code = _mainScript;
 
 const test = `
 _roll3D = false;   // 无浏览器环境，禁用 3D 骰子加载

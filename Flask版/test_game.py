@@ -172,7 +172,9 @@ s["daily"] = game._blank_daily("2026-10-01")
 s["history"] = []
 msgs2 = []
 day_settle(s, msgs2)
-check(s["buff_next"]["pay"] == 0.15 and s["buff_next"]["energy"] == 10, "满分日 → 次日 buff")
+check(s["buff_next"]["pay"] == 0.15 and s["buff_next"]["energy"] == 10
+      and not s["buff_next"].get("con") and not s["buff_next"].get("vit"),
+      "满分日 → 次日 buff（报酬 / 精力；贡献 / 活力点不重复）")
 check(s["buff_next"]["date"] == "2026-10-02", "buff 生效日")
 check(s["heat_n"] == 1, "安眠室累计 +1")
 print("  区间奖励：" + str(s["buff_next"]))
@@ -186,14 +188,20 @@ s["health"] = {"date": "2026-10-03", "done": [1, 1, 1, 1, 0, 0, 0], "multi": [0,
 s["daily"] = game._blank_daily("2026-10-03")
 day_settle(s, msgs2)
 check(s["buff_next"]["energy"] == 0 and s["buff_next"]["pay"] == 0, "50 分（普通档）→ 无额外奖励、无惩罚")
-# v1.59b：60–74「良好」档（第三档）→ 结算 声望+2/贡献+1/活力点+1；次日区间奖励 报酬+5%/贡献+1/活力点+1
+# v1.59b / v1.76：60–74「良好」档（第三档）→ 日结算 声望+2/贡献+1/活力点+1；次日只加报酬+5%
 s["health"] = {"date": "2026-10-04", "done": [1, 1, 1, 1, 1, 0, 0], "multi": [0, 0], "score": 65}
 s["daily"] = game._blank_daily("2026-10-04")
 _c65, _v65 = s["con"], s["vit"]
 day_settle(s, msgs2)
-check(s["con"] - _c65 == 1 and s["vit"] - _v65 == 1, "65 分（良好档）→ 结算 贡献+1 / 活力点+1（v1.59b）")
-check(s["buff_next"]["pay"] == 0.05 and s["buff_next"]["con"] == 1 and s["buff_next"].get("vit") == 1,
-      "65 分（良好档）→ 次日区间奖励 报酬+5% / 贡献+1 / 活力点+1（v1.59b）")
+check(s["con"] - _c65 == 1 and s["vit"] - _v65 == 1, "65 分（良好档）→ 日结算 贡献+1 / 活力点+1（v1.59b）")
+check(s["buff_next"]["pay"] == 0.05 and not s["buff_next"].get("con") and not s["buff_next"].get("vit"),
+      "65 分（良好档）→ 次日区间奖励只有 报酬+5%（贡献/活力点不重复）")
+# v1.76：区间奖励领取不再二次发放贡献/活力点
+_c76, _v76 = s["con"], s["vit"]
+s["buff_next"]["date"] = "2000-01-01"          # 强制视为已到生效日
+game.apply_buff_claim(s, msgs2)
+check(s["con"] == _c76 and s["vit"] == _v76 and s["buff_next"]["claimed"] is True,
+      "v1.76：区间奖励领取不重复发放贡献/活力点（仍标记已领取）")
 
 print("=== 7. 周结算（全黄金周） ===")
 s["week_settled"] = ""
@@ -284,12 +292,21 @@ ep0 = sum(v for k, v in s["mats"].items() if game.M.get(k, [None, None])[1] == "
 s["con"] = 2000
 game.buy_con(s, _i_ep, [], 1, _ep_mat)
 check(sum(v for k, v in s["mats"].items() if game.M.get(k, [None, None])[1] == "史诗") == ep0 + 1
-      and s["con"] == 1700, "贡献兑换史诗材料 ×1（-300 贡献）")
+      and s["con"] == 1400, "贡献兑换史诗材料 ×1（-600 贡献，v1.71c 审计价）")
 game.buy_con(s, _i_ep, [], 1, _ep_mat)
 check(sum(v for k, v in s["mats"].items() if game.M.get(k, [None, None])[1] == "史诗") == ep0 + 2
-      and s["con"] == 1400, "史诗材料 ×2（周限 2 内）")
+      and s["con"] == 800, "史诗材料 ×2（周限 2 内）")
 bad = game.buy_con(s, _i_ep, [], 1, _ep_mat)
-check(bad is not None and s["con"] == 1400, "史诗材料周限购拦截（每周 2）")
+check(bad is not None and s["con"] == 800, "史诗材料周限购拦截（每周 2）")
+# v1.74：史诗材料包另需冒险者 Lv4（公会 D 也不再越级购买）
+_s74lv = new_state(); _s74lv["rep"] = game.CFG["guildReq"][2]; _s74lv["con"] = 1000
+_s74lv["lv_idx"] = 2
+bad = game.buy_con(_s74lv, _i_ep, [], 1, _ep_mat)
+check(bad is not None and "Lv4" in bad and _s74lv["con"] == 1000,
+      "v1.74：Lv3 兑换史诗材料被等级门槛拦截")
+_s74lv["lv_idx"] = 3
+game.buy_con(_s74lv, _i_ep, [], 1, _ep_mat)
+check(_s74lv["con"] == 400, "v1.74：Lv4 兑换史诗材料放行（-600 贡献）")
 # v1.38o：稀有材料 周限 3
 rare0 = sum(v for k, v in s["mats"].items() if game.M.get(k, [None, None])[1] == "稀有")
 s["con"] = 2000
@@ -387,16 +404,24 @@ check(s["explore"] == 97 and s["explore_used"] == 1, "发起时扣点（-3）与
 check(s["explore_active"]["h"] == 2 and s["explore_active"]["finishTs"] > game.now_ms(), "区域耗时 2 小时（未到点）")
 err = game.do_explore(s, 1, [])
 check(err is not None and "进行中" in err, "进行中重复探索被拒")
-mat0 = dict(s["mats"]); mon0 = s["money"]
+mat0 = dict(s["mats"]); mon0 = s["money"]; exp0 = s["exp"]
 err = game.explore_return(s, [])
 check(err is None and s.get("explore_active") is None, "中途返回（放弃）")
 check(dict(s["mats"]) == mat0 and s["money"] == mon0, "返回无任何掉落")
+check(s["exp"] == exp0, "v1.70：中途返回也没有经验")
 err = game.do_explore(s, 0, [])
 check(err is None, "重新发起")
 s["explore_active"]["finishTs"] = game.now_ms() - 1000
 game.explore_finish_check(s, [])
 check(s.get("explore_active") is None, "到点结算后清空进行中")
 check(s["explore_result"] is not None and s["explore_result"]["region"] == "晨光森林", "探索结果结构（到点结算）")
+check(isinstance(s["explore_result"].get("loot"), list) and s["explore_result"].get("h") == 2
+      and s["explore_result"].get("exp") == 10, "v1.75：探索结果含结构化战利品 / 耗时 / 经验")
+# v1.70：区域固定经验（完成必得）
+check(s["exp"] == exp0 + 10, "v1.70：探索到点给区域经验（晨光森林 +10，实际 +%d）" % (s["exp"] - exp0))
+check("经验 +10" in s["explore_result"]["msg"], "v1.70：结算文案含「经验 +10」：" + s["explore_result"]["msg"])
+check(all(int(r.get("e", 0)) > 0 for r in game.REGIONS), "v1.70：22 个区域都配了经验值")
+check([r.get("e") for r in game.REGIONS if r["n"] == "深渊核心"] == [65], "v1.70：深渊核心 +65（全区最高）")
 
 print("=== 13. 稀有事件「下一次委托」加成 ===")
 s2 = new_state()
@@ -577,6 +602,10 @@ check(s["legend_active"] is not None and s["legend_preview"] is True, "未解锁
 check(any("预览" in m for m in msgs18), "预览消息入队")
 check(s["pending_legend"] and s["pending_legend"]["preview"] is True
       and s["pending_legend"]["name"] == s["legend_active"][0], "预览弹窗待展示（pending_legend）")
+check(isinstance(s.get("legend_rumor"), dict)
+      and s["legend_rumor"].get("name") == s["legend_active"][0]
+      and 2 <= len(s["legend_rumor"].get("idxs") or []) <= 3,
+      "v1.73：预览事件同步生成 2~3 条酒馆传闻")
 err = game.take_legend(s, [])
 check(err is not None and "无法接取" in err, "预览无法接取（服务端拦截）")
 check(s["legend_active"] is not None, "预览事件保留（未被消费）")
@@ -585,6 +614,7 @@ game.random.random = lambda: 0.99
 game.roll_legend(s, [])
 check(s["legend_active"] is None and s["legend_preview"] is False, "跨天清除预览")
 check(s["pending_legend"] is None, "跨天同时清除预览弹窗")
+check(s.get("legend_rumor") is None, "v1.73：跨天同时清除预览传闻")
 game.random.random = _orig_rand
 
 print("=== 19. 6 点日界（v1.27） ===")
@@ -696,8 +726,8 @@ check(s8["health"]["meals"] == [1, 1, 1], "旧档迁移：三餐已勾选 → me
 print("=== 21. v1.29 委托池扩充与新增道具 ===")
 # 1) 委托数量（扩充目标 16/24/30/20/16）
 qcount = {lv: len(game.C[lv]) for lv in ["Lv1", "Lv2", "Lv3", "Lv4", "Lv5"]}
-check(qcount == {"Lv1": 16, "Lv2": 25, "Lv3": 32, "Lv4": 34, "Lv5": 50},
-      "委托池 16/25/32/34/50（v1.32 补 8 简单档 + v1.41 I1 加 10 链委托 + I4 加 6 新机制委托 + v1.42 加 6 龙种委托 + v1.45 加 6 恶魔/种族委托 + v1.45b 加 3 链委托 + v1.57 种族链 12），实际 " + str(qcount))
+check(qcount == {"Lv1": 16, "Lv2": 25, "Lv3": 32, "Lv4": 34, "Lv5": 54},
+      "委托池 16/25/32/34/54（v1.32 补 8 简单档 + v1.41 I1 加 10 链委托 + I4 加 6 新机制委托 + v1.42 加 6 龙种委托 + v1.45 加 6 恶魔/种族委托 + v1.45b 加 3 链委托 + v1.57 种族链 12 + v1.72 金属龙 4），实际 " + str(qcount))
 # 2) 全部委托：9 字段、有专属描写、掉落材料在材料表、主材料格式合法
 fmt_bad = [q[0] for lv in game.C for q in game.C[lv]
            if len(q) != 9 or q[0] not in game.QUEST_STORY or any(m not in game.M for m in q[8])]
@@ -728,7 +758,7 @@ s9["pool"] = {"point": "08:00", "list": [list(game.C["Lv1"][0])], "taken": False
 check(game.pool_expired(s9), "构造：接取窗口已过期")
 game.use_item(s9, "时之怀表", [])
 check(not game.pool_expired(s9) and s9["items"].get("时之怀表") is None,
-      "时之怀表：窗口重置为 1 小时、道具消耗")
+      "时之怀表：窗口重置为 2 小时、道具消耗")
 s9["pool"]["taken"] = True
 s9["items"]["时之怀表"] = 1
 r9 = game.use_item(s9, "时之怀表", [])
@@ -762,7 +792,7 @@ for li, want in [(0, {0}), (2, {0, 1, 2}), (4, {0, 1, 2, 3, 4})]:
     lvs = {game.QUEST_LV[q[0]] for q in game.mix_pool(s)}
     check(lvs == want, "Lv" + str(li + 1) + " 玩家混合池含 Lv" + str(sorted(x + 1 for x in want)))
 s = new_state(); s["lv_idx"] = 4
-# v1.41 I1：全新存档未满足链前置 → 157 总池 - 31 条链节点 = 126（v1.57：链前置 18 → 31）
+# v1.41 I1：全新存档未满足链前置 → 161 总池 - 35 条链节点 = 126（v1.72：金属龙链 +4）
 check(len(game.mix_pool(s)) == 126, "Lv5 玩家混合池（新档，链前置过滤后）= 126 个委托")
 # v1.41 I1：完成前置后链节点进入池（迷雾灯塔·引航 → 残焰）
 s2 = new_state(); s2["lv_idx"] = 4; s2["done_quests"] = {"迷雾灯塔·引航": 1}
@@ -773,8 +803,65 @@ check("迷雾灯塔·残焰" in _mixnames and "迷雾灯塔·引航" in _mixname
 # v1.41 I1：QUEST_REQ 引用完整性（键值都必须是真实委托名且键确有前置）
 _allnames = {q[0] for lv in game.C for q in game.C[lv]}
 _req_bad = [k2 for k2, v2 in game.QUEST_REQ.items() if k2 not in _allnames or v2 not in _allnames]
-check(not _req_bad, "QUEST_REQ 引用完整性（31 条链节点，键值均为真实委托）" + ("，异常：" + str(_req_bad) if _req_bad else ""))
-check(len(game.QUEST_REQ) == 31, "QUEST_REQ 共 31 条链前置，实际 " + str(len(game.QUEST_REQ)))
+check(not _req_bad, "QUEST_REQ 引用完整性（35 条链节点，键值均为真实委托）" + ("，异常：" + str(_req_bad) if _req_bad else ""))
+check(len(game.QUEST_REQ) == 35, "QUEST_REQ 共 35 条链前置，实际 " + str(len(game.QUEST_REQ)))
+# v1.72：金属龙种（银 / 青铜 / 赤铜 / 黄铜）——委托、掉落阵营规则、装备、传奇
+_qmap72 = {q[0]: q for lv in game.C for q in game.C[lv]}
+_metalq72 = ["银龙的月光审判", "青铜龙的潮汐试炼", "赤铜龙的熔炉谜题", "黄铜龙的沙海辩论"]
+check(all(n in _qmap72 for n in _metalq72), "v1.72：金属龙四条委托入池")
+check(all(game.QUEST_REQ[n] == "金龙宝藏的谈判" for n in _metalq72),
+      "v1.72：金属龙支线（完成金龙后四条委托同时解锁，不再逐级前置）")
+_corpse_mat72 = {"龙血", "大块龙肉", "龙骨", "龙心", "龙牙", "绿龙胆囊"}
+check(all(not (_corpse_mat72 & set(_qmap72[n][8].keys())) for n in _metalq72),
+      "v1.72：金属龙为友善阵营——委托不产龙血 / 龙肉 / 龙骨 / 龙心等尸体材料")
+check(any(_corpse_mat72 & set(_qmap72[n][8].keys()) for n in ["狩猎火龙", "追踪黑龙的阴翳", "驱赶绿龙"]),
+      "v1.72：色彩龙敌对委托保留尸体材料（火龙 / 黑龙 / 绿龙）")
+_metalgear72 = ["银龙鳞甲", "青铜龙牙枪", "赤铜龙角冠", "黄铜龙息杖"]
+check(all(any(g[0] == n for g in game.GEAR) for n in _metalgear72),
+      "v1.72：金属龙四件传说装备入表")
+check(all(next(g for g in game.GEAR if g[0] == n)[5].split("×")[0] in game.M for n in _metalgear72),
+      "v1.72：金属龙装备主材料均在材料表")
+_lg72 = {L[0]: L for L in game.LEGEND}
+check("金属龙会" in _lg72 and (_lg72["金属龙会"][8] or {}).get("q") == "黄铜龙的沙海辩论",
+      "v1.72：传奇事件「金属龙会」入池（黄铜龙链尾解锁）")
+# v1.73：传奇事件专属酒馆传闻
+_lr73 = game.LEGEND_RUMORS
+check(set(_lr73) == set(_lg72), "v1.73：16 个传奇事件均有酒馆传闻池（无缺键 / 无多余键）")
+check(all(7 <= len(v) <= 9 for v in _lr73.values()),
+      "v1.73：每个传奇事件的传闻 7~9 条，实际 " + str(sorted((k, len(v)) for k, v in _lr73.items())))
+_r73 = game._new_legend_rumor("屠龙传说")
+check(_r73 and _r73["name"] == "屠龙传说" and 2 <= len(_r73["idxs"]) <= 3,
+      "v1.73：传闻抽取 2~3 条")
+check(len(set(_r73["idxs"])) == len(_r73["idxs"])
+      and all(0 <= i < len(_lr73["屠龙传说"]) for i in _r73["idxs"]),
+      "v1.73：抽取下标不重复且不越界")
+_s73 = new_state(); _s73["legend_active"] = list(game.LEGEND[0])
+_s73["legend_rumor"] = game._new_legend_rumor(game.LEGEND[0][0]); _s73["legend_preview"] = False
+_err73 = game.take_legend(_s73, [])
+check(_err73 is None and _s73["legend_rumor"] is None,
+      "v1.73：接取传奇事件后清除对应酒馆传闻")
+_s73m = new_state(); _s73m["legend_active"] = list(game.LEGEND[1])
+_s73m.pop("legend_rumor", None)
+game.migrate_state(_s73m)
+check(isinstance(_s73m.get("legend_rumor"), dict)
+      and _s73m["legend_rumor"].get("name") == game.LEGEND[1][0],
+      "v1.73：旧档已有传奇事件时自动补生成传闻")
+_s73m["legend_active"] = None
+game.migrate_state(_s73m)
+check(_s73m.get("legend_rumor") is None, "v1.73：传奇事件结束后清理残留传闻")
+# v1.74：酒馆传奇话题按游戏日刷新——同日刷新不重掷，跨天换一批
+_r74a = game._new_legend_rumor("屠龙传说", "2026-10-20")
+_r74a2 = game._new_legend_rumor("屠龙传说", "2026-10-20")
+_r74b = game._new_legend_rumor("屠龙传说", "2026-10-21")
+check(_r74a == _r74a2, "v1.74：传奇传闻同日多次生成一致（刷新页面不重掷）")
+check(_r74b["date"] == "2026-10-21" and _r74b["idxs"] != _r74a["idxs"],
+      "v1.74：传奇传闻跨天刷新（日期与抽取结果更新）")
+_s74m = new_state(); _s74m["legend_active"] = list(game.LEGEND[0])
+_s74m["legend_rumor"] = {"name": game.LEGEND[0][0], "date": "2000-01-01", "idxs": [0, 1]}
+game.migrate_state(_s74m)
+check(_s74m["legend_rumor"]["date"] == game.today_str()
+      and _s74m["legend_rumor"]["name"] == game.LEGEND[0][0],
+      "v1.74：旧日传闻在跨天后自动换新，事件保留")
 # 2) draw_pool 从混合池抽取（多次采样覆盖全部等级）
 s = new_state(); s["lv_idx"] = 4
 got = set()
@@ -808,8 +895,13 @@ check(sum(1 for x in game.C["Lv4"] if x[4] == "简单") == 4
 
 print("=== 23. v1.32 内容大扩充（材料/装备/料理/道具）+ 噩梦词条修复 ===")
 # 1) 数量总览
-check(len(game.M) == 125, "材料 125 种（v1.57 → 119；v1.58 六域遗珍 +6）")
-check(len(game.GEAR) == 131, "装备 131 件（v1.58 → 128；v1.59 弱出口补全 +3）")
+check(len(game.M) == 129, "材料 129 种（v1.72 金属龙 +4）")
+# v1.75：材料价值拉开梯度——同品阶最高/最低价至少 5 倍（原 1.8~2.7 倍，过于规整）
+for _q75, _minspread in (("普通", 8), ("精良", 8), ("稀有", 8), ("史诗", 6), ("传说", 5)):
+    _vals75 = [v[2] for v in game.M.values() if v[1] == _q75]
+    _spread75 = max(_vals75) / min(_vals75)
+    check(_spread75 >= _minspread, "v1.75：%s材料价格参差（最高/最低 = %.1f 倍，需 ≥ %d）" % (_q75, _spread75, _minspread))
+check(len(game.GEAR) == 135, "装备 135 件（v1.72 金属龙 +4）")
 check(len(game.CFG["recipes"]) == 25, "料理 25 道（v1.50 → 21；v1.58 六域遗珍 +4）")
 check(len(game.ITEM_DESC) == 15, "道具 15 种（7→11，+4；v1.46 +4 准备物）")
 # 2) 新装备主材料均在材料表
@@ -1233,18 +1325,18 @@ _res29 = game.settle(s29, {"q": q0, "rate": 0.99, "meal": None, "qlv": 5}, [])
 game.rand = _old_rand
 check(isinstance(_res29, dict) and "成长 +" in _res29.get("pet", ""), "settle：结算结果附带宠物成长提示")
 
-print("=== 30. v1.38r 批次（入睡窗 21:00~23:30 / 接取窗口 / 升级详情队列；v1.41f3 末次刷新 21:00） ===")
-# 1) 刷新点：08/12/18/21（v1.41f3：末次 22:00 → 21:00）
-check(game.CFG["refreshHours"] == [8, 12, 18, 21], "刷新点 [8,12,18,21]（v1.41f3 末次 22:00 → 21:00）")
-# 2) 接取窗口：常规 1 小时（30 分钟 → 1 小时）；最后一次刷新点 2.5 小时至 23:30
-check(game.POOL_WINDOW_MS == 60 * 60 * 1000, "接取窗口 = 1 小时（30 分钟 → 1 小时）")
+print("=== 30. v1.38r 批次（入睡窗 21:00~23:30 / 接取窗口 / 升级详情队列；v1.76 前三班提前、末班 21:00） ===")
+# 1) 刷新点：07/11/17/21（v1.76：前三班提前 1 小时，末班保持 21:00）
+check(game.CFG["refreshHours"] == [7, 11, 17, 21], "刷新点 [7,11,17,21]（v1.76 前三班提前、末班 21:00）")
+# 2) 接取窗口：常规 2 小时（v1.75：1 → 2 小时）；最后一次刷新点 2.5 小时至 23:30
+check(game.POOL_WINDOW_MS == 120 * 60 * 1000, "接取窗口 = 2 小时（v1.75：1 → 2 小时）")
 check(game.LAST_POOL_WINDOW_MS == 150 * 60 * 1000, "最后班窗口 = 2.5 小时（21:00 → 23:30）")
 s30 = new_state()
 s30["pool"] = {"point": "08:00", "list": [list(game.C["Lv1"][0])], "taken": False,
-               "bornTs": game.now_ms() - 59 * 60 * 1000, "expiredLogged": False}
-check(not game.pool_expired(s30), "常规班刷新后 59 分钟：窗口内")
-s30["pool"]["bornTs"] = game.now_ms() - 61 * 60 * 1000
-check(game.pool_expired(s30), "常规班刷新后 61 分钟：已过期")
+               "bornTs": game.now_ms() - 119 * 60 * 1000, "expiredLogged": False}
+check(not game.pool_expired(s30), "常规班刷新后 119 分钟：窗口内")
+s30["pool"]["bornTs"] = game.now_ms() - 121 * 60 * 1000
+check(game.pool_expired(s30), "常规班刷新后 121 分钟：已过期")
 s30b = new_state()
 s30b["pool"] = {"point": "2026-10-05@21", "list": [list(game.C["Lv1"][0])], "taken": False,
                 "bornTs": game.now_ms() - 140 * 60 * 1000, "expiredLogged": False}
@@ -1255,14 +1347,14 @@ check(game.pool_expired(s30b), "最后班（@21）151 分钟：已过期")
 check(game.TASK_WINDOWS[0] == (21 * 60, 23 * 60 + 30), "TASK_WINDOWS[0] = 21:00~23:30")
 # 4) 升级详情队列（levelups，前端弹窗数据源）
 s31 = new_state()
-s31["exp"] = 60
+s31["exp"] = game.CFG["expNeed"][0]
 s31["energy"] = 10                            # v1.38s2：压低后验证升级补满
 game.check_level_up(s31)
 check(s31["lv_idx"] == 1 and s31.get("levelups") == [1], "升级写入 levelups（Lv2）")
 check(s31["energy"] == game.energy_max_now(s31), "升级补满当前精力（= 新上限，v1.38s2）")
 game.check_level_up(s31)
 check(s31.get("levelups") == [1], "未升级不重复入队")
-s31["exp"] = 500
+s31["exp"] = game.CFG["expNeed"][1]
 game.check_level_up(s31)
 check(s31["lv_idx"] == 2 and s31.get("levelups") == [1, 2], "连升追加 levelups（Lv3）")
 
@@ -1329,7 +1421,7 @@ _jl = [q for q in game.C["Lv3"] if q[0] == "巨龙巢穴侦察"][0]
 check(list(_jl[8].keys())[0] == "兽肉" and _jl[8]["兽肉"] == [2, 4] and _jl[8]["龙骨"] == [1, 1],
       "巨龙巢穴侦察：兽肉保必掉（龙骨/龙鳞改概率副项——v1.63 经济重平衡）")
 _gl = [q for q in game.C["Lv4"] if q[0] == "古龙遗骸采集"][0]
-check(_gl[8]["龙角"] == [1, 3], "古龙遗骸采集：龙角概率量 1~5 → 1~3")
+check(_gl[8]["龙角"] == [1, 3, 0.07], "古龙遗骸采集：龙角概率量 1~3（7% 概率）")
 
 print("=== 33. v1.39 B1：超 7 天未上线的跳过对齐 ===")
 s39 = new_state()
@@ -1395,7 +1487,7 @@ game.grant_legend_reward(_s43, ["公会大师试炼", "精英", 30, "困难", 0,
 check("公会大师徽章" in _s43["trophies"], "非装备奖励仍入藏品（公会大师徽章）")
 # ③ W/H/P 公会称号
 _s44 = new_state()
-_s44["rep"] = 20000
+_s44["rep"] = game.CFG["guildReq"][9]
 game.check_guild_titles(_s44, [])
 check(all(_t in _s44["titles"] for _t in ("世界行者", "英雄", "至尊")), "W/H/P 称号授予（世界行者/英雄/至尊）")
 # ④ 连击保险计入门槛统计（v1.40：保险真正保住连击）
@@ -1407,7 +1499,7 @@ _s45["shield_days"] = ["x00"]
 check(game.sleep_streak(_s45, 30) is True, "连击保险日计入：缺 4 天中 1 天被保险 → 达标")
 # ⑤ P 级传奇每周 2 次
 _s46 = new_state()
-_s46["rep"] = 20000
+_s46["rep"] = game.CFG["guildReq"][9]
 _s46["legend_name"] = "测试传奇"
 _LEG = ["测试传奇", "精英", 3, "困难", 0, 0, "", "", {}]
 _s46["legend_active"] = list(_LEG)
@@ -1682,7 +1774,7 @@ check(game.cook(_s90, _j3, []) is None and _s90["explore"] == 5, "星尘蜜露 +
 check(game.cook(_s90, _j2, []) is not None and _s90["explore"] == 5, "星尘蜜露 5 点即达当日累计上限（月光花茶被拒，v1.50）")
 
 print("=== 44. v1.42：龙种体系 + 九头蛇材料改造 + 巨龙盛宴 enPct ===")
-check(len(game.M) == 125, "材料 125 种（含 v1.45 新增 / v1.58 六域遗珍）")
+check(len(game.M) == 129, "材料 129 种（含 v1.45 新增 / v1.58 六域遗珍 / v1.72 金属龙）")
 _feast44 = next(r for r in game.CFG["recipes"] if r["n"] == "巨龙盛宴")
 check(len(game.recipe_ing(_feast44)) == 10 and game.recipe_ing(_feast44)["世界树汁液"] == 1
       and game.recipe_ing(_feast44)["龙心"] == 3,
@@ -1711,7 +1803,7 @@ check(_s99["energy"] == int(game.energy_max_now(_s99) * 0.5 + 0.5),
       "盛宴恢复 50% 精力上限（" + str(_s99["energy"]) + "/" + str(game.energy_max_now(_s99)) + "）")
 
 print("=== 45. v1.45：地狱/恶魔/魔鬼 + 中立种族 ===")
-check(len(game.M) == 125, "材料 125 种（v1.45 +7 / v1.58 +6）")
+check(len(game.M) == 129, "材料 129 种（v1.45 +7 / v1.58 +6 / v1.72 +4）")
 _all_names45 = {q[0] for lv in game.C for q in game.C[lv]}
 check({"猎杀深渊恶魔", "魔鬼的谈判", "血战遗迹考察", "镇压恶魔裂隙", "迷路的仙灵", "净化亡灵谷"} <= _all_names45,
       "6 个新委托在池（恶魔/魔鬼/仙灵/亡灵）")
@@ -1813,7 +1905,7 @@ for _lv49, _lst49 in game.C.items():
     for _q49 in _lst49:
         if _q49 and _q49[0] == "古龙遗骸采集":
             _gd49 = _q49
-check(_gd49 and _gd49[8].get("龙瞳结晶") == [1, 2], "古龙遗骸采集掉落龙瞳结晶 [1,2]")
+check(_gd49 and _gd49[8].get("龙瞳结晶") == [1, 2, 0.07], "古龙遗骸采集掉落龙瞳结晶 [1,2]（7% 概率）")
 
 print("=== 50. v1.48d：失败结算规则（30% 报酬 + 30% 经验，至少 1、无掉落） ===")
 _real_rand50 = game.rand
@@ -1843,7 +1935,7 @@ print("=== 52. v1.49：主题套装补齐（25 件） ===")
 _new49 = ["金龙鳞铠","魔力结晶杖","雷霆龙牙枪","暗影龙鳞袍","龙瞳宝珠","龙角战弓","剧毒龙牙匕","绿龙护心镜",
           "九头蛇鳞铠","再生蛇髓护符","九头蛇之心","九头蛇胆囊杖","剧毒蛇齿链","恶魔角盔","混沌之刃","硫磺结晶甲",
           "魔鬼纹章","冥河护符","幽魂灯杖","仙灵披风","王者之冠","符文岩巨锤","远古符文法杖","流沙战袍","世界树长弓"]
-check(len(game.GEAR) == 131, "装备 131 件（v1.49 +25；v1.52 +8；v1.57 +3；v1.58 +7；v1.59 +3）")
+check(len(game.GEAR) == 135, "装备 135 件（v1.49 +25；v1.52 +8；v1.57 +3；v1.58 +7；v1.59 +3；v1.72 +4）")
 _miss49 = [n for n in _new49 if not game.gear_def(n)]
 check(not _miss49, "v1.49：25 件全部入表" + ("；缺 " + str(_miss49) if _miss49 else ""))
 _bad49 = []
@@ -2052,8 +2144,9 @@ check(_c56.get("讨伐哥布林") == 16000 and _c56.get("星图师的需求") ==
       "B1：6 条难度报酬修正（困难 ≥ 同档普通下限）")
 # ② B2：铂金商店传说自选 7 → 13
 _sel56 = game.PLAT_SHOP[0]["sel"]
-check(len(_sel56) == 13 and all(k in _sel56 for k in ["世界树枝条", "时之沙漏", "星辉花", "星尘蜜", "星陨岩", "云纹锦"]),
-      "B2：铂金商店传说自选 13 种（+6 无稳定购买渠道传说主材）")
+check(len(_sel56) == 17 and all(k in _sel56 for k in ["世界树枝条", "时之沙漏", "星辉花", "星尘蜜", "星陨岩", "云纹锦",
+                                                   "银龙鳞", "青铜龙牙", "赤铜龙角", "黄铜龙息结晶"]),
+      "B2：铂金商店传说自选 17 种（含金属龙四主材）")
 # ③ B4+B6：全量词条阶梯校验（同效果跨品阶严格递增，0 违规）
 import re as _re56
 _qo56 = ["精良", "稀有", "史诗", "传说"]
@@ -2242,9 +2335,9 @@ check(_reg59["虚空裂痕·深处"].get("lv") == 5 and _reg59["虚空裂痕·�
 check(_reg59["虚空裂痕"].get("lv") == 4, "虚空裂痕地表 Lv3 → Lv4")
 _s59g = _base59(rep=400, lv=2)                 # Lv3 + D
 check(game.region_gate(_s59g, _reg59["晨光森林·深处"]) is not None, "晨光深处：Lv3+公会D 被公会线拦（v1.60 起需 C）")
-_s59g["rep"] = 850
+_s59g["rep"] = game.CFG["guildReq"][3]
 check(game.region_gate(_s59g, _reg59["晨光森林·深处"]) is None, "晨光深处：Lv3+公会C 放行")
-_s59g2 = _base59(rep=2200, lv=3)               # Lv4 + A
+_s59g2 = _base59(rep=game.CFG["guildReq"][5], lv=3)   # Lv4 + A
 check(game.region_gate(_s59g2, _reg59["星夜洞窟·深处"]) is None, "星夜深处：Lv4+公会A 放行")
 _s59g2["lv_idx"] = 2
 check(game.region_gate(_s59g2, _reg59["星夜洞窟·深处"]) is not None, "星夜深处：Lv3 被等级线拦")
@@ -2252,11 +2345,11 @@ check(game.region_gate(_s59g2, _reg59["星夜洞窟·深处"]) is not None, "星
 # ④ 护符 I/II 判定对齐文案（C/B）
 _s59h = _base59(rep=400)
 check(game.charm_unlocked(_s59h, 0) is False, "护符 I：公会 D 未解锁（v1.60 起需 C）")
-_s59h["rep"] = 850
+_s59h["rep"] = game.CFG["guildReq"][3]
 check(game.charm_unlocked(_s59h, 0) is True, "护符 I：公会 C 解锁")
 _s59h["charm"] = 1
 check(game.charm_unlocked(_s59h, 1) is False, "护符 II：公会 C 未解锁（需 B）")
-_s59h["rep"] = 1200
+_s59h["rep"] = game.CFG["guildReq"][4]
 check(game.charm_unlocked(_s59h, 1) is True, "护符 II：公会 B 解锁")
 
 # ⑤ 精英委托重掷券：解锁档位 C → B（对齐文案/文档）
@@ -2472,10 +2565,11 @@ check(_md["wolf"]["mood"] == 100, "日结算集成：99 → 100 封顶（增量 
 
 print()
 print("=== 60. v1.63：委托经济重平衡 v2（低阶材料基准价压缩 + Lv1 报酬新表 + 级联） ===")
-# ① 基准价分档带（普通÷10 / 精良÷5 / 稀有÷3；史诗·传说不动）
-_bands = {"普通": (30, 80), "精良": (320, 800), "稀有": (2700, 5000), "史诗": (40000, 95000), "传说": (300000, 600000)}
+# ① 基准价分档带（v1.63 压缩后；v1.75 拉开同阶价差——区间随新基准价更新）
+_bands = {"普通": (10, 120), "精良": (140, 1500), "稀有": (1000, 12000),
+          "史诗": (20000, 180000), "传说": (150000, 900000)}
 _badp = [n for n, v in game.M.items() if not (_bands[v[1]][0] <= v[2] <= _bands[v[1]][1])]
-check(not _badp, "材料基准价分档（普通 30~80铜 / 精良 3.2~8银 / 稀有 27~50银 / 史诗·传说不动）"
+check(not _badp, "材料基准价分档（v1.75 参差化：普通 10~120铜 / 精良 1.4~15银 / 稀有 10~120银 / 史诗 2~18金 / 传说 15~90金）"
       + ("；越界 " + str(_badp[:5]) if _badp else ""))
 # ② Lv1 全 16 条新报酬
 _L1 = {"采集草药": 100, "采集蘑菇": 100, "拾取柴薪": 80, "修补渔网": 80, "驱赶田鼠": 140, "猎取山鸡": 110,
@@ -2548,6 +2642,39 @@ _t67c = new_state(); _t67c["gear"].append("铜剑")
 check("已拥有" in (game.craft(_t67c, "铜剑", []) or ""), "C4：已拥有装备拒绝重复打造")
 # ⑤ C3：sleep_streak 历史不足 → False（不越界）
 check(game.sleep_streak(new_state(), 3) is False, "C3：历史不足 n 天 → sleep_streak 返回 False")
+
+print("=== 62. v1.74：等级 / 公会曲线重平衡 ===")
+check(game.CFG["expNeed"] == [80, 600, 3200, 9000, 30000], "v1.74：升级门槛 80 / 600 / 3,200 / 9,000 / 30,000")
+check(game.CFG["guildReq"] == [0, 300, 1500, 3000, 4500, 5600, 11500, 16500, 22000, 30000],
+      "v1.74：公会门槛 F→P = 0 / 300 / 1,500 / 3,000 / 4,500 / 5,600 / 11,500 / 16,500 / 22,000 / 30,000")
+check(all(b > a for a, b in zip(game.CFG["expNeed"], game.CFG["expNeed"][1:]))
+      and all(b > a for a, b in zip(game.CFG["guildReq"], game.CFG["guildReq"][1:])),
+      "v1.74：两条曲线均严格递增（无倒挂）")
+_s74user = new_state(); _s74user["lv_idx"] = 1; _s74user["exp"] = 198; _s74user["rep"] = 400
+check(game.lv_num(_s74user) == 2 and game.guild_idx(_s74user) == 1,
+      "v1.74：Lv2 / 198 经验 / 400 声望 → 仍是公会 E（不再越级到 D）")
+
+print("=== 63. v1.76：刷新点整体提前 / 图纸逐张定价 ===")
+check(game.CFG["refreshHours"] == [7, 11, 17, 21], "v1.76：刷新点 07 / 11 / 17 / 21（末班不变）")
+check(game.POOL_WINDOW_MS == 120 * 60 * 1000 and game.LAST_POOL_WINDOW_MS == 150 * 60 * 1000,
+      "v1.76：常规窗口 2 小时 / 末班窗口 2.5 小时（21:00 → 23:30）")
+# 精力恢复随首次刷新提前到 07:00
+_s76 = new_state(); _s76["energy"] = 1
+game.catch_up(_s76, now=datetime(2026, 10, 5, 6, 30))
+check(_s76["energy"] == 1, "v1.76：06:30 精力尚未恢复（首刷新 07:00）")
+game.catch_up(_s76, now=datetime(2026, 10, 5, 7, 0))
+check(_s76["energy"] == game.energy_max_now(_s76), "v1.76：07:00 首次刷新恢复精力")
+# 图纸价格逐张不同（所有品阶内至少 1.4 倍价差）
+for _q76 in ("普通", "精良", "稀有", "史诗", "传说"):
+    _ps76 = [g[6] for g in game.GEAR if len(g) > 6 and g[5] != "—" and g[1] == _q76]
+    check(len(_ps76) > 1 and len(set(_ps76)) > 1 and max(_ps76) >= min(_ps76) * 1.4,
+          "v1.76：" + _q76 + "图纸价格差异化（" + str(min(_ps76)) + " ~ " + str(max(_ps76)) + " 铜）")
+# 后端按 GEAR[6] 扣款（而不是档位统一价）
+_s76b = new_state(); _s76b["rep"] = game.CFG["guildReq"][1]; _s76b["money"] = 100000
+_g76 = [g for g in game.GEAR if g[0] == "草药袋"][0]
+check(len(_g76) > 6 and _g76[6] == 1625, "v1.76：草药袋图纸单价 1,625 铜（普通档非统一 2,000）")
+check(game.buy_blueprint(_s76b, "草药袋", []) is None and _s76b["money"] == 100000 - 1625,
+      "v1.76：后端按逐张图纸价格扣款")
 
 print()
 print("=" * 40)

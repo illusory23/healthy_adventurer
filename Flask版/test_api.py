@@ -64,7 +64,7 @@ check("安眠护符" in j["state"].get("seen_items", []), "当前持有道具自
 
 print("=== 3. 模拟刷新窗口 → 接取 ===")
 s = _load()
-s["pool"]["bornTs"] = game.now_ms()          # 模拟刚刷新（1 小时窗口内）
+s["pool"]["bornTs"] = game.now_ms()          # 模拟刚刷新（2 小时窗口内，v1.75）
 s["energy"] = 200
 s["lv_idx"] = 1                              # Lv2，避免 Lv1 必成功削弱测试意义
 _save(s)
@@ -197,6 +197,13 @@ s["pending_legend"] = {"title": "传奇事件", "name": "测试传奇", "preview
 _save(s)
 j = post({"action": "results_ack"})
 check(j["state"]["pending_legend"] is None, "results_ack 清空 pending_legend")
+s = _load()
+_lr_today = {"name": "测试传奇", "date": game.today_str(), "idxs": [0, 2]}
+s["legend_rumor"] = dict(_lr_today)
+_save(s)
+j = get_state()
+check((j.get("state") or {}).get("legend_rumor") == _lr_today,
+      "v1.73/v1.74：传奇酒馆传闻随状态下发（当日 idxs 原样保留）")
 
 print("=== 10. 远程访问口令门（v1.26） ===")
 c2 = appmod.app.test_client()
@@ -250,8 +257,10 @@ check(j3c["ok"] and j3c["account"]["code"] == j_m["account"]["code"], "接入码
 check(j3c["state"]["name"] == "端到端测试", "绑定后取回目标账号存档")
 j3d = c3.get("/api/state").get_json()
 check(j3d["state"]["name"] == "端到端测试", "换绑后设备持续使用目标账号（Cookie 已切换）")
+r = c3.get("/api/accounts", headers={"X-Admin-Token": appmod.ADMIN_TOKEN})
+check(r.status_code == 200 and r.get_json()["ok"], "本机 + 服主 token 可查看账号列表（管理面板）")
 r = c3.get("/api/accounts")
-check(r.status_code == 200 and r.get_json()["ok"], "本机可查看账号列表（管理面板）")
+check(r.status_code == 403, "本机但缺服主 token → 账号列表被拒（v1.73）")
 c4 = appmod.app.test_client()
 c4.post("/gate", data={"k": appmod.ACCESS_KEY}, base_url="http://game.natfrp.com")   # 先过口令门
 r = c4.get("/api/accounts", base_url="http://game.natfrp.com")
@@ -294,16 +303,18 @@ check(j13f["ok"] and j13f["state"]["carry_pet"] == "月光狐", "重新携带成
 print("=== 14. v1.38q2 账号删除（仅本机） ===")
 c5 = appmod.app.test_client()                       # 第三台设备（自动建空号）
 j14 = c5.get("/api/state").get_json()
-r14 = c5.get("/api/accounts").get_json()
+r14 = c5.get("/api/accounts", headers={"X-Admin-Token": appmod.ADMIN_TOKEN}).get_json()
 tgt = [a for a in r14["accounts"] if a["code"] == j14["account"]["code"]][0]
 check(tgt["name"] == "", "待删除目标 = 空号（未命名）")
 r14a = c4.post("/api/accounts/delete", json={"id": tgt["id"]},
                base_url="http://game.natfrp.com",
                headers={"Cookie": "gp_key=" + appmod.ACCESS_KEY})
 check(r14a.status_code == 403, "非本机（已过口令门）→ 删除被拒 403")
-r14b = c5.post("/api/accounts/delete", json={"id": 999999}).get_json()
+r14b = c5.post("/api/accounts/delete", json={"id": 999999},
+               headers={"X-Admin-Token": appmod.ADMIN_TOKEN}).get_json()
 check(not r14b["ok"], "不存在的 id → 拒绝")
-r14c = c5.post("/api/accounts/delete", json={"id": tgt["id"]}).get_json()
+r14c = c5.post("/api/accounts/delete", json={"id": tgt["id"]},
+               headers={"X-Admin-Token": appmod.ADMIN_TOKEN}).get_json()
 check(r14c["ok"], "本机删除账号成功")
 check(all(a["code"] != tgt["code"] for a in r14c["accounts"]), "删除后列表已移除该账号")
 j14b = c5.get("/api/state").get_json()
@@ -424,7 +435,10 @@ print("=== 21. v1.69 本机改档接口 /admin/dev ===")
 
 
 def dev(op, args=None, uid=None, **kw):
-    return c.post("/admin/dev", json={"uid": UID if uid is None else uid, "op": op, "args": args or {}}, **kw)
+    hdr = dict(kw.pop("headers", {}) or {})
+    hdr.setdefault("X-Admin-Token", appmod.ADMIN_TOKEN)
+    return c.post("/admin/dev", json={"uid": UID if uid is None else uid, "op": op, "args": args or {}},
+                  headers=hdr, **kw)
 
 
 j = dev("set", {"key": "money", "value": "123456"}).get_json()
@@ -459,9 +473,16 @@ check(not dev("set", {"key": "money", "value": "1"}, uid=99999).get_json()["ok"]
 c8 = appmod.app.test_client()                  # 先过口令门拿 Cookie（否则先撞 401 口令门，测不到这层）
 c8.post("/gate", data={"k": appmod.ACCESS_KEY})
 r = c8.post("/admin/dev", json={"uid": UID, "op": "set", "args": {"key": "money", "value": "1"}},
-            base_url="http://localhost", environ_base={"REMOTE_ADDR": "203.0.113.5"})
-check(r.status_code == 403, "改档：远程来源伪造本机 Host → 403（仅本机可及，实际 %s）" % r.status_code)
+            base_url="http://localhost", environ_base={"REMOTE_ADDR": "203.0.113.5"},
+            headers={"X-Admin-Token": appmod.ADMIN_TOKEN})
+check(r.status_code == 403, "改档：远程来源伪造本机 Host（即使带 token）→ 403（仅本机可及，实际 %s）" % r.status_code)
 check(_load()["money"] == money_before, "改档：被拒的请求没有写档")
+r = c.post("/admin/dev", data="{\"uid\":1}", headers={"Content-Type": "text/plain",
+            "X-Admin-Token": appmod.ADMIN_TOKEN})
+check(r.status_code == 415, "改档：text/plain 被拒（v1.73 防 CSRF）")
+r = c.post("/admin/dev", json={"uid": UID, "op": "set", "args": {"key": "money", "value": "1"}},
+           headers={"X-Admin-Token": "wrong-token"})
+check(r.status_code == 403, "改档：错误 token → 403")
 
 print()
 print("=" * 40)

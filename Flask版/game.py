@@ -8,6 +8,7 @@ import json
 import math
 import random
 import re
+import threading
 import time
 from datetime import datetime, date, timedelta
 from pathlib import Path
@@ -51,6 +52,7 @@ QUEST_STORY = DATA["QUEST_STORY"]
 EXPLORE_EVENT_CHANCE = DATA["EXPLORE_EVENT_CHANCE"]
 REP_TABLE = DATA["REP_TABLE"]
 LEGEND_GOLD = DATA["LEGEND_GOLD"]
+LEGEND_RUMORS = DATA["LEGEND_RUMORS"]   # v1.73：传奇事件专属酒馆传闻（每个事件 7~9 条，出现时随机抽 2~3 条）
 REGION_EVENTS = DATA["REGION_EVENTS"]
 PARTY = DATA["PARTY"]                 # v1.65：组队副本池 [名, 品阶, 难度档, 精力, 报酬(铜), 掉表]
 PARTY_GROUPS = DATA["PARTY_GROUPS"]   # v1.65：随机组（"@组名" 取组内随机 1 种）
@@ -63,8 +65,8 @@ QUEST_LV = {}
 for _i, _lv in enumerate(LV_NAMES):
     for _q in C.get(_lv, []):
         QUEST_LV[_q[0]] = _i
-POOL_WINDOW_MS = 60 * 60 * 1000                # v1.38r：接取窗口 30 分钟 → 1 小时
-LAST_POOL_WINDOW_MS = 150 * 60 * 1000          # v1.41f3：最后一次刷新点接取窗口 2.5 小时（21:00 → 23:30）
+POOL_WINDOW_MS = 120 * 60 * 1000               # 常规接取窗口 2 小时（v1.75）
+LAST_POOL_WINDOW_MS = 150 * 60 * 1000          # v1.76：最后一次刷新点接取窗口 2.5 小时（21:00 → 23:30）
 MAX_CATCHUP_DAYS = 7                      # 补算护栏（09_技术方案 第五节）
 DAY_CUTOFF_HOUR = 6                       # 日界线：早 6 点刷新每日状态与结算（00:00~05:59 熬夜时段仍属前一天）
 # ── v1.28：打卡时间窗（分钟制 (起, 止) 闭区间；仅限制「新打卡」，窗口外允许取消）──
@@ -165,7 +167,13 @@ def _midnight_lock(i, now=None):
 MIDNIGHT_LOCK_MSG = "已经过了 00:00——昨日的打卡已锁定，不再接受补打。早点休息，明天再来。"
 
 
+_rand_local = threading.local()      # v1.73（P2）：改档工具的「锁定骰值」只作用于当前线程
+
+
 def rand(n):
+    fixed = getattr(_rand_local, "fixed", None)
+    if fixed is not None:            # 仅 devops.fixed_roll 在线改档时设置；不污染其他请求线程
+        return max(1, min(int(fixed), n))
     return random.randint(1, n)
 
 
@@ -240,6 +248,7 @@ def new_state():
         "charm": 0,
         "legend_day": "", "legend_week": "", "legend_week_n": 0, "legend_active": None, "legend_name": "传奇事件",
         "legend_preview": False,          # 未解锁时的「预览」事件（仅可看，不能接取；次日消失）
+        "legend_rumor": None,             # v1.73：传奇事件专属酒馆传闻 {name, date, idxs:[2~3]}
         "pending_legend": None,           # 待前端弹窗提示的「⚡ 触发特殊事件！」{title, name, preview}
         "legend_done": [], "done_quests": {}, "done_below5": 0,
         "titles": [], "pets": [], "trophies": [],
@@ -251,7 +260,7 @@ def new_state():
         "yesterday": None, "yesterday_shown": True,
         "pending_festival": None,         # v1.41d：节日欢迎弹窗 {name, text, date}（前端展示后 festival_ack 清空）
         "pool": None, "pool_point": "", "accepted": 0, "bonus_today": False, "bonus_quests": None,
-        "priv_quest": None, "priv_today": False,   # v1.38o：W 级公会特权委托（每日 08:00 必出） / 酒馆传闻见 rumor
+        "priv_quest": None, "priv_today": False,   # v1.38o：W 级公会特权委托（每日首次刷新 07:00 必出） / 酒馆传闻见 rumor
         "glass_quest": None, "glass_today": False,  # v1.38o：时间沙漏委托（装备★每日接取上限+1 时每日必出）
         "rumor": None,                    # v1.38o：酒馆传闻 {date, idx}（每存档每日独立随机）
         "active": [], "mats": {}, "history": [], "log": [],
@@ -287,7 +296,34 @@ def migrate_state(s):
     for k, v in base.items():
         if k not in s:
             s[k] = v
-    s["gear"] = [x for x in (s.get("gear") or []) if x]   # v1.41 I5：清洗脏装备名（防旧存档残留 null → renderBag 崩溃）
+    # v1.73：旧档已有传奇事件但无对应传闻 → 补生成一次；事件已结束时清空残留
+    if s.get("legend_active"):
+        _la = s["legend_active"]
+        _lan = _la[0] if isinstance(_la, list) and _la else ""
+        _lr = s.get("legend_rumor")
+        if (not isinstance(_lr, dict) or _lr.get("name") != _lan
+                or _lr.get("date") != today_str()):
+            s["legend_rumor"] = _new_legend_rumor(_lan)
+    else:
+        s["legend_rumor"] = None
+    # v1.41 I5 / v1.73：清洗脏装备名（旧档残留 null / 非法名 → renderBag 崩溃）
+    _gnames = {g[0] for g in GEAR}
+    s["gear"] = [x for x in (s.get("gear") or []) if isinstance(x, str) and x in _gnames]
+    _eq = s.get("equipped") if isinstance(s.get("equipped"), dict) else {}
+    _eq_seen = set()
+    _eq_clean = {}
+    for _slot in ("weapon", "armor", "accessory", "charmSlot"):
+        _v = _eq.get(_slot)
+        if isinstance(_v, str) and _v in _gnames and _v not in _eq_seen:
+            _eq_clean[_slot] = _v
+            _eq_seen.add(_v)
+        else:
+            _eq_clean[_slot] = None
+    s["equipped"] = _eq_clean
+    s["gear"] = [x for x in s["gear"] if x not in _eq_seen]
+    if isinstance(s.get("blueprints"), dict):
+        s["blueprints"] = {k: True for k in s["blueprints"]
+                           if isinstance(k, str) and gear_def(k) and gear_def(k)[5] != "—"}
     # v1.28：三餐拆分——health.meals 缺失时补；旧版「完整吃三餐」已勾选 → 视为三餐全点
     h = s.get("health")
     if isinstance(h, dict):
@@ -353,7 +389,7 @@ def migrate_state(s):
             if tn.endswith("图纸") and gear_def(tn[:-2]):
                 s["blueprints"][tn[:-2]] = True
             elif gear_def(tn):
-                if tn not in s["gear"]:
+                if tn not in owned_gear(s):
                     s["gear"].append(tn)
             else:
                 keep.append(tn)
@@ -387,38 +423,198 @@ def import_save_state(raw):
     return migrate_state(s)
 
 
+def _imp_int(v, default=0, lo=None, hi=None):
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return default
+    try:
+        n = int(v)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    if lo is not None and n < lo:
+        n = lo
+    if hi is not None and n > hi:
+        n = hi
+    return n
+
+
+def _imp_names(v, allowed=None, max_len=24, max_n=200):
+    """导入集合清洗：只留安全短字符串；allowed 给定时再按白名单过滤。"""
+    if not isinstance(v, list):
+        return []
+    out = []
+    for x in v:
+        if not isinstance(x, str):
+            continue
+        x = x.strip()
+        if not x or len(x) > max_len or any(c in x for c in "<>&\"'"):
+            continue
+        if allowed is not None and x not in allowed:
+            continue
+        if x not in out:
+            out.append(x)
+        if len(out) >= max_n:
+            break
+    return out
+
+
+def _imp_dict_int(v, allowed=None, hi=None):
+    out = {}
+    if not isinstance(v, dict):
+        return out
+    for k, n in v.items():
+        if not isinstance(k, str) or (allowed is not None and k not in allowed):
+            continue
+        out[k] = _imp_int(n, 0, 0, hi)
+    return out
+
+
 def _coerce_import(s):
-    """v1.50：导入档 schema 校验——关键字段类型不符即回退默认（宽松校正，防脏档拖垮服务端/前端渲染）"""
+    """v1.50/v1.73：导入档 schema 校验——关键字段逐项归一化（坏档直接回退默认，防毒档拖垮服务端/前端）。"""
     base = new_state()
-    for k in ("gear", "history", "active", "titles", "pets", "trophies", "log",
-              "seen_mats", "seen_items", "forged", "cooked", "achv", "results", "levelups",
-              "pending_rare", "shield_days", "legend_done"):
-        if not isinstance(s.get(k), list):
-            s[k] = list(base.get(k) or [])
-    for k in ("mats", "items", "equipped", "blueprints", "skills", "done_quests", "pet_data",
-              "tim_titles", "shop_daily", "shop_weekly", "health", "daily",
-              "meal_cap", "pet_nick", "exbuy"):        # v1.67：补 3 类内层字段（原缺失 → 毒档可砖账号）
-        if not isinstance(s.get(k), dict):
-            s[k] = dict(base[k])
-    for k in ("pet_walk", "wolf"):                     # v1.67：允许 None / dict 两态
-        if s.get(k) is not None and not isinstance(s.get(k), dict):
-            s[k] = None
-    _exb = s.get("exbuy") or {}
-    s["exbuy"] = {"date": _exb.get("date") if isinstance(_exb.get("date"), str) else "",
-                  "n": _exb["n"] if isinstance(_exb.get("n"), int) and not isinstance(_exb.get("n"), bool)
-                       and _exb["n"] >= 0 else 0}
-    for k in ("mats", "items"):                        # v1.67：值清洗——只留正整数（防字符串 / 负数脏值拖垮结算与渲染）
+    gear_names = {g[0] for g in GEAR}
+    craftable = {g[0] for g in GEAR if g[5] != "—"}
+    quest_names = set(QUEST_LV)
+    pet_names = set(PET_LINES) | {"小狼"}
+    achv_names = {a[0] for a in ACHV}
+    legend_names = {L[0] for L in LEGEND}
+    mat_names = set(M)
+    item_names = set(ITEM_DESC)
+    recipe_names = {r["n"] for r in CFG.get("recipes", [])}
+    skill_names = {x["n"] for x in SKILLS}
+    # 已装备：合法槽位 + 真实装备名；同一件装备不得占两个槽位
+    equip = {}
+    raw_eq = s.get("equipped") if isinstance(s.get("equipped"), dict) else {}
+    used_eq = set()
+    for slot in ("weapon", "armor", "accessory", "charmSlot"):
+        v = raw_eq.get(slot)
+        if isinstance(v, str) and v in gear_names and v not in used_eq:
+            equip[slot] = v
+            used_eq.add(v)
+        else:
+            equip[slot] = None
+    s["equipped"] = equip
+    # 背包装备：白名单 + 去重 + 不与已装备重复
+    gear = []
+    for x in s.get("gear") or []:
+        if isinstance(x, str) and x in gear_names and x not in gear and x not in used_eq:
+            gear.append(x)
+    s["gear"] = gear
+    s["blueprints"] = {k: True for k in (s.get("blueprints") or {})
+                       if isinstance(k, str) and k in craftable}
+    for k in ("铜剑", "猎弓", "皮甲"):
+        s["blueprints"].setdefault(k, True)
+    # 材料 / 道具：只留正整数值
+    for k in ("mats", "items"):
         d2 = s.get(k)
         if isinstance(d2, dict):
             s[k] = {kk: vv for kk, vv in d2.items()
-                    if isinstance(kk, str) and isinstance(vv, int) and not isinstance(vv, bool) and vv > 0}
-    if not isinstance((s.get("health") or {}).get("done"), list) or len(s["health"]["done"]) != 7:
-        s["health"] = dict(base["health"])
-    if not isinstance((s.get("daily") or {}).get("quests"), list):
-        s["daily"] = dict(base["daily"])
-    if not isinstance(s.get("equipped"), dict) or any(
-            not isinstance(v, (str, type(None))) for v in s["equipped"].values()):
-        s["equipped"] = dict(base["equipped"])
+                    if isinstance(kk, str) and kk in (mat_names if k == "mats" else item_names)
+                    and isinstance(vv, int) and not isinstance(vv, bool) and vv > 0}
+        else:
+            s[k] = {}
+    # 健康：所有子字段补齐并逐项校验（calc_health 直接读 done/multi，缺一即 500）
+    h = s.get("health") if isinstance(s.get("health"), dict) else {}
+    bh = base["health"]
+    done = h.get("done")
+    done = ([1 if _imp_int(x, 0) > 0 else 0 for x in done]
+            if isinstance(done, list) and len(done) == 7 else list(bh["done"]))
+    multi = h.get("multi")
+    multi = ([_imp_int(x, 0, 0, 100) for x in multi]
+             if isinstance(multi, list) and len(multi) == 2 else list(bh["multi"]))
+    meals = h.get("meals")
+    meals = ([1 if _imp_int(x, 0) > 0 else 0 for x in meals]
+             if isinstance(meals, list) and len(meals) == 3 else list(bh["meals"]))
+    vit_once = h.get("vitOnce")
+    vit_once = ([1 if _imp_int(x, 0) > 0 else 0 for x in vit_once]
+                if isinstance(vit_once, list) and len(vit_once) == 10 else list(bh["vitOnce"]))
+    s["health"] = {"date": h.get("date") if isinstance(h.get("date"), str) else bh["date"],
+                   "done": done, "multi": multi,
+                   "score": _imp_int(h.get("score"), 0, 0, 100),
+                   "meals": meals, "vitOnce": vit_once}
+    # 历史：逐条清洗（score 非数值会让周/月均值 TypeError）
+    hist = []
+    for x in s.get("history") or []:
+        if not isinstance(x, dict) or not isinstance(x.get("date"), str):
+            continue
+        t = x.get("tasks")
+        t = ([1 if _imp_int(v, 0) > 0 else 0 for v in t]
+             if isinstance(t, list) and len(t) == 7 else None)
+        mm = x.get("multi")
+        mm = ([_imp_int(v, 0, 0, 100) for v in mm]
+              if isinstance(mm, list) and len(mm) == 2 else [0, 0])
+        hist.append({"date": x["date"][:10],
+                     "score": _imp_int(x.get("score"), 0, 0, 100),
+                     "sleep": bool(x.get("sleep")), "tasks": t, "multi": mm})
+    s["history"] = hist[-400:]
+    # 每日统计
+    dy = s.get("daily") if isinstance(s.get("daily"), dict) else {}
+    bd = base["daily"]
+    s["daily"] = {"date": dy.get("date") if isinstance(dy.get("date"), str) else bd["date"],
+                  "done": _imp_int(dy.get("done"), 0, 0), "gold": _imp_int(dy.get("gold"), 0, 0),
+                  "exp": _imp_int(dy.get("exp"), 0, 0), "rep": _imp_int(dy.get("rep"), 0, 0),
+                  "con": _imp_int(dy.get("con"), 0, 0), "vit": _imp_int(dy.get("vit"), 0, 0),
+                  "quests": _imp_names(dy.get("quests"), quest_names, 30, 100),
+                  "mats": _imp_dict_int(dy.get("mats"), mat_names, 999999),
+                  "events": _imp_names(dy.get("events"), None, 120, 100)}
+    # 养成 / 收集 / 任务集合：白名单 + 数量上限，防止导入任意 HTML 或被渲染成超长列表
+    s["skills"] = _imp_dict_int(s.get("skills"), skill_names, 100)
+    for n in skill_names:
+        s["skills"].setdefault(n, 0)
+    s["done_quests"] = _imp_dict_int(s.get("done_quests"), quest_names, 9999)
+    s["achv"] = _imp_names(s.get("achv"), achv_names)
+    s["titles"] = _imp_names(s.get("titles"), None, 20, 80)
+    s["pets"] = _imp_names(s.get("pets"), pet_names, 20, 60)
+    s["trophies"] = _imp_names(s.get("trophies"), None, 30, 120)
+    s["legend_done"] = _imp_names(s.get("legend_done"), legend_names, 30, 30)
+    s["seen_mats"] = _imp_names(s.get("seen_mats"), mat_names, 30, 300)
+    s["seen_items"] = _imp_names(s.get("seen_items"), item_names, 30, 100)
+    s["forged"] = _imp_names(s.get("forged"), gear_names, 30, 200)
+    s["cooked"] = _imp_names(s.get("cooked"), recipe_names, 30, 100)
+    s["shield_days"] = _imp_names(s.get("shield_days"), None, 10, 40)
+    # pet_data：只留真实养成链宠物，数值归一到合法区间
+    pd = {}
+    raw_pd = s.get("pet_data") if isinstance(s.get("pet_data"), dict) else {}
+    for n, d in raw_pd.items():
+        if n not in PET_LINES or not isinstance(d, dict):
+            continue
+        pd[n] = {"stage": _imp_int(d.get("stage"), 1, 1, 4),
+                 "growth": _imp_int(d.get("growth"), 0, 0, 9999),
+                 "mutate": _imp_int(d.get("mutate"), 0, 0, 9999),
+                 "fedDate": d.get("fedDate") if isinstance(d.get("fedDate"), str) else "",
+                 "fedCount": _imp_int(d.get("fedCount"), 0, 0, 99)}
+    s["pet_data"] = pd
+    s["wolf"] = None
+    raw_wolf = s.get("wolf")
+    if isinstance(raw_wolf, dict):
+        s["wolf"] = {"stage": _imp_int(raw_wolf.get("stage"), 1, 1, 3),
+                     "growth": _imp_int(raw_wolf.get("growth"), 0, 0, 9999),
+                     "mutate": _imp_int(raw_wolf.get("mutate"), 0, 0, 9999),
+                     "fedDate": raw_wolf.get("fedDate") if isinstance(raw_wolf.get("fedDate"), str) else "",
+                     "fedCount": _imp_int(raw_wolf.get("fedCount"), 0, 0, 99)}
+    s["pet_nick"] = {k: v[:6] for k, v in (s.get("pet_nick") or {}).items()
+                     if isinstance(k, str) and isinstance(v, str) and k in pet_names}
+    s["tim_titles"] = _imp_dict_int(s.get("tim_titles"), None, 10 ** 15)
+    s["shop_daily"] = {"date": (s.get("shop_daily") or {}).get("date", "")
+                       if isinstance((s.get("shop_daily") or {}).get("date"), str) else "",
+                       "cnt": _imp_dict_int((s.get("shop_daily") or {}).get("cnt"), None, 9999)}
+    s["shop_weekly"] = {"week": (s.get("shop_weekly") or {}).get("week", "")
+                        if isinstance((s.get("shop_weekly") or {}).get("week"), str) else "",
+                        "cnt": _imp_dict_int((s.get("shop_weekly") or {}).get("cnt"), None, 9999)}
+    s["meal_cap"] = {"date": (s.get("meal_cap") or {}).get("date", "")
+                     if isinstance((s.get("meal_cap") or {}).get("date"), str) else "",
+                     "cap": _imp_int((s.get("meal_cap") or {}).get("cap"), 0, 0)}
+    _exb = s.get("exbuy") or {}
+    s["exbuy"] = {"date": _exb.get("date") if isinstance(_exb.get("date"), str) else "",
+                  "n": _imp_int(_exb.get("n"), 0, 0)}
+    s["pet_walk"] = None
+    # 在途内容：导入不允许带入已完成时间的 active / 探索 / 传奇 / 待领取宠物
+    s["active"] = []
+    s["explore_active"] = None
+    s["legend_active"] = None
+    s["legend_rumor"] = None
+    s["pending_pet"] = None
+    s["pending_energy"] = None
+    s["pool"] = None
     for k in ("lv_idx", "exp", "rep", "con", "vit", "money", "energy", "explore",
               "accepted", "total_quests", "heat_n", "echo", "incense", "done_below5"):
         v = s.get(k)
@@ -428,7 +624,7 @@ def _coerce_import(s):
     for k in ("name", "created"):
         if not isinstance(s.get(k), str):
             s[k] = base.get(k, "")
-
+    s["name"] = s["name"].strip()[:12]
 
 # ══════════════ 等级 / 公会 ══════════════
 
@@ -508,6 +704,15 @@ def gear_def(name):
         if g[0] == name:
             return g
     return None
+
+
+def owned_gear(s):
+    """v1.73（P1-5）：已拥有 = 背包 + 已装备（equip_item 会把装备移出 gear，原判断只看 gear）。"""
+    out = set(s.get("gear") or [])
+    for v in (s.get("equipped") or {}).values():
+        if v:
+            out.add(v)
+    return out
 
 
 def gear_effects(s):
@@ -747,8 +952,8 @@ def sim_cap_now(s):
 
 
 def active_normal_count(s):
-    # v1.41：传奇事件独立槽位——普通容量只计非传奇项（传奇与日常委托完全并行）
-    return sum(1 for a in s["active"] if not a.get("legend"))
+    # v1.41：传奇事件独立槽位；v1.73：公会额外委托同为独立槽位（界面承诺「不占同时进行上限」）
+    return sum(1 for a in s["active"] if not a.get("legend") and not a.get("bonus"))
 
 
 def active_meal(s):
@@ -1206,6 +1411,8 @@ def pet_meta_of(s, n):
         m = s.get("wolf")
     else:
         m = (s.get("pet_data") or {}).get(n)
+        if not m and n in PET_LINES:       # v1.73（P1-7）：传奇 / 月卡宠物绕过 grant_pet 时兜底初始化
+            m = pet_data_of(s, n)
     if not m:
         return None
     m.setdefault("mood", 50)
@@ -1655,7 +1862,7 @@ def latest_point(now=None):
             best = rh
     if best is None:
         y = now - timedelta(days=1)
-        return y.date(), CFG["refreshHours"][-1]   # 今天还没到首个刷新点 → 用昨天最后一个刷新点（v1.41f3：21:00）
+        return y.date(), CFG["refreshHours"][-1]   # 今天还没到首个刷新点 → 用昨天最后一个刷新点（v1.76：21:00）
     return now.date(), best
 
 
@@ -1760,7 +1967,7 @@ def draw_pool(s, point):
 
 
 def pool_base_window_ms(s=None):
-    """基础接取窗口（未计节日）：最后一次刷新点（按 pool.point 的班次）2.5 小时，其余 1 小时——v1.41f3"""
+    """基础接取窗口（未计节日）：最后一次刷新点（按 pool.point 的班次）2.5 小时，其余 2 小时——v1.76"""
     if s:
         p = s.get("pool") or {}
         pt = str(p.get("point") or "")
@@ -1773,12 +1980,12 @@ def pool_base_window_ms(s=None):
 
 
 def pool_window_ms(s=None):
-    """接取窗口时长（最后一次刷新点 2.5 小时；节日 +1 小时）——v1.41f3"""
+    """接取窗口时长（最后一次刷新点 2.5 小时；节日 +1 小时）——v1.76"""
     return pool_base_window_ms(s) + (FEST_POOL_BONUS_MS if is_festival() else 0)
 
 
 def _fmt_hours_txt(ms):
-    """毫秒 → 小时文本（1 / 2.5 / 3.5）——v1.41f3"""
+    """毫秒 → 小时文本（2 / 2.5）——v1.76"""
     h = ms / 3600000.0
     return str(int(h)) if h == int(h) else ("%.1f" % h)
 
@@ -1829,7 +2036,7 @@ def legend_eligible(s, L):
         return False
     if c.get("legend") and c["legend"] not in s["legend_done"]:
         return False
-    if c.get("gear") and c["gear"] not in s.get("gear", []):      # v1.51 A3：需拥有指定传说装备
+    if c.get("gear") and c["gear"] not in owned_gear(s):          # v1.51 A3：需拥有指定传说装备（v1.73：含已装备）
         return False
     if c.get("allLegend"):
         for x in LEGEND:
@@ -1850,6 +2057,31 @@ def legend_rep(s, L):
     return 400 + int(round(copper / 1000000 * 100)) + (200 if L[3] == "噩梦" else 0)
 
 
+def _legend_rumor_seed(name, d):
+    """v1.74：传闻抽取按「事件名 + 游戏日」定种子——同一天刷新页面不变，跨天自动换一批。"""
+    h = 2166136261
+    for ch in name + "|" + d:
+        h = ((h ^ ord(ch)) * 16777619) & 0xFFFFFFFF
+    return h
+
+
+def _new_legend_rumor(name, d=None):
+    """v1.73：从该传奇事件的传闻池抽 2~3 条（不重复），供酒馆界面展示。
+       v1.74：日刷新——日期相同则结果确定，不随网页刷新重掷。"""
+    arr = LEGEND_RUMORS.get(name) or []
+    if not arr:
+        return None
+    d = d or today_str()
+    seed = _legend_rumor_seed(name, d)
+    n = min(len(arr), 2 + seed % 2)
+    pool = list(range(len(arr)))
+    for i in range(len(pool) - 1, 0, -1):
+        seed = (seed * 1664525 + 1013904223) & 0xFFFFFFFF
+        j = seed % (i + 1)
+        pool[i], pool[j] = pool[j], pool[i]
+    return {"name": name, "date": d, "idxs": sorted(pool[:n])}
+
+
 def roll_legend(s, msgs):
     t = today_str()
     if s["legend_day"] == t:
@@ -1858,6 +2090,7 @@ def roll_legend(s, msgs):
     if s.get("legend_preview"):
         s["legend_active"] = None
         s["legend_preview"] = False
+        s["legend_rumor"] = None
         if s.get("pending_legend") and s["pending_legend"].get("preview"):
             s["pending_legend"] = None            # 旧预览的提示一并作废
     s["legend_day"] = t
@@ -1867,6 +2100,7 @@ def roll_legend(s, msgs):
         if random.random() < 0.02:
             s["legend_active"] = random.choice(LEGEND)
             s["legend_preview"] = True
+            s["legend_rumor"] = _new_legend_rumor(s["legend_active"][0])
             s["legend_name"] = "传奇事件" if random.random() < 0.5 else "世界级事件"
             msgs.append("🔮 " + s["legend_name"] + "的低语：「" + s["legend_active"][0] + "」——尚未达到参与条件，只能远远望见（预览）")
             s["pending_legend"] = {"title": s["legend_name"], "name": s["legend_active"][0], "preview": True}
@@ -1880,6 +2114,7 @@ def roll_legend(s, msgs):
             return
         s["legend_active"] = random.choice(pool)
         s["legend_preview"] = False
+        s["legend_rumor"] = _new_legend_rumor(s["legend_active"][0])
         s["legend_name"] = "传奇事件" if random.random() < 0.5 else "世界级事件"
         msgs.append("🌍 " + s["legend_name"] + "出现：「" + s["legend_active"][0] + "」")
         s["pending_legend"] = {"title": s["legend_name"], "name": s["legend_active"][0], "preview": False}
@@ -1898,16 +2133,15 @@ def grant_legend_reward(s, L):
             continue
         m = re.search(r"宠物「(.+?)」", p)
         if m:
-            if m.group(1) not in s["pets"]:
-                s["pets"].append(m.group(1))
+            grant_pet(s, m.group(1))       # v1.73（P1-7）：统一初始化 pet_data（心情/羁绊/阅读进化）
             continue
         m = re.match(r"^(.+?)图纸$", p)
         if m and gear_def(m.group(1)):
             s["blueprints"][m.group(1)] = True     # v1.40：图纸类奖励入图纸库（原误入藏品 → 陨星武器图纸拿不到）
             continue
         if gear_def(p):
-            if p not in s["gear"]:
-                s["gear"].append(p)                # v1.40：装备类奖励入装备背包（原误入藏品 → 世界树护符/时间沙漏永远拿不到）
+            if p not in owned_gear(s):
+                s["gear"].append(p)                # v1.40：装备类奖励入装备背包（v1.73：已装备的视为已有，不重复发）
             continue
         if p not in s["trophies"]:
             s["trophies"].append(p)
@@ -1930,6 +2164,7 @@ def take_legend(s, msgs):
     # v1.41：传奇事件独立槽位——不再占用普通「同时进行」上限
     rate = legend_rate(s, L[3])
     s["legend_active"] = None
+    s["legend_rumor"] = None
     s["legend_week"] = _wk
     s["legend_week_n"] = _lwN + 1
     s["active"].append({
@@ -2013,7 +2248,7 @@ def try_rare_event(s, quest_tag, quest_name, msgs, explore_mode=False, res=None)
     elif typ == "gear":
         pool = [g for g in GEAR if g[1] in ("普通", "精良")]
         g = random.choice(pool)
-        if g[0] not in s["gear"]:
+        if g[0] not in owned_gear(s):
             s["gear"].append(g[0])
         msg = "获得装备「" + g[0] + "」"
     elif typ == "item":
@@ -2193,7 +2428,7 @@ def settle(s, a, msgs):
         # v1.41 I1：链推进提示（该委托是某链节点的前置时，提示后续线索）
         _nxt = [k2 for k2, v2 in QUEST_REQ.items() if v2 == q[0]]
         if _nxt:
-            add_log(s, "🔗 传闻：完成「" + q[0] + "」后，「" + _nxt[0] + "」的线索已出现，将可能出现在委托栏中", "gold")
+            add_log(s, "🔗 传闻：完成「" + q[0] + "」后，「" + "」「".join(_nxt) + "」的线索已出现，将可能出现在委托栏中", "gold")
         month_event_add(s, msgs, "quest")   # v1.41 I3：月度世界事件·委托进度
         if a.get("qlv", s["lv_idx"] + 1) <= 4:
             s["done_below5"] += 1
@@ -2291,12 +2526,13 @@ def day_settle(s, msgs):
     # 次日区间奖励
     nxt = next_day_str(d_str)
     nb = {"date": nxt, "pay": 0, "energy": 0, "con": 0, "vit": 0, "claimed": False, "score": sc}
+    # v1.76：贡献 / 活力点只在日结算发放一次——次日区间奖励不再重复给（只保留报酬 / 精力）
     if sc >= 90:
-        nb.update(pay=0.15, con=6, vit=5, energy=10)
+        nb.update(pay=0.15, energy=10)
     elif sc >= 75:
-        nb.update(pay=0.10, con=3, vit=3)
+        nb.update(pay=0.10)
     elif sc >= 60:
-        nb.update(pay=0.05, con=1, vit=1)   # v1.59b：良好档（第三档）追加 活力点 +1（与结算表同步）
+        nb.update(pay=0.05)
     elif sc < 40:                       # v1.40：虚弱 → 次日精力上限 −10%（原固定 −10 对高等级无感）；40–59「普通」档无额外奖励
         nb.update(energyPct=-0.10)
     # v1.40：补发未领取的旧区间奖励（玩家生效日未上线时，贡献/活力点不再被覆盖丢失；报酬与精力有时效，过期作废）
@@ -2456,12 +2692,12 @@ def monthly_settle(s, end_date_str, msgs):
     elif t_read == 2:
         pool = [g for g in GEAR if g[1] == "稀有"]
         g = random.choice(pool)
-        if g and g[0] not in s["gear"]:
+        if g and g[0] not in owned_gear(s):
             s["gear"].append(g[0])
             got.append("阅读 " + str(read_n) + " 次 → 装备「" + g[0] + "」")
     elif t_read == 3:
         if "月光狐" not in s["pets"]:
-            s["pets"].append("月光狐")
+            grant_pet(s, "月光狐")         # v1.73（P1-7）：初始化 pet_data，阅读进化立即生效
             got.append("阅读 " + str(read_n) + " 次 → 宠物「月光狐」")
     if t_quest:
         c = int(round([50000, 150000, 500000][t_quest - 1] * lv_gold_mul(s)))
@@ -2590,15 +2826,15 @@ def _achv_cond(s, name):
     return False
 
 
-def check_achievements(s, msgs):
+def check_achievements(s, msgs, force=False):
     for name, gear in ACHV:
         if name in s["achv"]:
             continue
-        if not _achv_cond(s, name):
+        if not force and not _achv_cond(s, name):
             continue
         s["achv"].append(name)
         if gear:                                       # 常规成就：奖励成就饰品
-            if gear not in s["gear"]:
+            if gear not in owned_gear(s):
                 s["gear"].append(gear)
             add_log(s, "🏅 成就达成「" + name + "」→ 成就饰品「" + gear + "」已放入装备背包", "gold")
             msgs.append("🏅 成就达成「" + name + "」→ 获得「" + gear + "」")
@@ -2614,7 +2850,7 @@ def check_achievements(s, msgs):
 def _check_gallery_titles(s, msgs):
     """v1.38：图鉴四类集齐 → 授予称号（纯荣誉，冒险者信息页「称号」栏展示）"""
     seen = set(s.get("seen_mats") or []) | set((s.get("mats") or {}).keys())
-    owned = set(s.get("forged") or []) | set(s.get("gear") or [])
+    owned = set(s.get("forged") or []) | owned_gear(s)
     for slot in (s.get("equipped") or {}).values():
         if slot:
             owned.add(slot)
@@ -2976,8 +3212,8 @@ def catch_up(s, now=None):
     # ② 区间奖励领取
     apply_buff_claim(s, msgs)
 
-    # ③ 精力恢复（每日 08:00）
-    if s["energy_restore_date"] != t and now.hour >= 8:
+    # ③ 精力恢复（每日首次刷新 07:00——v1.76）
+    if s["energy_restore_date"] != t and now.hour >= CFG["refreshHours"][0]:
         was = s["energy"]
         s["energy"] = energy_max_now(s)
         s["energy_restore_date"] = t
@@ -3084,7 +3320,7 @@ def catch_up(s, now=None):
     if pp and now_ms() >= pp["ts"]:
         s["pending_pet"] = None
         if pp["name"] not in s["pets"]:
-            s["pets"].append(pp["name"])
+            grant_pet(s, pp["name"])       # v1.73（P1-7）：含传奇宠物，统一初始化 pet_data
         if pp["name"] == "小狼" and not s.get("wolf"):     # v1.22：小狼成长链初始化
             s["wolf"] = {"stage": 1, "growth": 0, "mutate": 0, "fedDate": "", "fedCount": 0}
         msgs.append("🐺 你救下的小狼伤好了，正式成为你的伙伴！")
@@ -3286,7 +3522,8 @@ def accept_bonus(s, idx, msgs):
     rate = success_rate(s, q)
     _dur = int(round(q[3] * (1 + today_fest_eff().get("dur", 0))))   # v1.41f：儿童节·委托耗时 −30%
     s["active"].append({"q": q, "rate": rate, "qlv": lv_num(s), "meal": active_meal(s), "dur": _dur,
-                        "acceptTs": now_ms(), "finishTs": now_ms() + _dur * 60 * 1000, "name": q[0]})
+                        "acceptTs": now_ms(), "finishTs": now_ms() + _dur * 60 * 1000, "name": q[0],
+                        "bonus": True})       # v1.73：公会额外委托独立槽位（不占同时进行上限）
     s["bonus_quests"] = None
     msgs.append("📜 接取公会额外委托「" + q[0] + "」，成功率 " + str(round(rate * 100)) + "%")
     return None
@@ -3362,19 +3599,32 @@ def abandon_quest(s, i, name=None):
     return None
 
 
-def use_gale(s, i, msgs):
+def use_gale(s, i, msgs, name=None, accept_ts=None):
+    """v1.73（P1-4）：优先按 name + acceptTs 定位进行中委托——
+       客户端列表在请求途中可能被 catch_up 删除前面的项，旧下标会结算错委托。"""
     i = int(i)
+    if name:
+        try:
+            _ts = int(accept_ts) if accept_ts is not None else None
+        except (TypeError, ValueError):
+            _ts = None
+        i = next((k for k, a in enumerate(s["active"])
+                  if a.get("name") == name
+                  and (_ts is None or int(a.get("acceptTs") or 0) == _ts)), -1)
     if i < 0 or i >= len(s["active"]):
         return "委托不存在。"
     if not s["items"].get("疾风符咒"):
         return "没有疾风符咒。"
+    a = s["active"][i]
     s["items"]["疾风符咒"] -= 1
     if s["items"]["疾风符咒"] <= 0:
         del s["items"]["疾风符咒"]
-    a = s["active"][i]
     add_log(s, "💨 使用疾风符咒 → 立即完成「" + a["name"] + "」", "gold")
     settle(s, a, msgs)
-    del s["active"][i]
+    try:
+        s["active"].remove(a)          # 按对象身份删除，避免 settle 期间列表变化导致删错
+    except ValueError:
+        pass
     return None
 
 
@@ -3619,7 +3869,7 @@ def explore_finish_check(s, msgs):
         except (TypeError, ValueError, IndexError):
             msgs.append("🧭 探索记录已失效（区域数据变动），本次探索无法结算。")
             return
-    gains = []
+    gains, loot = [], []          # v1.75：loot = 结构化结算明细（前端详情弹窗用）
     for pair in r["d"]:
         name = pair[0]
         if not name:
@@ -3635,14 +3885,17 @@ def explore_finish_check(s, msgs):
                 c = 20 + random.randint(0, 30)
                 s["money"] += c
                 gains.append("铜币 " + str(c))
+                loot.append({"t": "money", "n": c, "src": "旧宝箱"})
             elif sub < 0.7:
                 mm = random_mat(s, "普通")
                 s["mats"][mm] = s["mats"].get(mm, 0) + 3
                 gains.append("旧宝箱开出 " + mm + " ×3")
+                loot.append({"t": "mat", "n": mm, "c": 3, "q": M[mm][1], "src": "旧宝箱"})
             elif sub < 0.9:
                 mm = random_mat(s, "精良")
                 s["mats"][mm] = s["mats"].get(mm, 0) + 2
                 gains.append("旧宝箱开出 " + mm + " ×2")
+                loot.append({"t": "mat", "n": mm, "c": 2, "q": M[mm][1], "src": "旧宝箱"})
             else:                                 # 10%：随机普通~精良装备 ×1（尚未拥有；全拥有则空箱）
                 eqd = [s["equipped"].get(k) for k in ("weapon", "armor", "accessory", "charmSlot")]
                 pool = [g for g in GEAR if g[1] in ("普通", "精良")
@@ -3651,26 +3904,46 @@ def explore_finish_check(s, msgs):
                     g = random.choice(pool)
                     s["gear"].append(g[0])
                     gains.append("旧宝箱开出 装备「" + g[0] + "」")
+                    loot.append({"t": "gear", "n": g[0], "src": "旧宝箱"})
                 else:
                     gains.append("旧宝箱（空的）")
+                    loot.append({"t": "other", "n": "旧宝箱（空的）", "src": "旧宝箱"})
         elif name in ITEM_DESC:
             s["items"][name] = s["items"].get(name, 0) + 1
             gains.append("规则道具「" + name + "」×1")
+            loot.append({"t": "item", "n": name, "c": 1})
         else:
             n = 1 + random.randint(0, 2)
             s["mats"][name] = s["mats"].get(name, 0) + n
             gains.append(name + " ×" + str(n))
+            loot.append({"t": "mat", "n": name, "c": n, "q": M[name][1]})
     # v1.61i：携带宠物拾取（探索场景；材料池 = 本区域掉表）
     _pf = pet_find_roll(s, "explore", [[pair2[0], pair2[1]] for pair2 in r["d"]], False)   # v1.61k：权重 = 区域掉率%
     if _pf:
+        _pet_name = pet_show_name(s, s["carry_pet"])
         for _g in _pf:
             s["mats"][_g["name"]] = s["mats"].get(_g["name"], 0) + _g["n"]
-        gains.append("🐾 " + pet_show_name(s, s["carry_pet"]) + " 翻出了 "
+            loot.append({"t": "pet", "n": _g["name"], "c": _g["n"],
+                         "q": M[_g["name"]][1] if _g["name"] in M else "", "petName": _pet_name})
+        gains.append("🐾 " + _pet_name + " 翻出了 "
                      + "、".join(_g2["name"] + " ×" + str(_g2["n"]) for _g2 in _pf))
 
-    msg = "获得：" + "、".join(gains) if gains else "空手而归……什么都没找到。"
+    # v1.70：区域固定经验（完成必得，与掉落并行；中途返回不给）——数值看 REGIONS 的 e 字段（见数据表《探索区域总表.csv》与 07 文档）
+    _ex = int(r.get("e", 0) or 0)
+    if _ex:
+        s["exp"] += _ex
+        if s.get("daily"):
+            s["daily"]["exp"] += _ex
+        check_level_up(s)
+
+    if gains:
+        msg = "获得：" + "、".join(gains) + ("、经验 +" + str(_ex) if _ex else "")
+    else:
+        msg = (("空手而归……不过一路历练有所得：经验 +" + str(_ex)) if _ex
+               else "空手而归……什么都没找到。")
     add_log(s, "🧭 探索「" + r["n"] + "」完成 → " + msg, "gold" if gains else "")
-    s["explore_result"] = {"region": r["n"], "msg": msg}
+    s["explore_result"] = {"region": r["n"], "msg": msg, "h": int(ea.get("h", 0) or 0),
+                           "exp": _ex, "loot": loot, "ts": now_ms()}
     # 探索事件判定（20% 触发；区域事件 / 盗贼伏击 70/30）——结果交给前端展示/选择
     s["pending_event"] = roll_explore_event(s, r)
     # 稀有事件（探索模式）
@@ -3969,6 +4242,8 @@ def buy_con(s, i, msgs, n=1, mat=None):
     i = int(i)
     n = max(1, min(int(n or 1), 9999))          # v1.38k：批量兑换
     it = CON_SHOP[i]
+    if it.get("lv") and lv_num(s) < it["lv"]:    # v1.74：史诗材料包等商品另设冒险者等级门槛
+        return "该商品需冒险者 Lv" + str(it["lv"]) + " 才能兑换。"
     if it.get("g") and guild_idx(s) < it["g"]:   # v1.41 H2：B 级解锁项（精英委托重掷券）
         return "尚未解锁（需公会 " + CFG["guildName"][it["g"]] + " 级）。"
     bad = _shop_lim_check(s, it, n, "con")      # v1.38m：限购
@@ -4104,6 +4379,9 @@ def buy_plat(s, msgs, i=0, mat=None):
     if it.get("matSel"):
         if not mat or M.get(mat, [None, None])[1] != it["matSel"][0]:
             return "请先选择具体材料（" + it["matSel"][0] + "档）。"
+        _sel = it.get("sel")
+        if _sel and mat not in _sel:      # v1.73：服务端与前端自选清单同口径
+            return "该材料不在本店自选清单中。"
     if s["money"] < it["platC"] * 1000000:
         return "铂金币不足（需要 " + str(it["platC"]) + "）。"
     s["money"] -= it["platC"] * 1000000
@@ -4288,7 +4566,7 @@ def craft(s, name, msgs):
         return "没有这件装备。"
     if g[5] == "—":
         return "「" + name + "」不能打造，只能通过成就或事件获得。"
-    if name in s["gear"]:                                # v1.67：已拥有不再重复打造（每件装备唯一，原可重复叠放积灰）
+    if name in owned_gear(s):                            # v1.67：已拥有不再重复打造（v1.73：含已装备）
         return "你已拥有「" + name + "」——每件装备只此一件，无需重复打造。"
     if name not in s["blueprints"]:
         return "没有「" + name + "」图纸。"
@@ -4313,7 +4591,7 @@ def craft(s, name, msgs):
         if s["mats"][k] <= 0:
             del s["mats"][k]
     s["money"] -= cost
-    if name not in s["gear"]:
+    if name not in owned_gear(s):
         s["gear"].append(name)
     if name not in s.setdefault("forged", []):          # v1.35：图鉴·打造记录
         s["forged"].append(name)
@@ -4406,9 +4684,10 @@ def buy_blueprint(s, name, msgs):
         return "该图纸不存在。"
     if name in s["blueprints"]:
         return "已掌握该图纸。"
-    # 价格与公会门槛对齐原型 BP_SHOP（普通 20 银 / 精良 1.5 金 / 稀有 9 金 / 史诗 42 金 / 传说 5 铂金币）
-    cost = {"普通": 2000, "精良": 15000, "稀有": 90000, "史诗": 420000, "传说": 5000000}.get(g[1], 15000)
-    need = {"普通": 1, "精良": 1, "稀有": 3, "史诗": 5, "传说": 6}.get(g[1], 1)
+    # v1.76：图纸价格按装备效果单独定价（GEAR[6]，单位铜币）；旧数据回退到档位价
+    cost = int(g[6]) if len(g) > 6 and g[6] else {"普通": 2000, "精良": 15000, "稀有": 90000,
+                                                   "史诗": 420000, "传说": 5000000}.get(g[1], 15000)
+    need = {"普通": 1, "精良": 1, "稀有": 2, "史诗": 5, "传说": 6}.get(g[1], 1)   # v1.75：稀有图纸 C → D
     if guild_idx(s) < need:
         return "公会等级不足（需要 " + CFG["guildName"][need] + " 级）。"
     if s["money"] < cost:

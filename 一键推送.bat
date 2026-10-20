@@ -47,7 +47,11 @@ goto hold
 echo.
 echo [FAILED] Commit is kept locally - fix the issue and run this script again.
 echo          (Rerunning is safe: it will skip the commit step and just push.)
+echo.
+pause
+exit /b 1
 
 :hold
 echo.
 pause
+exit /b 0

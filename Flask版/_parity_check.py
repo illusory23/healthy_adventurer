@@ -10,6 +10,11 @@ from pathlib import Path
 
 import game
 
+try:                       # v1.70：控制台非 UTF-8（如 GBK）时，↔ / ✅ 不再把脚本打崩
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 PASS = 0
 FAIL = 0
 
@@ -127,8 +132,19 @@ _badg = [i for i in range(max(len(_pg), len(_ps))) if i >= len(_pg) or i >= len(
 check(not _badg, "GEAR 全量一致（" + str(len(_pg)) + " 件）"
       + ("；差异下标: " + str(_badg[:6]) if _badg else ""))
 
-print("=== 8. 全量数据表 · 前端 ↔ 服务端（v1.51：27 表防漂移；v1.55：+PET_LINES 含品阶/数值 = 28 表） ===")
+print("=== 8. 全量数据表 · 前端 ↔ 服务端（v1.73：含 LEGEND_RUMORS 全量防漂移） ===")
 _tf = out["tablesFull"]
+# v1.73（P2）：不只比较「双方都有的键」——关键表若有哪一端整体漏导出，也必须报错
+_EXPECT_TABLES = {
+    "BUY_TIERS", "C", "CHARM", "CON_SHOP", "CRAFT", "EXPLORE_EVENT_CHANCE", "ITEM_DESC",
+    "LEGEND", "LEGEND_GOLD", "LEGEND_RUMORS", "M", "MASTER_SHOP", "MONTH_EVENTS",
+    "PET_FIND", "PET_GIFTS", "PET_LINES", "PLAT_SHOP", "QUEST_ITEM", "QUEST_REQ",
+    "QUEST_STORY", "QUEST_TURNIN", "RARE", "REGIONS", "REGION_EVENTS", "PARTY",
+    "PARTY_GROUPS", "PARTY_TXT", "REP_TABLE", "SHOP", "SKILLS", "SKILL_COST", "VIT_SHOP",
+}
+_missing_tbl = sorted(t for t in _EXPECT_TABLES if t not in _tf or getattr(game, t, None) is None)
+check(not _missing_tbl, "关键数据表齐全（应有 " + str(len(_EXPECT_TABLES)) + " 表）"
+      + ("；缺失: " + str(_missing_tbl) if _missing_tbl else ""))
 _bad8 = []
 for k in sorted(_tf):
     srv = getattr(game, k, None)
@@ -147,7 +163,7 @@ for k in sorted(_tf):
     _bad8.append(k)
 check(not _bad8, "全量数据表一致（" + str(len(_tf)) + " 表）" + ("；差异: " + str(_bad8) if _bad8 else ""))
 
-print("=== 9. 全量数据表 · 原型 ↔ 前端（v1.51：创造模式与 Flask 前端同步） ===")
+print("=== 9. 全量数据表 · 原型 ↔ 前端（v1.51：创造模式与 Flask 前端同步；v1.73：含 LEGEND_RUMORS） ===")
 _r2 = subprocess.run(["node", "_dump_proto.js"], cwd=str(PROTO),
                      capture_output=True, text=True, encoding="utf-8")
 if _r2.returncode != 0:

@@ -305,11 +305,19 @@ def _server_up():
         return False
 
 
+def _admin_token():
+    try:
+        return (Path(__file__).resolve().parent / "admin_token.txt").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 def _api(op, uid, args):
     """在线：调本机 /admin/dev（服务端在自己的锁内结算 + 写档 + 自动备份）"""
     body = json.dumps({"uid": uid, "op": op, "args": args}, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request("http://%s:%d/admin/dev" % (HOST, PORT), data=body,
-                                 headers={"Content-Type": "application/json; charset=utf-8"})
+                                 headers={"Content-Type": "application/json; charset=utf-8",
+                                          "X-Admin-Token": _admin_token()})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode("utf-8"))
 

@@ -48,9 +48,12 @@ def _day_end_ms(day):
 
 
 def _week_start_ms(now=None):
-    d = (now or datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
-    d -= timedelta(days=d.weekday())          # 周一 00:00（与 social.py 同口径）
-    return int(d.timestamp() * 1000)
+    """v1.73：与游戏日同口径（06:00 日界线；周一 06:00 起算）。"""
+    d = now or datetime.now()
+    gd = datetime.strptime(game.today_str(d), "%Y-%m-%d")
+    gd -= timedelta(days=gd.weekday())
+    gd = gd.replace(hour=game.DAY_CUTOFF_HOUR)
+    return int(gd.timestamp() * 1000)
 
 
 def _load(uid):
@@ -292,6 +295,9 @@ def accept(uid, me_s, pid, msgs):
     row = db.party_get(pid)
     if not row or row["status"] != "open":
         return "该队伍已结束邀请"
+    # v1.73：邀请发出后任一方拉黑 → 接受时同样拦截（不能只靠 invite 时的一次检查）
+    if db.is_blocked(uid, row["uid"]) or db.is_blocked(row["uid"], uid):
+        return "对方暂不接受邀请"
     if row["expire_at"] and row["expire_at"] <= _now_ms():
         return "该副本已过期作废"
     busy = _busy(uid, exclude_pid=pid)

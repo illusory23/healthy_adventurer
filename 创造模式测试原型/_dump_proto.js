@@ -28,7 +28,12 @@ global.setInterval = () => 0;
 
 // v1.50：对拍目标改为 Flask 前端（game.html 原型层 ↔ Flask 服务端）；桥接层截除不参与
 const html = fs.readFileSync(__dirname + '/健康的冒险者的一天.html', 'utf-8');  // v1.51：dump 创造模式原型（与前端/服务端对拍）
-let code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// v1.73（P2）：不再依赖「第一个无属性 <script>」——跳过 importmap，按主脚本特征选取
+const _mainScript = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+  .map(function(m){ return m[1]; })
+  .find(function(s){ return s.indexOf("function newState") >= 0; });
+if(!_mainScript){ console.error("未找到主游戏脚本块（function newState）"); process.exit(1); }
+const code = _mainScript;
 // 原型文件无 Flask boot 段：主块整体参与（与 _smoke_creator.js 同策略）
 
 const test = `
@@ -71,7 +76,7 @@ OUT.gear = GEAR.map(function(g){ return g.slice(); });   // v1.49：装备表全
 OUT.tablesFull = {
   BUY_TIERS: BUY_TIERS, C: C, CHARM: CHARM, CON_SHOP: CON_SHOP, CRAFT: CRAFT,
   EXPLORE_EVENT_CHANCE: EXPLORE_EVENT_CHANCE, ITEM_DESC: ITEM_DESC, LEGEND: LEGEND,
-  LEGEND_GOLD: LEGEND_GOLD, M: M, MASTER_SHOP: MASTER_SHOP, MONTH_EVENTS: MONTH_EVENTS,
+  LEGEND_GOLD: LEGEND_GOLD, LEGEND_RUMORS: LEGEND_RUMORS, M: M, MASTER_SHOP: MASTER_SHOP, MONTH_EVENTS: MONTH_EVENTS,
   PET_FIND: PET_FIND, PET_GIFTS: PET_GIFTS, PET_LINES: PET_LINES, PLAT_SHOP: PLAT_SHOP, QUEST_ITEM: QUEST_ITEM, QUEST_REQ: QUEST_REQ, QUEST_STORY: QUEST_STORY,
   QUEST_TURNIN: QUEST_TURNIN, RARE: RARE, REGIONS: REGIONS, REGION_EVENTS: REGION_EVENTS,
   PARTY: PARTY, PARTY_GROUPS: PARTY_GROUPS, PARTY_TXT: PARTY_TXT,

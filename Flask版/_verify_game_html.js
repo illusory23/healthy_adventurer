@@ -36,7 +36,12 @@ global.AudioContext = function(){ return { state:"running", currentTime:0, resum
   createGain(){ return { gain:{ setValueAtTime(){}, exponentialRampToValueAtTime(){} }, connect(){} }; } }; };
 
 const html = fs.readFileSync(path.join(__dirname, 'static', 'game.html'), 'utf-8');
-const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// v1.73（P2）：不再依赖「第一个无属性 <script>」——跳过 importmap，按主脚本特征选取
+const _mainScript = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+  .map(function(m){ return m[1]; })
+  .find(function(s){ return s.indexOf("function newState") >= 0; });
+if(!_mainScript){ console.error("未找到主游戏脚本块（function newState）"); process.exit(1); }
+const code = _mainScript;
 
 const test = `
 var FAIL = 0;   // v1.69：必须是 var —— let 在 eval 里不会漏给外层，原写法让末尾读到 FAIL 恒为 undefined(0)，断言失败被静默吞成「通过」
@@ -52,15 +57,15 @@ ck(showLevelUpDetail.toString().indexOf('新解锁') >= 0 && showLevelUpDetail.t
    '升级详情弹窗：新解锁 + 能力提升');
 ck([1,2,3,4].every(function(i){ return LEVEL_INFO[i] && LEVEL_INFO[i].unlock.length && LEVEL_INFO[i].gain.length; }),
    'LEVEL_INFO 覆盖 Lv2~Lv5');
-ck(CFG.refreshHours.join(',') === '8,12,18,21', '刷新点 08/12/18/21（v1.41f3 末次 22:00 → 21:00）');
+ck(CFG.refreshHours.join(',') === '7,11,17,21', '刷新点 07/11/17/21（v1.76 前三班提前、末班 21:00）');
 ck(typeof LAST_POOL_WINDOW_MS !== 'undefined' && LAST_POOL_WINDOW_MS === 150*60*1000 && typeof poolBaseWindowMs === 'function',
-   'v1.41f3：最后班窗口常量 2.5 小时 + poolBaseWindowMs');
+   'v1.76：最后班窗口常量 2.5 小时（21:00 → 23:30）+ poolBaseWindowMs');
 /* v1.41f4：酒馆页（传闻迁入最上方 + 公会厨房迁入改名酒馆料理） */
 ck(typeof renderTavern === 'function' && renderTavern.toString().indexOf('酒馆传闻') >= 0 && renderTavern.toString().indexOf('酒馆料理') >= 0,
    'v1.41f4：renderTavern 含酒馆传闻 + 酒馆料理');
 ck(renderQuest.toString().indexOf('酒馆传闻') < 0, 'v1.41f4：委托页传闻已移除');
 ck(renderShop.toString().indexOf('烹饪') < 0, 'v1.41f4：公会页料理卡已移除');
-ck(POOL_WINDOW_MS === 60*60*1000, '接取窗口 1 小时');
+ck(POOL_WINDOW_MS === 120*60*1000, '接取窗口 2 小时（v1.75：1 → 2）');
 ck(CFG.taskWindows[0][0] === '21:00' && CFG.taskWindows[0][1] === '23:30', '入睡打卡时段 21:00~23:30');
 ck(matIcon('山鸡羽') === '🪶' && matIcon('蘑菇') === '🍄', '材料图标修正（山鸡羽/蘑菇）');
 ck(load.toString().indexOf('migrate(raw ? JSON.parse(raw) : newState())') >= 0, 'load 新档走补全（v1.38r）');
@@ -93,7 +98,8 @@ ck(ACHV.filter(function(a){ return a.cond.toString().indexOf('S.histStats') >= 0
 ck(typeof roll3D !== 'undefined' || true, '（骰子为动态 import，HTML 侧检查）');
 /* v1.41 修复：结算动画/掷骰重播两遍（整批 splice 快照 + 先 ack 后解锁） */
 const _frSrc = flushResults.toString();
-ck(_frSrc.indexOf('splice(0)') >= 0 && _frSrc.indexOf('先 ack') >= 0, 'v1.41：flushResults 防重播两遍（整批快照 + 先 ack 后解锁）');
+ck(_frSrc.indexOf('splice(0)') >= 0 && _frSrc.indexOf('n_results') >= 0 && _frSrc.indexOf('finally') >= 0,
+   'v1.41/v1.73：flushResults 整批快照 + 按已展示条数 ack + 异常复位');
 /* v1.41 修复：昨日结算重复弹出（打卡 / 定时同步重入）——展示后须本地标记 + ack 服务端 + 会话级防竞态 */
 ck(_frSrc.indexOf('yesterday_ack') >= 0, 'v1.41：昨日结算展示后 ack 服务端（防打卡/同步重弹）');
 ck(_frSrc.indexOf('_ysAckDate') >= 0 && _frSrc.indexOf('S.yesterdayShown = true') >= 0, 'v1.41：昨日结算本地标记 + 会话级防竞态');
@@ -123,7 +129,11 @@ ck(typeof S.mealSp === 'object' && S.mealSp !== null && 'cnt' in S.mealSp && 'go
 ck(REGIONS.filter(function(r){ return r.n === "深渊裂隙"; })[0].c === 10
    && REGIONS.filter(function(r){ return r.n === "深渊核心"; })[0].c === 12, 'v1.41f5：深渊裂隙 10 / 深渊核心 12（v1.61c 改名）');
 /* v1.42：龙种体系 + 九头蛇材料改造 + 巨龙盛宴 enPct */
-ck(Object.keys(M).length === 125, 'v1.58：材料 125 种（+六域遗珍 6：冥河灯油 / 地狱火种 / 泰坦石核 / 沼心莲实 / 深海遗珠 / 冰晶果）');
+ck(Object.keys(M).length === 129, 'v1.72：材料 129 种（125 + 金属龙 4：银龙鳞 / 青铜龙牙 / 赤铜龙角 / 黄铜龙息结晶）');
+ck(html.indexOf("const _exG = r.e || 0;") >= 0 && html.indexOf('、经验 +" + _exG') >= 0
+   && html.indexOf('经验（完成必得；中途返回无）') >= 0,
+   'v1.70：原型层探索结算发经验（_exG）+ 区域详情显示经验行');
+ck(html.indexOf('经验 +\${r.e || 0}') >= 0, 'v1.70：区域卡片行同步显示「经验 +N」');
 ck(C["Lv5"].some(function(q){ return q[0] === "魔鬼的谈判"; }) && C["Lv4"].some(function(q){ return q[0] === "镇压恶魔裂隙"; }),
    'v1.45：恶魔/魔鬼委托入池');
 ck(CFG.recipes.some(function(r){ return r.n === "巨龙盛宴" && Object.keys(recipeIng(r)).length === 10; }),
@@ -134,10 +144,12 @@ ck(C["Lv4"].some(function(q){ return q[0] === "驱赶绿龙"; }) && C["Lv5"].som
    'v1.42：龙种委托入池（驱赶绿龙 / 狩猎火龙）');
 ck(CFG.recipes.some(function(r){ return r.n === "巨龙盛宴" && r.enPct === 0.5 && !r.en && recipeIng(r)["大块龙肉"] >= 3; }),
    'v1.67a：盛宴 enPct=0.5（维持原档；史诗/传说不削弱——en 移除、大块龙肉）');
-ck(Object.keys(QUEST_REQ).length === 31 && QUEST_REQ["魂灯引渡"] === "净化亡灵谷" && QUEST_REQ["地狱钟声"] === "魔鬼的谈判"
+ck(Object.keys(QUEST_REQ).length === 35 && QUEST_REQ["魂灯引渡"] === "净化亡灵谷" && QUEST_REQ["地狱钟声"] === "魔鬼的谈判"
    && QUEST_REQ["圣兽驯服"] === "古龙遗骸采集" && QUEST_REQ["弑龙者"] === "圣兽驯服" && QUEST_REQ["深渊领主封印"] === "深渊裂隙调查"
-   && QUEST_REQ["亡者回廊·镇魂"] === "亡者回廊·踏勘" && QUEST_REQ["泰坦之心"] === "泰坦遗骸发掘" && QUEST_REQ["雪原巡礼"] === "圣兽驯服",
-   'v1.57：委托链 31 条前置（v1.45b ×7 + v1.51 ×3 + 种族链 ×13）');
+   && QUEST_REQ["亡者回廊·镇魂"] === "亡者回廊·踏勘" && QUEST_REQ["泰坦之心"] === "泰坦遗骸发掘" && QUEST_REQ["雪原巡礼"] === "圣兽驯服"
+   && QUEST_REQ["银龙的月光审判"] === "金龙宝藏的谈判" && QUEST_REQ["青铜龙的潮汐试炼"] === "金龙宝藏的谈判"
+   && QUEST_REQ["赤铜龙的熔炉谜题"] === "金龙宝藏的谈判" && QUEST_REQ["黄铜龙的沙海辩论"] === "金龙宝藏的谈判",
+   'v1.72：委托链 35 条前置（v1.45b ×7 + v1.51 ×3 + 种族链 ×13 + 金属龙支线 ×4）');
 ck(C["Lv5"].some(function(q){ return q[0] === "地狱钟声"; }) && C["Lv5"].some(function(q){ return q[0] === "魂灯引渡"; })
    && C["Lv5"].some(function(q){ return q[0] === "仙灵的谢礼"; }),
    'v1.45b：地狱钟声 / 仙灵的谢礼 / 魂灯引渡 入池');
@@ -198,10 +210,10 @@ ck(showQuestDetailByName.toString().indexOf('基础成功率') >= 0 && showQuest
 ck(monthEventNow.toString().indexOf('lvIdx < 1') < 0 && monthEventTick.toString().indexOf('lvIdx < 1') < 0,
    'v1.48f：月事件 Lv1 解锁（无 Lv2 门槛）');
 /* v1.49：主题套装补齐 + 词条正则修复 */
-ck(GEAR.length === 131 && !!gearDef('金龙鳞铠') && !!gearDef('世界树长弓') && !!gearDef('冥河护符')
+ck(GEAR.length === 135 && !!gearDef('金龙鳞铠') && !!gearDef('世界树长弓') && !!gearDef('冥河护符')
    && !!gearDef('冥河渡灯') && !!gearDef('硫磺王冠') && !!gearDef('泰坦之心')
    && !!gearDef('花岗岩重锤') && !!gearDef('铅矿护符') && !!gearDef('古币坠饰'),
-   'v1.57：装备 121 → 131 件（v1.58 +7；v1.59 弱出口补全 +3）');
+   'v1.72：装备 135 件（131 + 金属龙 4：银龙鳞甲 / 青铜龙牙枪 / 赤铜龙角冠 / 黄铜龙息杖）');
 ck(gearEffects.toString().indexOf('([^；;]+?)类(?:委托)?成功率') >= 0 && gearEffects.toString().indexOf('([^；;]+?)类精力消耗'),
    'v1.49：词条正则键不跨「；」（修复组合词条吞键）');
 /* v1.58：六域遗珍（新材料 / 装备 / 料理）+ 「探索点/天」词条整体移除 */
@@ -239,6 +251,9 @@ hck(html.indexOf('传奇资格 ✓') >= 0, '经验条·传奇资格文案（v1.3
 hck(html.indexOf('S.historyTotal || S.history.length') >= 0, '存档页天数用 historyTotal 兜底（v1.39 C3）');
 hck(html.indexOf('export_save') >= 0, '桥接层含 export_save 调用（v1.39 C3）');
 hck(html.indexOf('curMul:10000') >= 0, '图纸定价修复（v1.40）');
+hck(html.indexOf('g.length > 6 && g[6] > 0') >= 0
+    && html.indexOf('const _bp = bpInfo(n)') >= 0,
+    'v1.76：图纸按 GEAR[6] 逐张定价（商店显示与购买同源）');
 hck(html.indexOf('完成 ≥1 次传奇事件') >= 0, '护符 V 解锁条件（v1.40）');
 hck(html.indexOf('const FESTIVAL_RANGES') >= 0 && html.indexOf('const TASK_ORDER') >= 0,
     'v1.41c：假期区间表 + 任务展示顺序（静态）');
@@ -271,7 +286,7 @@ hck(html.indexOf('b.scrollIntoView({inline:"center"') >= 0, 'v1.57：当前页�
 hck(html.indexOf('main.addEventListener("touchstart"') >= 0 && html.indexOf('Math.abs(dx) < 70') >= 0
     && html.indexOf('nb.click()') >= 0, 'v1.57：内容区左右滑动手势切页（复用页签点击路径）');
 /* v1.48b：多品类数据回滚（功能代码保留）+ 酒馆传闻 2 条 + 健康 span2 + 委托页标题 */
-hck(html.indexOf('"蜂蜜":["食材","普通",60]') >= 0 && html.indexOf(',["草药"]]') < 0 && html.indexOf(',["食材"]]') < 0 && html.indexOf(',["特殊"]]') < 0,
+hck(/"蜂蜜":\["食材","普通",\d+\]/.test(html) && html.indexOf(',["草药"]]') < 0 && html.indexOf(',["食材"]]') < 0 && html.indexOf(',["特殊"]]') < 0,
     'v1.48b：M 表多品类数据已回滚（无第 4 位数组）');
 hck(html.indexOf('function matCats(') >= 0 && html.indexOf('function matHasCat(') >= 0,
     'v1.48b：多品类功能代码保留（matCats / matHasCat）');
@@ -282,11 +297,11 @@ hck(html.indexOf('.twocol>.card.span2') >= 0 && html.indexOf('"card span2"') >= 
 hck(html.indexOf('正在进行的委托（') >= 0 && html.indexOf('委托刷新 · ') >= 0 && html.indexOf('当前刷新 · ') < 0,
     'v1.48b：委托页标题（正在进行的委托 / 委托刷新）');
 /* v1.48c：材料品类修正 + 掉落 + 委托卡加高 + 3D 骰标题 */
-hck(html.indexOf('"巨龙竖瞳":["兽材","传说",520000]') >= 0 && html.indexOf('"龙瞳结晶":["宝石","传说",580000]') >= 0,
+hck(/"巨龙竖瞳":\["兽材","传说",\d+\]/.test(html) && /"龙瞳结晶":\["宝石","传说",\d+\]/.test(html),
     'v1.48c：材料表修正（竖瞳兽材 / 龙瞳结晶宝石·传说）');
-hck(html.indexOf('"世界树皮":["特殊","传说",450000,["织物","草药"]]') >= 0,
+hck(/"世界树皮":\["特殊","传说",\d+,\["织物","草药"\]\]/.test(html),
     'v1.48c：世界树皮多品类（特殊 + 织物 + 草药）');
-hck(html.indexOf('"龙瞳结晶":[1,2]') >= 0, 'v1.48c：古龙遗骸采集掉落龙瞳结晶');
+hck(html.indexOf('"龙瞳结晶":[1,2,0.07]') >= 0, 'v1.48c/v1.73：古龙遗骸采集掉落龙瞳结晶（单独 7% 概率）');
 hck((html.match(/min-height:220px/g) || []).length >= 2, 'v1.48c/v1.61e：委托页两卡加高（150px → 220px）');
 hck(html.indexOf('📖 委托说明') >= 0 && html.indexOf('刷新与窗口') >= 0 && html.indexOf('今日接取上限') >= 0 && html.indexOf('【更多机会】') < 0,
     'v1.48d：委托说明卡（接取上限文案更新 / 移出「更多机会」）');
@@ -345,8 +360,8 @@ hck(html.indexOf('questRep(q, S.lvIdx+1)') < 0 && html.indexOf('questRep(q, a.ql
 /* v1.51 A3：传奇事件——同时最多 1 个 + 指定传说装备条件 */
 hck((html.match(/传奇事件同时最多 1 个/g) || []).length >= 2,
     'v1.51 A3：传奇同时限 1（原型层 + 桥接层两处 takeLegend）');
-hck(html.indexOf('if(c.gear && (S.gear || []).indexOf(c.gear) < 0) return false;') >= 0
-    && html.indexOf('需拥有传说装备「') >= 0, 'v1.51 A3：传奇专属条件（gear 键 + 条件文案）');
+hck(html.indexOf('if(c.gear && !ownedGear(c.gear)) return false;') >= 0
+    && html.indexOf('需拥有传说装备「') >= 0, 'v1.51 A3：传奇专属条件（gear 键 + 条件文案；v1.73 含已装备）');
 /* v1.51b：图鉴宠物节（第七节） */
 hck(html.indexOf('const PET_GAL_ICON = {') >= 0 && html.indexOf('const PET_GAL = [') >= 0,
     'v1.51b：宠物显示图标表 + 全条目表（9 格）');
@@ -467,7 +482,7 @@ hck(html.indexOf('短时类成功率+4%","雷霆龙牙×7"') >= 0
     && html.indexOf('"魔鬼纹章","史诗","饰品",0.12,"公会贡献+20%；委托经验+12%"') >= 0,
     'v1.52 B4+B6：词条阶梯对齐（短时 1/2/3/4、魔鬼纹章 20/12）');
 hck(html.indexOf('最后一次（21:00）') >= 0 && html.indexOf('最后一班') < 0,
-    'v1.52：术语「最后一班」→「最后一次」（全文件）');
+    'v1.52/v1.76：术语「最后一班」→「最后一次」（末班 21:00）');
 hck(html.indexOf('"鹿皮斗篷":"软鞣鹿皮缝成的斗篷') >= 0
     && html.indexOf('"百战护符":"三百场委托打磨出的护符，纹路里全是故事。它不张扬，只是让好运来得比别处勤快一点。",') >= 0,
     'v1.52：GEAR_FLAVOR 8 条新增（尾逗号修复）');
@@ -499,9 +514,10 @@ hck(html.indexOf('"王都巡夜","短时","21:00-23:30",120,"简单",58000,58') 
     && html.indexOf('"猎场驱兽","狩猎","08:00-23:30",180,"简单",60000,60') >= 0,
     'v1.59：Lv4 简单档报酬/经验下调（王都巡夜 5.8 万 / 猎场驱兽 6 万）');
 hck(html.indexOf("else if(sc>=60){ rep=2; con=1; vit=1; }") >= 0
-    && html.indexOf("else if(sc>=60){ nb.pay=0.05; nb.con=1; nb.vit=1; }") >= 0
-    && html.indexOf('今日委托报酬 +5%、贡献 +1、活力点 +1') >= 0,
-    'v1.59b：良好档（60–74）活力点 +1（结算 / 区间奖励 / 说明文案三处）');
+    && html.indexOf("else if(sc>=60){ nb.pay=0.05; }") >= 0
+    && html.indexOf('今日委托报酬 +5%') >= 0
+    && html.indexOf('今日委托报酬 +5%、贡献 +1、活力点 +1') < 0,
+    'v1.59b/v1.76：良好档日结算 活力点 +1；区间奖励去重（只含报酬）');
 hck(html.indexOf('"花岗岩重锤","普通","武器",0.01,"—","花岗岩×3"') >= 0
     && html.indexOf('"铅矿护符","普通","饰品",0.02,"—","铅矿石×2"') >= 0
     && html.indexOf('"古币坠饰","稀有","饰品",0.08,"稀有事件概率+1%","古董钱币×4"') >= 0,
@@ -550,10 +566,10 @@ hck(html.indexOf("const EV_ROB_CAP = 1000000") >= 0
     'v1.61c：盗贼伏击抢夺上限 1 铂金币（上限 + 文案）');
 hck(html.indexOf("const roll = a.forceRoll || rand(100)") >= 0 && html.indexOf("const roll2 = a.forceRoll || rand(100)") >= 0,
     'v1.61c：立即完成委托锁定骰值 1（forceRoll 覆盖常规 + 传奇结算）');
-hck(html.indexOf('{n:"晨光森林·深处", t:"07:00-09:00", c:4, h:3, lv:3, g:3, deep:1') >= 0
-    && html.indexOf('{n:"星夜洞窟·深处", t:"21:00-23:00", c:5, h:6, lv:4, g:5, deep:1') >= 0
-    && html.indexOf('{n:"腐化森林·深处", t:"08:00-23:30", c:7, h:9, lv:5, g:6, deep:1') >= 0
-    && html.indexOf('{n:"虚空裂痕·深处", t:"22:00-23:30", c:9, h:14, lv:5, g:6, deep:1') >= 0,
+hck(html.indexOf('{n:"晨光森林·深处", t:"07:00-09:00", c:4, h:3, e:20, lv:3, g:3, deep:1') >= 0
+    && html.indexOf('{n:"星夜洞窟·深处", t:"21:00-23:00", c:5, h:6, e:30, lv:4, g:5, deep:1') >= 0
+    && html.indexOf('{n:"腐化森林·深处", t:"08:00-23:30", c:7, h:9, e:50, lv:5, g:6, deep:1') >= 0
+    && html.indexOf('{n:"虚空裂痕·深处", t:"22:00-23:30", c:9, h:14, e:60, lv:5, g:6, deep:1') >= 0,
     'v1.60：7 处深处重排为 C/A/S 共绑（Lv3+C / Lv4+A / Lv5+S）');
 hck(html.indexOf('{n:"虚空裂痕", t:"22:00-23:30", c:8, lv:4, h:12') >= 0,
     'v1.60：虚空裂痕地表 Lv3 → Lv4');
@@ -630,7 +646,7 @@ hck(html.indexOf("PTY = j.party || null") >= 0 && html.indexOf("if(j.party !== u
     'v1.65：副本数据随响应缓存（变量 PTY——与数据段 const PARTY 不重名）');
 /* v1.66：材料市场（P3 · 桥接层注入市场页；数据段含 CFG.market） */
 hck(html.indexOf("market:{") >= 0 && html.indexOf("unlockLv:3") >= 0
-    && html.indexOf("unlockGuild:3") >= 0 && html.indexOf('tiers:["普通","精良","稀有","史诗"]') >= 0
+    && html.indexOf("unlockGuild:2") >= 0 && html.indexOf('tiers:["普通","精良","稀有","史诗"]') >= 0
     && html.indexOf("buyDaily:5") >= 0 && html.indexOf("buyWeekly:20") >= 0,
     'v1.66：数据段含 CFG.market（解锁 / 品阶 / 限额 / 区间）');
 hck(html.indexOf('data-t="shop"') >= 0 && html.indexOf('data-t="market"') >= 0
@@ -657,6 +673,63 @@ hck(html.indexOf("挂单即托管") >= 0 && html.indexOf("免手续费") >= 0
     && html.indexOf("天未售出自动下架退回") >= 0 && html.indexOf("单价区间 = 商店价") >= 0
     && html.indexOf(".mkt-row{") >= 0,
     'v1.66：托管 / 免手续费 / 单价区间 / 到期退回文案与样式');
+
+/* v1.71：商店标题精简 + 链式解锁下一级预告 + 探索中详情可点 */
+hck(html.indexOf('<h3>公会商店（用铜币）</h3>') < 0 && html.indexOf('<h3>公会商店</h3>') >= 0,
+    'v1.71：公会商店标题删除「（用铜币）」');
+hck(html.indexOf("const GUILD_LV_UNLOCK") >= 0 && html.indexOf("function guildNextHint()") >= 0
+    && html.indexOf("function cardHint(") >= 0 && html.indexOf("史诗材料需 Lv4") >= 0,
+    'v1.71/v1.74：链式解锁「下一级」预告（公会等级解锁表 + 卡片底部小字）');
+hck(html.indexOf("🔒 下一档 <b>") >= 0 && html.indexOf("开放至 <b>") >= 0
+    && html.indexOf("下一品阶预告") >= 0 && html.indexOf("下一级 <b>第 ") >= 0
+    && html.indexOf("开放：材料买入（买入价 = 卖出价 ×3）") >= 0
+    && html.indexOf("开放：公会商店（材料包 / 消耗品 / 任务准备物）") >= 0,
+    'v1.71：F 级引导 / 图纸 / 技能树 / 冥念护符 / 料理 / 交易所均含下一阶预告');
+hck(html.indexOf('onclick="showRegionDetail(${ea.idx})"') >= 0
+    && html.indexOf("点击查看区域详情 ›") >= 0
+    && html.indexOf("正在探索此区域——结束后自动结算") >= 0,
+    'v1.71：探索中卡片可点击查看区域详情（含进行中状态文案）');
+
+/* v1.71b：探索确认界面 + 健康榜刷新/公开状态提示 */
+hck(html.indexOf('onclick="event.stopPropagation();showRegionDetail(${i})"') >= 0
+    && html.indexOf("确认前往") >= 0
+    && html.indexOf("确认后将扣除 <b>${r.c} 探索点</b>") >= 0
+    && html.indexOf("耗时 <b>${r.h} 小时</b>") >= 0,
+    'v1.71b：探索按钮先打开确认详情，确认后才会出发（含消耗/耗时说明）');
+hck(html.indexOf("function socRefresh()") >= 0
+    && html.indexOf('onclick="socRefresh()"') >= 0
+    && html.indexOf("健康分未公开") >= 0
+    && html.indexOf("Date.now() - _socAt > 15000") >= 0,
+    'v1.71b：健康榜手动刷新 + 社交页自动刷新 + 好友公开状态提示');
+
+/* v1.71c：商店全量审计——史诗材料包 300 → 600（价值/贡献档位对齐） */
+hck(html.indexOf('{n:"指定史诗材料×1", con:600') >= 0
+    && html.indexOf('{n:"指定史诗材料×1", con:300') < 0
+    && html.indexOf("lv:4") >= 0 && html.indexOf("v1.74 加 Lv4 门槛") >= 0,
+    'v1.71c/v1.74：史诗材料包 600 贡献 + 冒险者 Lv4 门槛（保留稀有 120 / 普通 20 / 精良 50）');
+
+/* v1.72：金属龙种（色彩龙敌对 / 金属龙友善） */
+hck(html.indexOf("银龙的月光审判") >= 0 && html.indexOf("青铜龙的潮汐试炼") >= 0
+    && html.indexOf("赤铜龙的熔炉谜题") >= 0 && html.indexOf("黄铜龙的沙海辩论") >= 0
+    && html.indexOf("金属龙会") >= 0,
+    'v1.72：金属龙四委托 + 传奇「金属龙会」入池');
+hck(html.indexOf("银龙鳞") >= 0 && html.indexOf("青铜龙牙") >= 0
+    && html.indexOf("赤铜龙角") >= 0 && html.indexOf("黄铜龙息结晶") >= 0
+    && html.indexOf("银龙鳞甲") >= 0 && html.indexOf("青铜龙牙枪") >= 0
+    && html.indexOf("赤铜龙角冠") >= 0 && html.indexOf("黄铜龙息杖") >= 0,
+    'v1.72：金属龙四材料 + 四传说装备入表');
+/* 势力表的色彩龙 / 金属龙阵营拆分在 数据表/_生成数据表.js，由 CSV 生成校验覆盖 */
+hck(html.indexOf("金属龙为友善") >= 0
+    && html.indexOf("不产龙血") >= 0,
+    'v1.72：金属龙委托标注友善阵营 / 不产尸体材料');
+
+/* v1.73/v1.74：传奇事件专属酒馆传闻（按游戏日定种子，刷新不重掷） */
+hck(html.indexOf("const LEGEND_RUMORS = {") >= 0
+    && html.indexOf("function newLegendRumor(name, d)") >= 0
+    && html.indexOf("同一天刷新页面不变，跨天自动换一批") >= 0
+    && html.indexOf("S.legendRumor.date !== todayStr()") >= 0
+    && html.indexOf("今夜，酒馆里只有一个话题：") >= 0,
+    'v1.73/v1.74：传奇事件酒馆传闻 2~3 条，同日稳定 / 跨日刷新');
 
 let evalFail = 0;
 try { eval(code + test); } catch(e){ console.log('FAIL 加载异常: ' + e.message); evalFail = 1; }

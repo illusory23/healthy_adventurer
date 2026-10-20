@@ -91,14 +91,14 @@ def main():
     # ── 补丁 H：creator 钩子
     L = sub_once(L, '    document.getElementById("tab-"+b.dataset.t).classList.add("on");',
                  '    document.getElementById("tab-"+b.dataset.t).classList.add("on");\n' + creator_hook, 'H creator')
-    # ── 补丁 I：社交页刷新钩子（v1.64 · Flask 专属——原型无「社交」页签）
-    L = sub_once(L, '    if(b.dataset.t === "bag") renderBag();   // v1.61e：切到背包页时按真实高度重排两栏（量测需可见）\n'
+    # ── 补丁 I：社交页刷新钩子（v1.64 · Flask 专属——原型无「社交」页签；v1.73 renderTab 结构）
+    L = sub_once(L, '    renderTab(b.dataset.t);                  // v1.73：切页时按需渲染该页（隐藏页不再预先全量重建）\n'
                     '    if(b.dataset.t === "social") loadSocial();   // v1.64：进入社交页时拉取好友 / 邮件数据\n',
-                 '    if(b.dataset.t === "bag") renderBag();   // v1.61e：切到背包页时按真实高度重排两栏（量测需可见）\n',
+                 '    renderTab(b.dataset.t);                  // v1.73：切页时按需渲染该页（隐藏页不再预先全量重建）\n',
                  'I 社交刷新钩子')
-    # ── 补丁 J：渲染列表剔除社交页（v1.64 · Flask 专属）
-    L = sub_once(L, '  renderQuest(); renderTavern(); renderHealth(); renderBag(); renderPet(); renderGallery(); renderShop(); renderLog(); renderSocial();   // v1.41f4：+酒馆；v1.56：+宠物；v1.64：+社交',
-                 '  renderQuest(); renderTavern(); renderHealth(); renderBag(); renderPet(); renderGallery(); renderShop(); renderLog();   // v1.41f4：+酒馆；v1.56：+宠物',
+    # ── 补丁 J：渲染列表剔除社交 / 市场页（v1.64 / v1.66 · Flask 专属）
+    L = sub_once(L, '    else ["quest","tavern","health","bag","pet","gallery","shop","log","social","market"].forEach(renderTab);',
+                 '    else ["quest","tavern","health","bag","pet","gallery","shop","log"].forEach(renderTab);   // 原型无社交 / 市场页',
                  'J 渲染列表')
     # ── 补丁 G：尾部启动段
     new_main = '\n'.join(L).rstrip('\n') + '\n\n' + proto_tail

@@ -28,14 +28,18 @@ def _now_ms():
 
 
 def _day_start_ms(now=None):
-    d = (now or datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
-    return int(d.timestamp() * 1000)
+    """v1.73：与游戏日同口径（06:00 日界线）——避免 00:00~05:59 重复领取每日额度。"""
+    d = now or datetime.now()
+    gd = datetime.strptime(game.today_str(d), "%Y-%m-%d").replace(hour=game.DAY_CUTOFF_HOUR)
+    return int(gd.timestamp() * 1000)
 
 
 def _week_start_ms(now=None):
-    d = (now or datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
-    d -= timedelta(days=d.weekday())          # 周一 00:00
-    return int(d.timestamp() * 1000)
+    d = now or datetime.now()
+    gd = datetime.strptime(game.today_str(d), "%Y-%m-%d")
+    gd -= timedelta(days=gd.weekday())        # 游戏日所在周的周一 06:00
+    gd = gd.replace(hour=game.DAY_CUTOFF_HOUR)
+    return int(gd.timestamp() * 1000)
 
 
 def _lv(s):
@@ -73,46 +77,74 @@ def _low_gift_used(uid):
 
 def _card(u, s, with_health):
     card = {"uid": u["id"], "name": u["name"], "lv": _lv(s), "last_login": u.get("last_login", 0),
-            "friend": False, "health": None}
+            "friend": False, "health": None, "public": bool(u.get("health_public"))}
     if with_health and u.get("health_public"):
-        card["health"] = {"today": game.calc_health(s), "week": _week_avg(s)}
+        # v1.73（P0-1）：单个玩家的脏档不得拖垮整张社交页——健康分异常只影响这一行
+        try:
+            card["health"] = {"today": game.calc_health(s), "week": _week_avg(s)}
+        except Exception:
+            card["health"] = {"today": 0, "week": 0, "error": True}
     return card
 
 
 def overview(me_uid):
     me = db.get_user(me_uid)
-    me_s = _load(me_uid)
     day0, week0 = _day_start_ms(), _week_start_ms()
     friend_ids = db.friends_of(me_uid)
+    # v1.73（P2）：账号列表 + 存档各查一次（原实现每个好友 / 玩家 / 邮件发件人各查一次 → N+1）
+    users = db.list_users()
+    by_id = {u["id"]: u for u in users}
+    need = set(by_id) | set(friend_ids) | {me_uid}
+    raw_states = db.load_user_states(need)
+
+    def state_of(uid):
+        raw, _ = raw_states.get(uid, (None, False))
+        return game.migrate_state(raw) if raw else game.new_state()
+
+    me_s = state_of(me_uid)
     friends = []
     for fid in friend_ids:
-        u = db.get_user(fid)
-        if not u:
+        u = by_id.get(fid) or db.get_user(fid)
+        if not u or u.get("banned"):
             continue
-        c = _card(u, _load(fid), True)
+        c = _card(u, state_of(fid), True)
         c["friend"] = True
         friends.append(c)
     players = []
-    for u in db.list_users():
+    for u in users:
         if u["id"] == me_uid or not u.get("name") or u.get("migrated") or u.get("banned"):
             continue
-        c = _card(u, _load(u["id"]), True)
+        c = _card(u, state_of(u["id"]), True)
         c["friend"] = u["id"] in friend_ids
         players.append(c)
     # 健康榜（仅公开者）：含自己（自己对自己可见）
+    # v1.71b：好友单独并入榜单——好友即使不满足 players 的过滤条件（如迁移标记），
+    #          只要公开了健康分也应可见；按 uid 去重，好友优先于公开玩家。
     board = []
-    me_card = {"uid": me_uid, "name": me.get("name") or "我", "lv": _lv(me_s),
-               "health": {"today": game.calc_health(me_s), "week": _week_avg(me_s)}}
-    board.append(me_card)
-    for c in players:
-        if c["health"]:
+    seen = set()
+
+    def _board_add(c):
+        if c.get("health") and c["uid"] not in seen:
+            seen.add(c["uid"])
             board.append(c)
+
+    try:
+        _me_health = {"today": game.calc_health(me_s), "week": _week_avg(me_s)}
+    except Exception:
+        _me_health = {"today": 0, "week": 0, "error": True}
+    me_card = {"uid": me_uid, "name": me.get("name") or "我", "lv": _lv(me_s),
+               "health": _me_health}
+    _board_add(me_card)
+    for c in friends:
+        _board_add(c)
+    for c in players:
+        _board_add(c)
     # 邮件（近 60 条）
     mails = []
     for m in db.mail_list(me_uid):
         frm = ""
         if m.get("from_uid"):
-            fu = db.get_user(m["from_uid"])
+            fu = by_id.get(m["from_uid"])
             frm = (fu or {}).get("name") or "已注销的冒险者"
         mails.append({"id": m["id"], "kind": m["kind"], "from": frm, "from_uid": m["from_uid"],
                       "title": m["title"], "body": m["body"], "mat": m["mat"], "qty": m["qty"],

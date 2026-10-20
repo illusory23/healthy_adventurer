@@ -128,12 +128,16 @@ db.set_banned(uid, False)
 r = c.get("/api/state", environ_base=REMOTE)
 check(r.status_code == 200, "解封后恢复访问")
 
-print("=== 7. 服主工具（/admin 仅本机）===")
+print("=== 7. 服主工具（/admin 仅本机 + token）===")
 cl2 = appmod.app.test_client()
 r = cl2.get("/admin")
-check(r.status_code == 200 and "邀请码" in r.get_data(as_text=True), "本机可开服主工具")
-r = remote_client().get("/admin", environ_base=REMOTE)
-check(r.status_code == 403, "远程访问服主工具被拒")
+check(r.status_code == 403, "本机但无 token → 服主工具被拒（v1.73）")
+r = cl2.get("/admin?token=" + appmod.ADMIN_TOKEN)
+check(r.status_code == 302, "token 换 cookie → 重定向")
+r = cl2.get("/admin")
+check(r.status_code == 200 and "邀请码" in r.get_data(as_text=True), "本机 + token 可开服主工具")
+r = remote_client().get("/admin?token=" + appmod.ADMIN_TOKEN, environ_base=REMOTE)
+check(r.status_code == 403, "远程访问服主工具被拒（即使带 token）")
 r = cl2.post("/admin/invite/new", data={"uses": "2", "hours": "24", "note": "服主工具测试"})
 check(r.status_code == 302, "服主生成邀请码（表单）")
 top = db.list_invite_codes()[0]
@@ -381,14 +385,20 @@ check(all(m["status"] != "unread" for m in ract(c, {"action": "social"})["social
       "read_all 全部标记已读（多封实测）")
 j = ract(c, {"action": "social"})
 check(all(not b["health"] for b in j["social"]["board"] if b["uid"] != u_c), "默认健康分不公开（榜上仅自己）")
+check(all(b.get("public") is False for b in j["social"]["players"] if b["uid"] != u_c),
+      "v1.71b：未公开者卡片带 public=False（前端显示「健康分未公开」）")
+_boards = j["social"]["board"]
+check(len({b["uid"] for b in _boards}) == len(_boards), "v1.71b：健康榜按 uid 去重（自己 + 好友 + 公开玩家合并）")
 j = ract(c2, {"action": "privacy_set", "health": True})
 check(j["ok"] and j["social"]["me"]["settings"]["health_public"] is True, "开启健康分公开")
 j = ract(c, {"action": "social"})
 b2 = [b for b in j["social"]["board"] if b["uid"] == u_c2]
 check(bool(b2) and isinstance(b2[0]["health"]["today"], int) and "week" in b2[0]["health"],
       "公开后出现在他人健康榜（今日 + 本周均值）")
+check(bool(b2) and b2[0].get("public") is True, "v1.71b：公开好友卡片带 public=True")
 check(n_dot >= 1, "未读 / 待领取邮件计入红点")
 cl2 = appmod.app.test_client()
+cl2.get("/admin?token=" + appmod.ADMIN_TOKEN)      # v1.73：token → cookie
 r = cl2.post("/admin/broadcast", data={"title": "全服公告", "body": "今晚八点副本"})
 check(r.status_code == 302, "服主发广播")
 found = [m for m in ract(c, {"action": "social"})["social"]["mail"] if m["kind"] == "system" and "全服公告" in m["title"]]
@@ -630,7 +640,9 @@ check(j["party"]["offer"] is not None and j["party"]["offer"]["status"] == "aban
 import market as mkt
 
 
-def mk_mkt_user(nick, lv=3, rep=900, money=200000):
+def mk_mkt_user(nick, lv=3, rep=None, money=200000):
+    if rep is None:
+        rep = game.CFG["guildReq"][3]
     cc = appmod.app.test_client()
     r = cc.post("/register", data={"nick": nick})
     assert r.status_code == 302, nick
@@ -642,22 +654,26 @@ def mk_mkt_user(nick, lv=3, rep=900, money=200000):
 
 
 print("=== 20. P3：解锁 / 上架（托管 · 区间 · 限额）===")
-cM, uM = mk_mkt_user("摊主")               # Lv3 + 公会 C（rep 900）
+_C_REP = game.CFG["guildReq"][3]
+cM, uM = mk_mkt_user("摊主")               # Lv3 + 公会 D（v1.75：C → D）
 cK, uK = mk_mkt_user("顾客")               # 同上，钱多
 cF, uF = mk_mkt_user("路人", lv=3, rep=0)  # 公会 F
-cG, uG = mk_mkt_user("学徒", lv=2, rep=900)  # Lv2
-cE4, uE4 = mk_mkt_user("大师兄", lv=4, rep=900)   # Lv4：史诗门槛
+cG, uG = mk_mkt_user("学徒", lv=2, rep=_C_REP)  # Lv2
+cE4, uE4 = mk_mkt_user("大师兄", lv=4, rep=_C_REP)   # Lv4：史诗门槛
 j = lact(cF, {"action": "market"})
-check(not j["market"]["unlock"], "公会未到 C 不解锁")
+check(not j["market"]["unlock"], "公会未到 D 不解锁")
 j = lact(cG, {"action": "market"})
 check(not j["market"]["unlock"], "Lv2 不解锁")
 j = lact(cM, {"action": "market"})
 MK = j["market"]
-check(MK["unlock"] and "market_dot" in j, "Lv3 + 公会 C 解锁（含市场红点字段）")
+check(MK["unlock"] and "market_dot" in j, "Lv3 + 公会 D 解锁（含市场红点字段）")
 check(MK["limits"]["maxListings"] == 3 and MK["limits"]["buyDaily"] == 5
       and MK["limits"]["buyWeekly"] == 20 and MK["limits"]["listingDays"] == 3, "限额参数随概览下发")
 _lo, _hi = mkt._price_bounds("止血草")
-check(_lo == 81 and _hi == 270, "价格区间 = 商店价（基准 30×3=90）的 90%~300%")
+_base = game.M["止血草"][2]
+check(_lo == int(_base * 3 * 0.9) and _hi == int(_base * 3 * 3),
+      "价格区间 = 商店价（基准 %d×3=%d）的 90%%~300%%" % (_base, _base * 3))
+_P = _hi
 j = lact(cM, {"action": "market_list", "mat": "龙心", "qty": 1, "price": 300000})
 check(not j["ok"] and "不可上架" in j["error"], "传说不可上架")
 j = lact(cM, {"action": "market_list", "mat": "专注药剂", "qty": 1, "price": 100})
@@ -668,20 +684,20 @@ j = lact(cM, {"action": "market_list", "mat": "止血草", "qty": 20, "price": _
 check(not j["ok"] and "单价" in j["error"], "低于区间下限被拒")
 j = lact(cM, {"action": "market_list", "mat": "止血草", "qty": 20, "price": _hi + 1})
 check(not j["ok"] and "单价" in j["error"], "高于区间上限被拒")
-j = lact(cM, {"action": "market_list", "mat": "止血草", "qty": 20, "price": 120})
+j = lact(cM, {"action": "market_list", "mat": "止血草", "qty": 20, "price": _P})
 check(j["ok"] and j["market"]["mine"][0]["status"] == "on", "上架成功（托管在售）")
 check(db.load_user_state(uM)[0]["mats"].get("止血草") == 20, "托管：上架先从背包扣除（40 → 20）")
 check(j["market"]["me"]["list_today"] == 1 and j["market"]["me"]["list_active"] == 1, "额度计数（今日 1/3）")
-lact(cM, {"action": "market_list", "mat": "止血草", "qty": 5, "price": 120})
-lact(cM, {"action": "market_list", "mat": "止血草", "qty": 5, "price": 120})
-j = lact(cM, {"action": "market_list", "mat": "止血草", "qty": 5, "price": 120})
+lact(cM, {"action": "market_list", "mat": "止血草", "qty": 5, "price": _P})
+lact(cM, {"action": "market_list", "mat": "止血草", "qty": 5, "price": _P})
+j = lact(cM, {"action": "market_list", "mat": "止血草", "qty": 5, "price": _P})
 check(not j["ok"] and "挂单" in j["error"], "同时挂单上限（3/3）拦截")
 j = lact(cM, {"action": "market"})
 lid5 = [r for r in j["market"]["mine"] if r["status"] == "on" and r["qty"] == 5][0]["id"]
 j = lact(cM, {"action": "market_cancel", "id": lid5})
 check(j["ok"], "下架一单")
 check(db.load_user_state(uM)[0]["mats"].get("止血草") == 15, "下架原样退回（10 → 15）")
-j = lact(cM, {"action": "market_list", "mat": "止血草", "qty": 5, "price": 120})
+j = lact(cM, {"action": "market_list", "mat": "止血草", "qty": 5, "price": _P})
 check(not j["ok"] and "上架次数" in j["error"], "每日上架 ≤3 次（含已下架）")
 
 print("=== 21. P3：买入 / 限额 / 货款 / 到期 ===")
@@ -694,13 +710,13 @@ _mK = db.load_user_state(uK)[0]["money"]
 j = lact(cK, {"action": "market_buy", "id": lid1, "qty": 3})
 check(j["ok"], "部分购买（3/20）")
 sK = db.load_user_state(uK)[0]
-check(sK["money"] == _mK - 360 and sK["mats"].get("止血草") == 43, "买家扣款 360 铜、入包 ×3")
+check(sK["money"] == _mK - _P * 3 and sK["mats"].get("止血草") == 43, "买家扣款 %d 铜、入包 ×3" % (_P * 3))
 check(db.market_get(lid1)["qty"] == 17, "挂单剩余 17")
 proceeds = [m for m in db.mail_list(uM) if m["kind"] == "proceeds"]
-check(len(proceeds) == 1 and proceeds[0]["money"] == 360, "货款进卖家邮件（360 铜）")
+check(len(proceeds) == 1 and proceeds[0]["money"] == _P * 3, "货款进卖家邮件（%d 铜）" % (_P * 3))
 _mM = db.load_user_state(uM)[0]["money"]
 j = lact(cM, {"action": "mail_op", "id": proceeds[0]["id"], "op": "claim"})
-check(j["ok"] and db.load_user_state(uM)[0]["money"] == _mM + 360, "卖家领取货款入账")
+check(j["ok"] and db.load_user_state(uM)[0]["money"] == _mM + _P * 3, "卖家领取货款入账")
 # 周限 20：新买家 + 周初流水 20 个（当天恰为周一时，日限会先于周限触发）
 cW, uW = mk_mkt_user("周限客")
 with closing(db.conn()) as cc:
@@ -740,7 +756,7 @@ check(len(ret) == 1 and ret[0]["qty"] == 15, "剩余 15 个 → 退回邮件")
 _before = db.load_user_state(uM)[0]["mats"].get("止血草", 0)
 j = lact(cM, {"action": "mail_op", "id": ret[0]["id"], "op": "claim"})
 check(j["ok"] and db.load_user_state(uM)[0]["mats"].get("止血草", 0) == _before + 15, "领取退回件恢复材料")
-j = lact(cF, {"action": "market_list", "mat": "止血草", "qty": 1, "price": 120})
+j = lact(cF, {"action": "market_list", "mat": "止血草", "qty": 1, "price": _P})
 check(not j["ok"], "未解锁不能上架（服务端权威）")
 j = lact(cK, {"action": "market"})
 check(j["market"]["me"]["buy_today"] == 5 and j["market"]["me"]["buy_week"] == 5, "买入额度统计准确")

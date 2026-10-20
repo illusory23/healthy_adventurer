@@ -8,16 +8,21 @@ const fakeEl = () => ({ textContent:"", innerHTML:"", style:{}, value:"",
   classList:{ add(){}, remove(){}, contains(){return false;} }, onclick:null,
   focus(){}, addEventListener(){}, dataset:{}, querySelectorAll(){return []; } });
 const elCache = {};
-global.document = { getElementById:(id)=>(elCache[id]=elCache[id]||fakeEl()), querySelectorAll:()=>[], addEventListener:()=>{} };
+global.document = { getElementById:(id)=>(elCache[id]=elCache[id]||fakeEl()), querySelector:()=>fakeEl(), querySelectorAll:()=>[], addEventListener:()=>{} };
 global.alert = ()=>{}; global.confirm = ()=>false; global.setInterval = ()=>0;
 
 const html = fs.readFileSync(path.join(__dirname, '..', '创造模式测试原型', '健康的冒险者的一天.html'), 'utf-8');
-const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// v1.73（P2）：不再依赖「第一个无属性 <script>」——跳过 importmap，按主脚本特征选取
+const _mainScript = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+  .map(function(m){ return m[1]; })
+  .find(function(s){ return s.indexOf("function newState") >= 0; });
+if(!_mainScript){ console.error("未找到主游戏脚本块（function newState）"); process.exit(1); }
+const code = _mainScript;
 
 const pack = `
 (function(){
   return JSON.stringify({
-    C: C, M: M, GEAR: GEAR, LEGEND: LEGEND, REGIONS: REGIONS, RARE: RARE,
+    C: C, M: M, GEAR: GEAR, LEGEND: LEGEND, LEGEND_RUMORS: LEGEND_RUMORS, REGIONS: REGIONS, RARE: RARE,
     CFG: CFG, SHOP: SHOP, VIT_SHOP: VIT_SHOP, CON_SHOP: CON_SHOP,
     PLAT_SHOP: PLAT_SHOP, BUY_TIERS: BUY_TIERS, QUEST_REQ: QUEST_REQ, QUEST_ITEM: QUEST_ITEM, CRAFT: CRAFT,
     MONTH_EVENTS: MONTH_EVENTS, QUEST_TURNIN: QUEST_TURNIN, MASTER_SHOP: MASTER_SHOP,

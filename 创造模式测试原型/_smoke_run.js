@@ -28,7 +28,12 @@ global.setInterval = () => 0;
 
 // v1.50：测试目标改为 Flask 前端（game.html 原型层）——项目以 Flask 版为最终实现；桥接层截除不参与
 const html = fs.readFileSync(__dirname + '/../Flask版/static/game.html', 'utf-8');
-let code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+// v1.73（P2）：不再依赖「第一个无属性 <script>」——跳过 importmap，按主脚本特征选取
+const _mainScript = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
+  .map(function(m){ return m[1]; })
+  .find(function(s){ return s.indexOf("function newState") >= 0; });
+if(!_mainScript){ console.error("未找到主游戏脚本块（function newState）"); process.exit(1); }
+let code = _mainScript;
 {
   // 截除 Flask 桥接层 + Flask 专用 boot（从服务端拉状态的启动段）——只保留原型层逻辑
   const _bi = code.indexOf('(async function boot(){');
@@ -145,15 +150,18 @@ console.log("\\n===== 3. 自由探索（7 区域 × 60 次）=====");
   pickExploreEvent = function(){ return null; };
   S.lvIdx = 4;
   S.history = [{date:"d", score:100, sleep:true}];
+  check(REGIONS.every(function(r){ return (r.e || 0) > 0; }), "v1.70：每个区域都配了固定经验（e 字段）");
+  let _expBad = 0;
   for(let i=0; i<REGIONS.length; i++){
     const r = REGIONS[i];
     S.explore = 99999; S.mats = {}; S.items = {}; S.money = 0;
     let got = 0, empty = 0, unknown = 0;
     for(let n=0; n<60; n++){
       S.exploreUsed = 0; S.explore = 99999;
-      const bM = Object.assign({}, S.mats), bI = Object.assign({}, S.items), bC = S.money;
+      const bM = Object.assign({}, S.mats), bI = Object.assign({}, S.items), bC = S.money, bE = S.exp;
       doExplore(i);
       if(S.exploreActive){ S.exploreActive.finishTs = Date.now() - 1; exploreFinishCheck(); }  // v1.25：快进到点强制结算
+      if(S.exp - bE !== (r.e || 0)) _expBad++;   // v1.70：区域固定经验——每次结算应恰好 +r.e
       let g = 0;
       for(const k in S.mats){ if((S.mats[k]||0) > (bM[k]||0)){ g++; if(!M[k]) unknown++; } }
       for(const k in S.items){ if((S.items[k]||0) > (bI[k]||0)){ g++; if(ITEM_DESC[k]===undefined) unknown++; } }
@@ -161,9 +169,10 @@ console.log("\\n===== 3. 自由探索（7 区域 × 60 次）=====");
       got += g; if(!g) empty++;
     }
     if(unknown){ bad(r.n + " 出现未知材料/道具 ×" + unknown); }
-    console.log("  " + r.n + "：平均 " + (got/60).toFixed(2) + " 类/次 | 空手 " + empty + " 次" + (unknown?" ❌":" ✅"));
+    console.log("  " + r.n + "：平均 " + (got/60).toFixed(2) + " 类/次 | 空手 " + empty + " 次 | 经验 +" + (r.e || 0) + (unknown?" ❌":" ✅"));
     PASS++;
   }
+  check(_expBad === 0, "v1.70：22 区域 × 60 次探索——每次到点结算都恰好加 r.e 经验");
   dlg = _dlg; inRegionTime = _irt; pickExploreEvent = _pee;
 }
 
@@ -432,12 +441,12 @@ console.log("\\n===== 8. 商店 / 兑换 / 技能 / 护符 / 稀有事件 / 存�
   buyCon(_iEp, 1);
   check(typeof _matPickCb === "function", "史诗材料兑换：弹出自选弹窗（v1.41 H2）");
   matPickChoose(_epName);
-  check(_epCount() === _epK + 1 && S.con === 1700, "贡献兑换史诗材料 ×1（-300 贡献）");
+  check(_epCount() === _epK + 1 && S.con === 1400, "贡献兑换史诗材料 ×1（-600 贡献，v1.71c 审计价）");
   buyCon(_iEp, 1);
   matPickChoose(_epName);
-  check(_epCount() === _epK + 2 && S.con === 1400, "史诗材料 ×2（周限 2 内）");
+  check(_epCount() === _epK + 2 && S.con === 800, "史诗材料 ×2（周限 2 内）");
   buyCon(_iEp, 1);
-  check(S.con === 1400, "史诗材料周限购拦截（每周 2）");
+  check(S.con === 800, "史诗材料周限购拦截（每周 2）");
   /* v1.38o：稀有材料 周限 3 */
   function _rareCount(){ let c = 0; for(const k in S.mats){ if(M[k] && M[k][1] === "稀有") c += S.mats[k]; } return c; }
   S.con = 2000; const _rareK = _rareCount();
@@ -901,10 +910,10 @@ console.log("\\n===== 16. 跨日刷新 / 成功率加成 / 趋势位置 =====");
 /* ═══════════ 17. v1.38r 批次（22:00 刷新 / 1h 接取窗口 / 入睡窗 / 材料图标 / 升级详情） ═══════════ */
 console.log("\\n===== 17. v1.38r 批次 =====");
 {
-  // 刷新点 08/12/18/21（v1.41f3：末次 22:00 → 21:00）
-  check(CFG.refreshHours.join(",") === "8,12,18,21", "刷新点 08/12/18/21（v1.41f3 末次 22:00 → 21:00）");
-  check(latestPoint(new Date(2026,9,5,7,0)).h === 21, "早 8 点前：上一刷新点 = 昨日 21:00");
-  // v1.41f3：最后一次刷新点窗口 2.5 小时（21:00 → 23:30；其余 1 小时）
+  // 刷新点 07/11/17/21（v1.76：前三班提前 1 小时，末班保持 21:00）
+  check(CFG.refreshHours.join(",") === "7,11,17,21", "刷新点 07/11/17/21（v1.76 前三班提前、末班 21:00）");
+  check(latestPoint(new Date(2026,9,5,6,0)).h === 21, "早 7 点前：上一刷新点 = 昨日 21:00");
+  // v1.76：最后一次刷新点窗口 2.5 小时（21:00 → 23:30；其余 2 小时）
   check(LAST_POOL_WINDOW_MS === 150*60*1000, "最后班窗口常量 = 2.5 小时");
   {
     const _fR17 = FESTIVAL_RANGES.splice(0);              // 临时隔离节日（窗口加成为 +1h）
@@ -915,14 +924,16 @@ console.log("\\n===== 17. v1.38r 批次 =====");
     check(!poolExpired(), "最后班：140 分钟仍在窗口内（2.5 小时）");
     S.pool = {point: "2026-10-05@21", bornTs: Date.now() - 151*60*1000};
     check(poolExpired(), "最后班：151 分钟已过期");
-    S.pool = {point: "2026-10-05@12", bornTs: Date.now() - 61*60*1000};
-    check(poolExpired(), "常规班：61 分钟已过期（1 小时）");
+    S.pool = {point: "2026-10-05@12", bornTs: Date.now() - 119*60*1000};
+    check(!poolExpired(), "常规班：119 分钟仍在窗口内（2 小时）");
+    S.pool = {point: "2026-10-05@12", bornTs: Date.now() - 121*60*1000};
+    check(poolExpired(), "常规班：121 分钟已过期（2 小时）");
     S.pool = _saveP;
     if(_fS17) FESTIVALS[_fK17] = _fS17;
     FESTIVAL_RANGES.push.apply(FESTIVAL_RANGES, _fR17);
   }
-  // 接取窗口 1 小时
-  check(POOL_WINDOW_MS === 60*60*1000, "接取窗口 = 1 小时（30 分钟 → 1 小时）");
+  // 接取窗口 2 小时（v1.75：1 → 2 小时）
+  check(POOL_WINDOW_MS === 120*60*1000, "接取窗口 = 2 小时（v1.75：1 → 2 小时）");
   // 入睡打卡时段 21:00~23:30
   check(CFG.taskWindows[0][0] === "21:00" && CFG.taskWindows[0][1] === "23:30", "入睡打卡时段 21:00~23:30");
   // 材料图标审查修正
@@ -1037,7 +1048,7 @@ console.log("\\n===== 18. v1.38s 批次 =====");
   check(document.getElementById("hExpTxt").textContent === "传奇资格 ✓", "累计 30000 → 传奇资格 ✓");
   S.lvIdx = 1; S.exp = 200; _lastLvFx = 1;
   render();
-  check(document.getElementById("hExpTxt").textContent === "140/440", "普通等级经验条显示本级进度（回归）");
+  check(document.getElementById("hExpTxt").textContent === (200-CFG.expNeed[0])+"/"+(CFG.expNeed[1]-CFG.expNeed[0]), "普通等级经验条显示本级进度（回归）");
 
   // 6) 委托等级标签（v1.38s4）——卡片外部显示委托等级（= 所属池）
   check(qLvText(C["Lv1"][0][0]) === "Lv1" && qLvText(C["Lv3"][0][0]) === "Lv3",
@@ -1110,7 +1121,7 @@ console.log("\\n===== 18. v1.38s 批次 =====");
     S.gear = _cG; S.blueprints = _cB; S.trophies = _cT;
     // ③ W/H/P 称号
     const _cRep = S.rep, _cTi = S.titles;
-    S.rep = 20000; S.titles = [];
+    S.rep = CFG.guildReq[9]; S.titles = [];
     checkGuildTitles();
     check(["世界行者","英雄","至尊"].every(function(x){ return S.titles.indexOf(x) >= 0; }), "W/H/P 称号授予（世界行者/英雄/至尊）");
     S.rep = _cRep; S.titles = _cTi;
@@ -1121,9 +1132,17 @@ console.log("\\n===== 18. v1.38s 批次 =====");
     S.shieldDays = ["z00"];
     check(sleepStreakProt(30) === true, "连击保险日计入：缺 4 天中 1 天被保险 → 达标（v1.40）");
     S.history = _cH; S.shieldDays = _cS;
-    // ⑤ 图纸定价修复
-    check(bpInfo("猎弓").price === 2000, "普通图纸 20 银 = 2,000 铜（原 bug 只扣 20）");
-    check(bpInfo("陨星武器").price === 5000000, "传说图纸 5 铂金 = 5,000,000");
+    // ⑤ 图纸定价修复 + v1.76 逐张差异化
+    check(bpInfo("猎弓").price === 1900, "普通图纸按效果差异化：猎弓 1,900 铜");
+    check(bpInfo("陨星武器").price === 3900000, "传说图纸按效果差异化：陨星武器 3,900,000 铜");
+    {
+      const _q76 = {};
+      GEAR.forEach(function(g){ if(g[5] !== "—") (_q76[g[1]] = _q76[g[1]] || []).push(g[6]); });
+      check(["普通","精良","稀有","史诗","传说"].every(function(q){
+        const ps = _q76[q] || []; return ps.length > 1 && Math.max.apply(null, ps) >= Math.min.apply(null, ps) * 1.4;
+      }), "v1.76：每个品阶内图纸价格不再统一（价差 ≥1.4 倍）");
+      check(new Set(_q76["传说"]).size > 5, "v1.76：传说图纸价格逐张不同（多种价位）");
+    }
     // ⑥ 虚弱 → 精力上限 −10%
     const _cBn = S.buffNext;
     S.buffNext = null;
@@ -1142,8 +1161,63 @@ console.log("\\n===== 19. v1.41 I1：委托链前置 =====");
   const _allN = new Set();
   Object.keys(C).forEach(function(lv){ (C[lv]||[]).forEach(function(q2){ _allN.add(q2[0]); }); });
   const _reqBad = Object.keys(QUEST_REQ).filter(function(k2){ return !_allN.has(k2) || !_allN.has(QUEST_REQ[k2]); });
-  check(Object.keys(QUEST_REQ).length === 31, "QUEST_REQ 共 31 条链前置（v1.41 I1 ×8 + v1.45b ×7 + v1.51 ×3 + v1.57 种族链 ×13）");
+  check(Object.keys(QUEST_REQ).length === 35, "QUEST_REQ 共 35 条链前置（v1.41 I1 ×8 + v1.45b ×7 + v1.51 ×3 + v1.57 种族链 ×13 + v1.72 金属龙 ×4）");
   check(_reqBad.length === 0, "QUEST_REQ 引用完整性（键值均为真实委托）" + (_reqBad.length ? "：" + _reqBad.join(",") : ""));
+  /* v1.72：金属龙种（友善）——委托 / 掉落阵营规则 / 装备 / 传奇 */
+  const _mq72 = ["银龙的月光审判", "青铜龙的潮汐试炼", "赤铜龙的熔炉谜题", "黄铜龙的沙海辩论"];
+  const _qmap72 = {}; Object.keys(C).forEach(function(lv){ (C[lv]||[]).forEach(function(q2){ _qmap72[q2[0]] = q2; }); });
+  check(_mq72.every(function(n){ return !!_qmap72[n]; }), "v1.72：金属龙四条委托入池");
+  check(_mq72.every(function(n){ return QUEST_REQ[n] === "金龙宝藏的谈判"; }),
+        "v1.72：金属龙支线（完成金龙后四条委托同时解锁）");
+  const _corpse72 = ["龙血","大块龙肉","龙骨","龙心","龙牙","绿龙胆囊"];
+  check(_mq72.every(function(n){ return !_corpse72.some(function(m){ return _qmap72[n][8][m]; }); }),
+        "v1.72：金属龙委托不产尸体材料（友善阵营）");
+  check(["狩猎火龙","追踪黑龙的阴翳","驱赶绿龙"].some(function(n){ return _corpse72.some(function(m){ return _qmap72[n][8][m]; }); }),
+        "v1.72：色彩龙敌对委托保留尸体材料");
+  check(["银龙鳞甲","青铜龙牙枪","赤铜龙角冠","黄铜龙息杖"].every(function(n){ return !!gearDef(n); }),
+        "v1.72：金属龙四件传说装备入表");
+  check(LEGEND.some(function(L){ return L[0] === "金属龙会" && L[8] && L[8].q === "黄铜龙的沙海辩论"; }),
+        "v1.72：传奇事件「金属龙会」入池");
+  /* v1.73：传奇事件专属酒馆传闻 */
+  check(Object.keys(LEGEND_RUMORS).length === LEGEND.length
+        && LEGEND.every(function(L){ return Array.isArray(LEGEND_RUMORS[L[0]]); }),
+        "v1.73：16 个传奇事件均有酒馆传闻池");
+  check(LEGEND.every(function(L){ const a = LEGEND_RUMORS[L[0]] || []; return a.length >= 7 && a.length <= 9; }),
+        "v1.73：每个传奇事件的传闻 7~9 条");
+  let _lrBad73 = 0;
+  for(let i = 0; i < 80; i++){
+    const _r = newLegendRumor(LEGEND[0][0]);
+    if(!_r || _r.idxs.length < 2 || _r.idxs.length > 3
+       || new Set(_r.idxs).size !== _r.idxs.length
+       || _r.idxs.some(function(x){ return x < 0 || x >= LEGEND_RUMORS[LEGEND[0][0]].length; })) _lrBad73++;
+  }
+  check(_lrBad73 === 0, "v1.73：传闻抽取 2~3 条、下标不重复且不越界（80 次采样）");
+  // 随机源退化（测试桩 / 异常 RNG 恒返回同一值）时也必须终止且不重复
+  const _rnd73 = Math.random;
+  Math.random = function(){ return 0.001; };
+  let _lrDeg73 = null;
+  try { _lrDeg73 = newLegendRumor(LEGEND[0][0]); } catch(e){}
+  Math.random = _rnd73;
+  check(!!_lrDeg73 && _lrDeg73.idxs.length >= 2 && _lrDeg73.idxs.length <= 3
+        && new Set(_lrDeg73.idxs).size === _lrDeg73.idxs.length,
+        "v1.73：随机源退化时抽取仍可终止且下标不重复");
+  /* v1.74：话题按游戏日刷新——同日多次生成一致，跨天换一批 */
+  const _lrD1 = newLegendRumor(LEGEND[0][0], "2026-10-20");
+  const _lrD1b = newLegendRumor(LEGEND[0][0], "2026-10-20");
+  const _lrD2 = newLegendRumor(LEGEND[0][0], "2026-10-21");
+  check(JSON.stringify(_lrD1) === JSON.stringify(_lrD1b),
+        "v1.74：传奇传闻同日生成一致（刷新页面不重掷）");
+  check(_lrD2.date === "2026-10-21" && JSON.stringify(_lrD2.idxs) !== JSON.stringify(_lrD1.idxs),
+        "v1.74：传奇传闻跨天刷新（日期与抽取结果更新）");
+  const _bLR73 = { a: S.legendActive, p: S.legendPreview, r: S.legendRumor };
+  S.legendActive = LEGEND[0]; S.legendPreview = false; S.legendRumor = newLegendRumor(LEGEND[0][0]);
+  renderTavern();
+  const _lrH73 = document.getElementById("tab-tavern").innerHTML;
+  check(_lrH73.indexOf("今夜，酒馆里只有一个话题：" + LEGEND[0][0]) >= 0,
+        "v1.73：传奇事件出现时酒馆显示专属传闻标题");
+  check(S.legendRumor.idxs.every(function(i){ return _lrH73.indexOf(LEGEND_RUMORS[LEGEND[0][0]][i]) >= 0; }),
+        "v1.73：随机抽中的 2~3 条传闻全部上屏");
+  S.legendActive = _bLR73.a; S.legendPreview = _bLR73.p; S.legendRumor = _bLR73.r; renderTavern();
 
   const _bk = S.doneQuests; const _bi = S.lvIdx;
   S.lvIdx = 4; S.doneQuests = {};
@@ -1335,30 +1409,51 @@ console.log("\\n===== 24. v1.41 未解锁内容隐藏 =====");
   S.rep = 0; renderShop();
   check(document.getElementById("tab-shop").innerHTML.indexOf("商店未开放") >= 0,
         "公会 F 级：商店页显示「商店未开放」引导（页签不隐藏）");
+  check(document.getElementById("tab-shop").innerHTML.indexOf("开放：公会商店（材料包 / 消耗品 / 任务准备物）") >= 0,
+        "v1.71：F 级商店未开放页预告 E 级开放内容");
   // 1) 铂金商店 / 贡献商店 / 技能树 / 护符：按解锁条件整卡显隐
-  S.rep = 100; S.money = 100000; renderShop();     // v1.61d：铂金商店改按持有解锁——固定 <1 铂金币验证内容隐藏
+  S.rep = CFG.guildReq[1]; S.money = 100000; renderShop();     // v1.61d：铂金商店改按持有解锁——固定 <1 铂金币验证内容隐藏
   let _sh = document.getElementById("tab-shop").innerHTML;
   check(_sh.indexOf("🏛 铂金商店") >= 0 && _sh.indexOf("内容隐藏——需持有") >= 0, "E 级：铂金商店界面保留、内容隐藏（v1.61d 改按持有 ≥1 铂金币解锁）");
-  check(_sh.indexOf("贡献商店（") < 0, "E 级：贡献商店未到 D 级 → 隐藏");
-  check(_sh.indexOf("技能树") < 0, "E 级：技能树（需 D 级）整卡隐藏");
+  check(_sh.indexOf("贡献商店（") < 0, "E 级：贡献商店未到 D 级 → 整卡隐藏");
+  check(_sh.indexOf("🌳 技能树（") < 0, "E 级：技能树（需 D 级）整卡隐藏");
   check(_sh.indexOf("🌙 冥念护符") < 0, "E 级：冥念护符（需 C 级）整卡隐藏");
   check(_sh.indexOf("🔒") >= 0, "商店页：未解锁卡片以「🔒 内容隐藏」呈现（v1.61d 取代整卡隐藏）");
   check(_sh.indexOf("图纸商店") >= 0 && _sh.indexOf("普通 图纸") >= 0, "E 级：图纸商店显示（普通/精良档已解锁）");
-  check(_sh.indexOf("稀有 图纸") < 0, "E 级：稀有档位（需 C 级）隐藏");
-  S.rep = 400; renderShop();
+  check(_sh.indexOf("稀有 图纸") < 0, "E 级：稀有档位（需 D 级）隐藏");
+  check(_sh.indexOf("下一级 <b>D 级</b>") >= 0 && _sh.indexOf("史诗材料需 Lv4") >= 0,
+        "v1.71：公会商店底部预告 D 级开放内容（自选各品阶材料 / 技能树）");
+  check(_sh.indexOf("下一档 <b>D 级</b>") >= 0 && _sh.indexOf("稀有图纸") >= 0,
+        "v1.75：图纸商店预告下一档 D 级稀有图纸（C → D）");
+  S.rep = CFG.guildReq[2]; renderShop();
   _sh = document.getElementById("tab-shop").innerHTML;
   check(_sh.indexOf("贡献商店（") >= 0, "D 级：贡献商店显示");
-  check(_sh.indexOf("重掷券") < 0, "D 级：精英重掷券（需 B 级）隐藏");
+  check(_sh.indexOf("稀有 图纸") >= 0, "v1.75：D 级：稀有图纸档位显示（原 C 级）");
+  check(_sh.indexOf("下一档 <b>A 级</b>") >= 0 && _sh.indexOf("史诗图纸") >= 0,
+        "v1.75：D 级：图纸商店预告下一档 A 级史诗图纸");
+  check(_sh.indexOf("buyCon(6") < 0, "D 级：精英重掷券（需 B 级）商品行隐藏");
   check(_sh.indexOf("技能树") >= 0, "D 级：技能树显示");
+  check(_sh.indexOf("🔓 下一级 <b>B 级</b>") >= 0 && _sh.indexOf("精英委托重掷券") >= 0,
+        "v1.71：贡献商店底部预告 B 级开放精英委托重掷券");
+  check(_sh.indexOf("开放至 <b>10 级</b>") >= 0, "v1.71：技能树底部预告 C 级开放至 10 级");
   check(_sh.indexOf("🌙 冥念护符") < 0, "D 级：冥念护符仍隐藏（v1.60 起需 C 级）");
-  S.rep = 850; renderShop();
+  S.rep = CFG.guildReq[3]; renderShop();
   _sh = document.getElementById("tab-shop").innerHTML;
   check(_sh.indexOf("🌙 冥念护符") >= 0, "C 级：冥念护符第 1 级显示（v1.60 对齐文案）");
-  check(_sh.indexOf("重掷券") < 0, "C 级：精英重掷券仍隐藏（v1.60 起需 B 级）");
-  S.rep = 1200; renderShop();
+  check(_sh.indexOf("buyCon(6") < 0, "C 级：精英重掷券仍隐藏（v1.60 起需 B 级）");
+  {   // v1.71：护符下一级未解锁 → 卡片底部显示条件与效果预告
+    const _bCharm = S.charm;
+    S.charm = 1; renderShop();
+    const _shCh = document.getElementById("tab-shop").innerHTML;
+    check(_shCh.indexOf("下一级 <b>第 2 级</b>") >= 0 && _shCh.indexOf("公会 B 级") >= 0,
+          "v1.71：冥念护符底部预告下一级解锁条件与效果");
+    S.charm = _bCharm; renderShop();
+    _sh = document.getElementById("tab-shop").innerHTML;
+  }
+  S.rep = CFG.guildReq[4]; renderShop();
   _sh = document.getElementById("tab-shop").innerHTML;
-  check(_sh.indexOf("重掷券") >= 0, "B 级：精英重掷券显示（v1.60 修正档位）");
-  S.rep = 6500; S.money = 5000000; renderShop();   // v1.61d：持有 ≥1 铂金币 → 铂金商店内容可见
+  check(_sh.indexOf("buyCon(6") >= 0, "B 级：精英重掷券显示（v1.60 修正档位）");
+  S.rep = CFG.guildReq[6]; S.money = 5000000; renderShop();   // v1.61d：持有 ≥1 铂金币 → 铂金商店内容可见
   _sh = document.getElementById("tab-shop").innerHTML;
   check(_sh.indexOf("🏛 铂金商店") >= 0 && _sh.indexOf("清醒符咒") >= 0, "S 级：铂金商店内容可见（持有 ≥1 铂金币）");
   check(_sh.indexOf("稀有 图纸") >= 0, "S 级：稀有档位显示");
@@ -1373,25 +1468,25 @@ console.log("\\n===== 24. v1.41 未解锁内容隐藏 =====");
   check(document.getElementById("tab-quest").innerHTML.indexOf("12 次 Lv2 委托") >= 0,
         "v1.60：未完成 12 次 Lv2 委托 → 显示解锁进度卡");
   (C["Lv2"] || []).slice(0, 12).forEach(function(q){ S.doneQuests[q[0]] = 1; });
-  S.rep = 100; renderQuest();
+  S.rep = CFG.guildReq[1]; renderQuest();
   let _qh = document.getElementById("tab-quest").innerHTML;
   check(_qh.indexOf("自由探索") >= 0 && _qh.indexOf("晨光森林") >= 0, "解锁后（Lv2 + 12 次 Lv2 委托）：探索整卡与基础区域显示");
   check(_qh.indexOf("晨光森林·深处") < 0, "E 级：深处区域（v1.60 起需 C 级）隐藏");
   check(_qh.indexOf("星夜洞窟·深处") < 0, "E 级：星夜洞窟·深处（v1.60 起需 A 级）隐藏");
   check(_qh.indexOf("深渊裂隙") < 0, "未完成前置委托：深渊裂隙（链解锁）隐藏");
-  S.rep = 400; renderQuest();
+  S.rep = CFG.guildReq[2]; renderQuest();
   _qh = document.getElementById("tab-quest").innerHTML;
   check(_qh.indexOf("晨光森林·深处") < 0, "D 级：晨光森林·深处仍隐藏（v1.60 起需 C 级）");
   check(_qh.indexOf("星夜洞窟·深处") < 0, "D 级：星夜洞窟·深处仍隐藏（需 A 级）");
-  S.rep = 850; renderQuest();
+  S.rep = CFG.guildReq[3]; renderQuest();
   _qh = document.getElementById("tab-quest").innerHTML;
   check(_qh.indexOf("晨光森林·深处") >= 0, "C 级：晨光森林·深处显示（Lv3 + C 双门槛）");
   check(_qh.indexOf("星夜洞窟·深处") < 0, "C 级：星夜洞窟·深处仍隐藏（需 A 级）");
-  S.rep = 2200; renderQuest();
+  S.rep = CFG.guildReq[5]; renderQuest();
   _qh = document.getElementById("tab-quest").innerHTML;
   check(_qh.indexOf("星夜洞窟·深处") >= 0, "A 级：星夜洞窟·深处显示（Lv4 + A 双门槛）");
   check(_qh.indexOf("腐化森林·深处") < 0, "A 级：腐化森林·深处仍隐藏（需 S 级）");
-  S.rep = 6500; renderQuest();
+  S.rep = CFG.guildReq[6]; renderQuest();
   _qh = document.getElementById("tab-quest").innerHTML;
   check(_qh.indexOf("腐化森林·深处") >= 0 && _qh.indexOf("虚空裂痕·深处") >= 0, "S 级：腐化/虚空深处显示（Lv5 + S 终段）");
   // 3) 图鉴：保持 v1.38 形态（未收集显示「？？？」占位卡，委托组全等级列出——用户指定不隐藏）
@@ -1424,6 +1519,34 @@ console.log("\\n===== 24. v1.41 未解锁内容隐藏 =====");
   rollLegend();
   check(!!S.legendActive && S.legendPreview === true, "未达参与条件：每日低语预览可生成（2%）");
   Math.random = _rnd2;
+  // v1.71：探索中卡片可点击查看区域详情（含进行中状态）
+  S.lvIdx = 4; S.history = [{date:"d", score:80, sleep:true}];
+  S.explore = 10; S.exploreUsed = 1;
+  S.exploreActive = {idx:0, n:"晨光森林", c:3, h:2, startTs:Date.now(), finishTs:Date.now()+3600000};
+  renderQuest();
+  const _qhA = document.getElementById("tab-quest").innerHTML;
+  check(_qhA.indexOf("探索中：晨光森林") >= 0 && _qhA.indexOf("showRegionDetail(0)") >= 0
+        && _qhA.indexOf("点击查看区域详情") >= 0, "v1.71：探索中卡片可点击查看区域详情");
+  check(_qhA.indexOf("可探索地点") >= 0 && _qhA.indexOf("午间溪谷") >= 0 && _qhA.indexOf("探索中") >= 0,
+        "v1.75：探索进行中仍显示可探索地点列表");
+  check(typeof scheduleExploreWake === "function" && scheduleExploreWake.toString().indexOf("finishTs") >= 0,
+        "v1.75：探索到点前台唤醒定时器已接入");
+  check(typeof showExploreSettlement === "function" && showExploreSettlement.toString().indexOf("参考价值") >= 0,
+        "v1.75：探索结算详情弹窗（结构化战利品）");
+  dlgCap = null; showRegionDetail(0);
+  check(dlgCap && dlgCap.b.indexOf("正在探索此区域") >= 0, "v1.71：区域详情显示「正在探索此区域」");
+  // v1.71b：可前往时详情页即确认页——含消耗/耗时说明与「确认前往」按钮；未确认不出发
+  S.exploreActive = null; S.exploreUsed = 0; S.explore = 10;
+  (C["Lv2"] || []).forEach(function(q, qi){ S.doneQuests[q[0]] = (qi === 0 ? 12 : 0); });
+  const _irtBak = inRegionTime;
+  inRegionTime = function(){ return true; };
+  dlgCap = null; showRegionDetail(0);
+  check(dlgCap && dlgCap.b.indexOf("确认后将扣除") >= 0 && dlgCap.b.indexOf("探索次数") >= 0
+        && dlgCap.b.indexOf("耗时") >= 0, "v1.71b：探索确认页显示探索点 / 次数 / 耗时说明");
+  check(dlgCap && dlgCap.btns.some(function(b){ return b.text === "确认前往"; }),
+        "v1.71b：探索确认页提供「确认前往」按钮");
+  check(S.exploreActive === null, "v1.71b：未点「确认前往」不会提前出发");
+  inRegionTime = _irtBak;
   // 恢复
   S.rep = _bRep; S.lvIdx = _bLv; S.legendActive = _bLA; S.legendPreview = _bLP; S.money = _bMoney;
   S.history = _bHist; S.explore = _bEx; S.exploreUsed = _bExU; S.exploreActive = _bExA; S.doneQuests = _bDQ;
@@ -1433,7 +1556,7 @@ console.log("\\n===== 24. v1.41 未解锁内容隐藏 =====");
 console.log("\\n===== 25. v1.41 料理分阶段开放（v1.41f4：酒馆料理） =====");
 {
   const _bRep2 = S.rep, _bLv2 = S.lvIdx, _bLM2 = S.lastMeal;
-  S.rep = 100;   // 商店页可见（E 级）
+  S.rep = CFG.guildReq[1];   // 商店页可见（E 级）
   S.lastMeal = null;   // 排除「当前生效料理」提示对断言字符串的干扰
   const _loR = CFG.recipes.filter(function(r){ return cookTier(r) === "普通"; })[0];
   const _gangR = CFG.recipes.filter(function(r){ return cookTier(r) === "精良"; })[0];
@@ -1443,6 +1566,8 @@ console.log("\\n===== 25. v1.41 料理分阶段开放（v1.41f4：酒馆料理�
   check(_kH.indexOf(_loR.n) >= 0, "Lv1：普通料理显示（"+_loR.n+"）");
   check(_kH.indexOf(_gangR.n) < 0, "Lv1：精良料理隐藏（"+_gangR.n+"）");
   check(_kH.indexOf(_rareR.n) < 0, "Lv1：稀有料理隐藏（"+_rareR.n+"）");
+  check(_kH.indexOf("Lv2</b> 开放：<b>精良品阶</b>料理") >= 0,
+        "v1.71：酒馆料理底部预告下一品阶（Lv2 精良）");
   check(_kH.indexOf("🍺 酒馆传闻") >= 0, "酒馆页最上方为酒馆传闻（v1.41f4）");
   S.lvIdx = 1; renderTavern();
   _kH = document.getElementById("tab-tavern").innerHTML;
@@ -1520,7 +1645,7 @@ console.log("\\n===== 28. v1.41c 节日窗口扩展 + 任务排序 =====");
   check(_tw0[1] === 23*60+30+60, "节日：入睡打卡窗口尾部 +1 小时（延至 00:30）");
   check(_tw1[1] === 8*60+60, "节日：起床打卡窗口尾部 +1 小时（延至 09:00）");
   check(_mw1[0] === 11*60-30 && _mw1[1] === 14*60+30, "节日：三餐窗口前后各 +30 分钟");
-  check(poolWindowMs() === poolBaseWindowMs() + 3600000, "节日：接取窗口 +1 小时（v1.49 修：21:00 后基础窗口 2.5h，改用同源基准）");
+  check(poolWindowMs() === poolBaseWindowMs() + 3600000, "节日：接取窗口 +1 小时（同源基准；v1.76 末班 21:00 起 2.5h）");
   check(winStr(_tw0) === "21:00–00:30", "winStr 跨日格式（21:00–00:30）");
   check(inWindowNow(_tw0, new Date(2026, 9, 2, 0, 15)) === true, "节日：入睡窗口跨日（次日 00:15 可打卡）");
   check(inWindowNow(_tw0, new Date(2026, 9, 2, 1, 0)) === false, "节日：入睡窗口次日 01:00 已关");
@@ -1604,7 +1729,7 @@ console.log("\\n===== 29. v1.41f5/f6：料理平衡调整 =====");
   cook(_spI);
   check(S.mealSp.date === todayStr() && S.mealSp.cnt === 1, "v1.41f6：跨日自动重置探索点料理计数");
   // v1.42：龙种委托 + 九头蛇材料改造
-  check(Object.keys(M).length === 125, "v1.58：材料 125 种（+六域遗珍 6）");
+  check(Object.keys(M).length === 129, "v1.72：材料 129 种（+金属龙 4）");
   // v1.45：恶魔 / 魔鬼 / 中立种族内容
   const _allQ45 = C["Lv1"].concat(C["Lv2"], C["Lv3"], C["Lv4"], C["Lv5"]).map(function(q){ return q[0]; });
   check(["猎杀深渊恶魔","魔鬼的谈判","血战遗迹考察","镇压恶魔裂隙","迷路的仙灵","净化亡灵谷"].every(function(n){ return _allQ45.indexOf(n) >= 0; }),
@@ -1748,8 +1873,8 @@ console.log("\\n===== 32. v1.48c：材料品类修正 =====");
     "世界树皮详情：三类用途（含草药作用）");
   const _allQ32 = (C["Lv1"]||[]).concat(C["Lv2"]||[], C["Lv3"]||[], C["Lv4"]||[], C["Lv5"]||[]);
   const _gd32 = _allQ32.filter(function(q){ return q[0] === "古龙遗骸采集"; })[0];
-  check(!!_gd32 && !!_gd32[8]["龙瞳结晶"] && _gd32[8]["龙瞳结晶"].join(",") === "1,2",
-    "古龙遗骸采集掉落龙瞳结晶 [1,2]");
+  check(!!_gd32 && !!_gd32[8]["龙瞳结晶"] && _gd32[8]["龙瞳结晶"].join(",") === "1,2,0.07",
+    "古龙遗骸采集掉落龙瞳结晶 [1,2]（7% 概率）");
   render();
   const _qH32 = document.getElementById("tab-quest").innerHTML || "";
   check(_qH32.indexOf("📖 委托说明") >= 0 && _qH32.indexOf("刷新与窗口") >= 0 && _qH32.indexOf("准备物") >= 0,
@@ -1811,7 +1936,7 @@ console.log("\\n===== 34. v1.48f：图鉴详情 / 数量格式 / 月事件 Lv1 =
 /* ═══════════ 35. v1.49 主题套装补齐（25 件） ═══════════ */
 console.log("\\n===== 35. v1.49：主题套装补齐（25 件） =====");
 {
-  check(GEAR.length === 131, "装备 121 → 131 件（v1.58 六域遗珍 +7；v1.59 弱出口补全 +3）");
+  check(GEAR.length === 135, "装备 135 件（v1.72 金属龙 +4）");
   const _n49 = ["金龙鳞铠","魔力结晶杖","雷霆龙牙枪","暗影龙鳞袍","龙瞳宝珠","龙角战弓","剧毒龙牙匕","绿龙护心镜",
     "九头蛇鳞铠","再生蛇髓护符","九头蛇之心","九头蛇胆囊杖","剧毒蛇齿链","恶魔角盔","混沌之刃","硫磺结晶甲",
     "魔鬼纹章","冥河护符","幽魂灯杖","仙灵披风","王者之冠","符文岩巨锤","远古符文法杖","流沙战袍","世界树长弓"];
@@ -1901,10 +2026,11 @@ console.log("\\n===== 37. v1.59：传奇报酬 / Lv4 简单档 / 弱出口装备
   S.equipped = _eqB59;
   const _mains59 = GEAR.filter(function(g){ return g[5] !== "—"; }).map(function(g){ return g[5].split("×")[0]; });
   check(["花岗岩","铅矿石","古董钱币"].every(function(m){ return _mains59.indexOf(m) >= 0; }), "v1.59：三个弱出口材料取得装备出口");
-  // v1.59b：良好档（第三档）追加 活力点 +1
+  // v1.59b / v1.76：良好档 活力点 +1 由日结算发放；区间奖励不再重复
   const _g59 = gradeInfo(65);
-  check(_g59.n === "良好" && _g59.eff.indexOf("活力点 +1") >= 0, "v1.59b：良好档说明含「活力点 +1」");
-  console.log("  v1.59 传奇 / Lv4 / 弱出口 / 良好档活力点 ✅");
+  check(_g59.n === "良好" && _g59.eff.indexOf("委托报酬 +5%") >= 0 && _g59.eff.indexOf("活力点") < 0,
+        "v1.76：良好档区间奖励只含报酬（贡献/活力点由日结算发放一次）");
+  console.log("  v1.59 传奇 / Lv4 / 弱出口 / 良好档活力点（v1.76 去重） ✅");
 }
 
 console.log("\\n===== 38. v1.60/v1.61：大师试炼 250 / 疗养圣所（无门槛·3 天·59 锁定）/ 深处 C-A-S / 护符 C-B / 重掷券 B / 虚空裂痕 Lv4 =====");
@@ -1957,18 +2083,18 @@ console.log("\\n===== 38. v1.60/v1.61：大师试炼 250 / 疗养圣所（无门
   check(_reg60["腐化森林·深处"].lv === 5 && _reg60["腐化森林·深处"].g === 6
         && _reg60["虚空裂痕·深处"].lv === 5 && _reg60["虚空裂痕·深处"].g === 6, "v1.60：腐化/虚空深处 = Lv5 + 公会 S");
   check(_reg60["虚空裂痕"].lv === 4, "v1.60：虚空裂痕地表 Lv3 → Lv4");
-  S.rep = 400; S.lvIdx = 2;                       // Lv3 + D
+  S.rep = CFG.guildReq[2]; S.lvIdx = 2;              // Lv3 + D
   check(!!regionGate(_reg60["晨光森林·深处"]), "v1.60：晨光深处 Lv3+公会D 被公会线拦");
-  S.rep = 850;
+  S.rep = CFG.guildReq[3];
   check(regionGate(_reg60["晨光森林·深处"]) === null, "v1.60：晨光深处 Lv3+公会C 放行");
   // ④ 护符 I/II = C/B
-  S.rep = 400; S.charm = 0;
+  S.rep = CFG.guildReq[2]; S.charm = 0;
   check(charmUnlocked(0) === false, "v1.60：护符 I 公会 D 未解锁");
-  S.rep = 850;
+  S.rep = CFG.guildReq[3];
   check(charmUnlocked(0) === true, "v1.60：护符 I 公会 C 解锁");
   S.charm = 1;
   check(charmUnlocked(1) === false, "v1.60：护符 II 公会 C 未解锁（需 B）");
-  S.rep = 1200;
+  S.rep = CFG.guildReq[4];
   check(charmUnlocked(1) === true, "v1.60：护符 II 公会 B 解锁");
   S.rep = _rc60; S.charm = _ch60;
   // ⑤ 精英委托重掷券：C → B
@@ -2045,11 +2171,11 @@ const _h38r = [
   ["v1.41c 假期区间表（FESTIVAL_RANGES）", html.indexOf("const FESTIVAL_RANGES") >= 0],
   ["v1.41c 任务展示顺序（TASK_ORDER）", html.indexOf("const TASK_ORDER") >= 0],
   ["v1.41c 节日窗口函数（taskWinNow/mealWinNow）", html.indexOf("function taskWinNow") >= 0 && html.indexOf("function mealWinNow") >= 0],
-  ["v1.58 六域遗珍材料 6 种入表", html.indexOf('"冥河灯油":["特殊","史诗",62000]') >= 0 && html.indexOf('"冰晶果":["食材","史诗",60000]') >= 0],
+  ["v1.58 六域遗珍材料 6 种入表", /"冥河灯油":\["特殊","史诗",\d+\]/.test(html) && /"冰晶果":\["食材","史诗",\d+\]/.test(html)],
   ["v1.58 探索点/天 词条移除", html.indexOf('探索点+1/天') < 0 && html.indexOf('/探索点\\+(\\d+)\\/天/') < 0],
   ["v1.67 传奇面额上调 + 星界摇篮 + 9 铂金补键", html.indexOf('"9铂金币":9000000') >= 0 && html.indexOf('"屠龙传说","精英",5,"噩梦","3铂金币",1000,"龙心×3、龙瞳结晶×2"') >= 0 && html.indexOf('"星界摇篮","探索+精英",7,"噩梦","3铂金币",1050') >= 0],
   ["v1.59 弱出口装备入表", html.indexOf('"花岗岩重锤","普通","武器",0.01') >= 0 && html.indexOf('"古币坠饰","稀有","饰品",0.08') >= 0],
-  ["v1.59b 良好档活力点+1（结算 + 区间奖励）", html.indexOf("else if(sc>=60){ rep=2; con=1; vit=1; }") >= 0 && html.indexOf("else if(sc>=60){ nb.pay=0.05; nb.con=1; nb.vit=1; }") >= 0],
+  ["v1.59b/v1.76 良好档活力点+1（日结算发放；区间奖励不重复）", html.indexOf("else if(sc>=60){ rep=2; con=1; vit=1; }") >= 0 && html.indexOf("else if(sc>=60){ nb.pay=0.05; }") >= 0],
   ["v1.60 大师试炼 250（前后端同值）", html.indexOf("S.doneBelow5 < 250") >= 0 && html.indexOf("累计完成 250 次 Lv5 以下委托") >= 0],
   ["v1.61 疗养圣所：无门槛 / 每月 3 天 / 59 锁定 / 今日+补请昨日", html.indexOf("function takeSickLeave") >= 0 && html.indexOf("SICK_MONTHLY = 3") >= 0 && html.indexOf("SICK_LOCK_SCORE = 59") >= 0 && html.indexOf("function sickToday") >= 0 && html.indexOf("guildIdx() < 3") < 0 && html.indexOf('apiCall("sick_leave"') >= 0 && html.indexOf("sickDays:[]") >= 0],
   ["v1.61b/c 疗养圣所 UI（独立通栏块 + margin-top 12px 防贴靠）", html.indexOf("<h3>🕊️ 疗养圣所</h3>") >= 0 && html.indexOf('<div class="card" style="margin-top:12px"><h3>🕊️ 疗养圣所') >= 0 && html.indexOf('<section id="tab-health" class="tabpage twocol"') < 0 && html.indexOf("'<div class=\"twocol\">' + h + '</div>' + hSick") >= 0 && html.indexOf("病假封存 · 评分锁定") >= 0 && html.indexOf("onclick=\"takeSickLeave('yesterday')\"") >= 0],
@@ -2066,7 +2192,7 @@ const _h38r = [
   ["v1.61c 盗贼伏击抢夺上限 1 铂金币", html.indexOf("const EV_ROB_CAP = 1000000") >= 0 && html.indexOf("Math.min(Math.floor(S.money * 0.10), EV_ROB_CAP)") >= 0],
   ["v1.61c 立即完成委托锁定骰值 1（forceRoll 大成功）", html.indexOf("const roll = a.forceRoll || rand(100)") >= 0 && html.indexOf("const roll2 = a.forceRoll || rand(100)") >= 0],
   ["v1.60 病假日计入两条连击口径（sleepStreak / sleepStreakProt）", html.indexOf("sick.indexOf(h.date) >= 0") >= 0 && html.indexOf("sk.indexOf(h.date) >= 0") >= 0],
-  ["v1.60 深处 C/A/S 共绑", html.indexOf('{n:"星夜洞窟·深处", t:"21:00-23:00", c:5, h:6, lv:4, g:5') >= 0 && html.indexOf('{n:"腐化森林·深处", t:"08:00-23:30", c:7, h:9, lv:5, g:6') >= 0 && html.indexOf('{n:"晨光森林·深处", t:"07:00-09:00", c:4, h:3, lv:3, g:3') >= 0],
+  ["v1.60 深处 C/A/S 共绑", html.indexOf('{n:"星夜洞窟·深处", t:"21:00-23:00", c:5, h:6, e:30, lv:4, g:5') >= 0 && html.indexOf('{n:"腐化森林·深处", t:"08:00-23:30", c:7, h:9, e:50, lv:5, g:6') >= 0 && html.indexOf('{n:"晨光森林·深处", t:"07:00-09:00", c:4, h:3, e:20, lv:3, g:3') >= 0],
   ["v1.60 虚空裂痕地表 Lv4", html.indexOf('{n:"虚空裂痕", t:"22:00-23:30", c:8, lv:4, h:12') >= 0],
   ["v1.60 护符 I/II 判定 = C/B", html.indexOf("{lv:1, need:3,") >= 0 && html.indexOf("{lv:2, need:4,") >= 0],
   ["v1.60 重掷券解锁档位 C → B（g:4）", html.indexOf('重掷券", con:240, lim:["日",1], g:4') >= 0],
@@ -2093,4 +2219,17 @@ const _h38r = [
 ];
 let _h38rBad = 0;
 _h38r.forEach(function(x){ console.log("  " + (x[1] ? "✅" : "❌") + " " + x[0]); if(!x[1]) _h38rBad++; });
-setTimeout(function(){ process.exit((_srcDupList.length || _h38rBad || globalThis.__smokeFail) ? 1 : 0); }, 4000);   // v1.61l：运行时应答失败（FAIL）也计入退出码——此前只影响打印，run_all_tests 漏报
+// v1.73（P1-10）：原 4 秒 setTimeout 会在异步测试跑完前 process.exit(0)（实测只跑到第 6 节）。
+// 改为事件循环自然结束（beforeExit）时按失败数退出；另加 30 分钟兜底超时（不阻止正常退出）。
+let _smokeExited = false;
+process.on("beforeExit", function(){
+  if(_smokeExited) return;
+  _smokeExited = true;
+  process.exit((_srcDupList.length || _h38rBad || globalThis.__smokeFail) ? 1 : 0);
+});
+setTimeout(function(){
+  if(_smokeExited) return;
+  _smokeExited = true;
+  console.error("❌ 冒烟测试超时（30 分钟）——请检查是否有未完成的异步测试");
+  process.exit(1);
+}, 30 * 60 * 1000).unref();
